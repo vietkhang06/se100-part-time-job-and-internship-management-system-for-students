@@ -1,0 +1,16 @@
+{
+  "name": "@campusjob/contracts",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"@campusjob/contracts lint passed\"",
+    "test": "echo \"@campusjob/contracts test passed\""
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

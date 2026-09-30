@@ -1,0 +1,37 @@
+{
+  "name": "campusjob",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "dev": "concurrently -n API,WEB -c blue,magenta \"pnpm --filter @campusjob/api start:dev\" \"pnpm --filter @campusjob/web dev\"",
+    "dev:api": "pnpm --filter @campusjob/api start:dev",
+    "dev:web": "pnpm --filter @campusjob/web dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm --filter @campusjob/api test:e2e",
+    "db:validate": "dotenv -e .env -- pnpm --filter @campusjob/api prisma validate",
+    "db:generate": "dotenv -e .env -- pnpm --filter @campusjob/api prisma generate",
+    "db:migrate": "dotenv -e .env -- pnpm --filter @campusjob/api prisma migrate dev",
+    "db:deploy": "dotenv -e .env -- pnpm --filter @campusjob/api prisma migrate deploy",
+    "db:studio": "dotenv -e .env -- pnpm --filter @campusjob/api prisma studio",
+    "admin:create": "dotenv -e .env -- pnpm --filter @campusjob/api admin:create",
+    "infra:config": "docker compose --env-file .env -f infra/docker-compose.yml config",
+    "infra:up": "docker compose --env-file .env -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose --env-file .env -f infra/docker-compose.yml down",
+    "infra:ps": "docker compose --env-file .env -f infra/docker-compose.yml ps",
+    "infra:logs": "docker compose --env-file .env -f infra/docker-compose.yml logs -f",
+    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "dotenv-cli": "^11.0.0",
+    "typescript": "^5.7.2"
+  }
+}
