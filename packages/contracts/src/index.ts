@@ -102,3 +102,35 @@ export interface ResetPasswordRequestDto {
 export interface ResetPasswordResponseDto {
   message: string;
 }
+
+export interface LoginRequestDto {
+  email: string;
+  password: string;
+}
+
+export interface LoginResponseDto {
+  accessToken: string;
+  user: AuthUserDto;
+}
+
+export interface RefreshResponseDto {
+  accessToken: string;
+  user: AuthUserDto;
+}
+
+export interface LogoutResponseDto {
+  ok: boolean;
+  message: string;
+}
+
+export interface MeResponseDto {
+  user: AuthUserDto;
+}
+
+export interface JwtPayload {
+  sub: string;
+  email: string;
+  role: UserRole;
+  sessionId?: string;
+}
+

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import supertest from 'supertest';
+import cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/shared/database/prisma.service';
 import { GlobalExceptionFilter } from '../src/shared/filters/http-exception.filter';
@@ -25,6 +26,7 @@ describe('AuthModule (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api/v1');
+    app.use(cookieParser());
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -466,4 +468,216 @@ describe('AuthModule (e2e)', () => {
         .expect(400);
     });
   });
+
+  describe('POST /api/v1/auth/login', () => {
+    it('should login successfully with valid credentials and return access token + refresh cookie', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      expect(res.body).toHaveProperty('accessToken');
+      expect(res.body).toHaveProperty('user');
+      expect(res.body.user.email).toBe(testStudentEmail);
+      expect(res.body.user.role).toBe(UserRole.STUDENT);
+
+      // Verify HttpOnly cookie
+      const cookies = res.headers['set-cookie'];
+      expect(cookies).toBeDefined();
+      const refreshCookie = (Array.isArray(cookies) ? cookies : [cookies]).find(
+        (c: string) => c.includes('campusjob_refresh_token') || c.includes('refreshToken'),
+      );
+      expect(refreshCookie).toBeDefined();
+      expect(refreshCookie).toContain('HttpOnly');
+    });
+
+    it('should reject login with incorrect password', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'WrongPassword123!',
+        })
+        .expect(401);
+    });
+
+    it('should reject login for non-existent email', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: 'unknown-user@campusjob.local',
+          password: 'Password123!',
+        })
+        .expect(401);
+    });
+
+    it('should reject login when account is pending verification', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testEmployerEmail,
+          password: testStrongPassword,
+        })
+        .expect(403);
+    });
+  });
+
+  describe('GET /api/v1/auth/me', () => {
+    it('should return current user when valid Bearer access token is provided', async () => {
+      const loginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      const accessToken = loginRes.body.accessToken;
+
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      expect(res.body.user).toBeDefined();
+      expect(res.body.user.email).toBe(testStudentEmail);
+      expect(res.body.user.id).toBe(loginRes.body.user.id);
+    });
+
+    it('should return 401 when no token is provided', async () => {
+      await request(app.getHttpServer())
+        .get('/api/v1/auth/me')
+        .expect(401);
+    });
+  });
+
+  describe('POST /api/v1/auth/refresh', () => {
+    it('should rotate refresh token and issue new access token', async () => {
+      const loginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      const loginCookies = loginRes.headers['set-cookie'];
+
+      const refreshRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', loginCookies)
+        .expect(200);
+
+      expect(refreshRes.body).toHaveProperty('accessToken');
+      expect(refreshRes.body.accessToken).not.toBe(loginRes.body.accessToken);
+
+      const rotatedCookies = refreshRes.headers['set-cookie'];
+      expect(rotatedCookies).toBeDefined();
+    });
+
+    it('should detect token reuse and revoke the entire token family', async () => {
+      // Clear old sessions so only this token family exists
+      const userBefore = await prisma.user.findUnique({ where: { email: testStudentEmail } });
+      await prisma.authSession.deleteMany({ where: { userId: userBefore!.id } });
+
+      const loginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      const initialCookie = loginRes.headers['set-cookie'];
+
+      // First refresh: consumes initialCookie, rotates to new cookie
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', initialCookie)
+        .expect(200);
+
+      // Second refresh using STOLEN / ALREADY CONSUMED initialCookie: REUSE ATTACK!
+      const reuseRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', initialCookie)
+        .expect(401);
+
+      expect(reuseRes.body.message).toContain('thu hồi');
+
+      // Verify in DB that all sessions for this user have been revoked
+      const user = await prisma.user.findUnique({ where: { email: testStudentEmail } });
+      const activeSessions = await prisma.authSession.findMany({
+        where: { userId: user!.id, revokedAt: null },
+      });
+      expect(activeSessions.length).toBe(0);
+    });
+  });
+
+  describe('POST /api/v1/auth/logout', () => {
+    it('should logout current session and clear refresh cookie', async () => {
+      const loginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      const cookie = loginRes.headers['set-cookie'];
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/logout')
+        .set('Cookie', cookie)
+        .expect(200);
+
+      expect(res.body.ok).toBe(true);
+
+      // Verify cookie cleared
+      const setCookies = res.headers['set-cookie'];
+      expect(setCookies).toBeDefined();
+    });
+  });
+
+  describe('POST /api/v1/auth/logout-all', () => {
+    it('should revoke all active sessions for current user', async () => {
+      // Create session 1
+      const loginRes1 = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      // Create session 2
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      const accessToken = loginRes1.body.accessToken;
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/logout-all')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      expect(res.body.ok).toBe(true);
+      expect(res.body.message).toContain('tất cả phiên');
+
+      // Verify no active sessions remain in DB
+      const user = await prisma.user.findUnique({ where: { email: testStudentEmail } });
+      const remainingActiveSessions = await prisma.authSession.findMany({
+        where: { userId: user!.id, revokedAt: null },
+      });
+      expect(remainingActiveSessions.length).toBe(0);
+    });
+  });
 });
+
