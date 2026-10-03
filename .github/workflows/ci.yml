@@ -71,6 +71,9 @@ jobs:
       - name: Prisma Migrate Deploy on CI Database
         run: pnpm db:deploy
 
+      - name: Build Contracts
+        run: pnpm --filter @campusjob/contracts build
+
       - name: Run Linters
         run: pnpm lint
 
