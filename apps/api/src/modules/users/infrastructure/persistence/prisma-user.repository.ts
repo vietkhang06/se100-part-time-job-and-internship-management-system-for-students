@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../shared/database/prisma.service';
-import { IUserRepository } from '../../domain/repositories/user.repository.interface';
+import { IUserRepository, CreateUserData } from '../../domain/repositories/user.repository.interface';
 import { UserEntity } from '../../domain/entities/user.entity';
 import { UserRole, UserStatus } from '@campusjob/contracts';
 
@@ -35,7 +35,7 @@ export class PrismaUserRepository implements IUserRepository {
     return raw ? this.toDomain(raw) : null;
   }
 
-  async create(user: Omit<UserEntity, 'id' | 'createdAt' | 'updatedAt'>): Promise<UserEntity> {
+  async create(user: CreateUserData): Promise<UserEntity> {
     const raw = await this.prisma.user.create({
       data: {
         email: user.email.toLowerCase().trim(),
@@ -48,6 +48,49 @@ export class PrismaUserRepository implements IUserRepository {
       },
     });
     return this.toDomain(raw);
+  }
+
+  async createWithVerificationToken(
+    user: CreateUserData,
+    tokenHash: string,
+    expiresAt: Date,
+  ): Promise<{ user: UserEntity; tokenId: string }> {
+    return await this.prisma.$transaction(async (tx) => {
+      const createdUser = await tx.user.create({
+        data: {
+          email: user.email.toLowerCase().trim(),
+          passwordHash: user.passwordHash,
+          fullName: user.fullName,
+          phone: user.phone ?? null,
+          role: user.role,
+          status: user.status,
+          emailVerifiedAt: user.emailVerifiedAt ?? null,
+        },
+      });
+
+      const tokenRecord = await tx.emailVerificationToken.create({
+        data: {
+          userId: createdUser.id,
+          tokenHash,
+          expiresAt,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: createdUser.id,
+          action: 'USER_REGISTERED',
+          entityType: 'User',
+          entityId: createdUser.id,
+          metadata: { role: createdUser.role },
+        },
+      });
+
+      return {
+        user: this.toDomain(createdUser),
+        tokenId: tokenRecord.id,
+      };
+    });
   }
 
   async updateStatus(id: string, status: UserEntity['status']): Promise<UserEntity> {

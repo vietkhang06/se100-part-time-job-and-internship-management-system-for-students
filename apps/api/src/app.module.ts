@@ -4,6 +4,7 @@ import * as path from 'path';
 import { DatabaseModule } from './shared/database/database.module';
 import { HealthModule } from './modules/health/health.module';
 import { UsersModule } from './modules/users/users.module';
+import { AuthModule } from './modules/auth/auth.module';
 import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
 
 @Module({
@@ -18,10 +19,11 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
     DatabaseModule,
     HealthModule,
     UsersModule,
+    AuthModule,
   ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(RequestIdMiddleware).forRoutes('*');
+    consumer.apply(RequestIdMiddleware).forRoutes('{*path}');
   }
 }

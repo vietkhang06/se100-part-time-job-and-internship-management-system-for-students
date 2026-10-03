@@ -8,6 +8,7 @@
     "pnpm": ">=10"
   },
   "scripts": {
+    "predev": "pnpm --filter @campusjob/contracts build",
     "dev": "concurrently -n API,WEB -c blue,magenta \"pnpm --filter @campusjob/api start:dev\" \"pnpm --filter @campusjob/web dev\"",
     "dev:api": "pnpm --filter @campusjob/api start:dev",
     "dev:web": "pnpm --filter @campusjob/web dev",
