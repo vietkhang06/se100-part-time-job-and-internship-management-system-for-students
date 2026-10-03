@@ -9,6 +9,7 @@ node_modules/
 dist/
 coverage/
 out/
+*.tsbuildinfo
 
 var/
 uploads/
