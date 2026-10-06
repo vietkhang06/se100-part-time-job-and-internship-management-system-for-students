@@ -1,8 +1,45 @@
+'use client';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { apiClient, ApiClientError } from '@/lib/api-client';
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent({ token }: { token: string | null }) {
+
+  const [loading, setLoading] = useState(true);
+  const [success, setSuccess] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!token) {
+      setError('Liên kết xác minh không hợp lệ.');
+      setLoading(false);
+      return;
+    }
+
+    const verifyEmail = async () => {
+      try {
+        await apiClient('/auth/verify-email', {
+          method: 'POST',
+          body: JSON.stringify({ token }),
+        });
+
+        setSuccess('Xác minh email thành công!');
+      } catch (error) {
+        if (error instanceof ApiClientError) {
+          setError(error.message);
+        } else {
+          setError('Đã xảy ra lỗi. Vui lòng thử lại.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    verifyEmail();
+  }, [token]);
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background">
       <Card className="w-full max-w-md text-center">
@@ -15,6 +52,23 @@ export default function VerifyEmailPage() {
           <CardTitle>Xác minh tài khoản Email</CardTitle>
           <CardDescription>
             Chúng tôi đã gửi thư kích hoạt tài khoản vào hộp thư của bạn. Vui lòng bấm vào liên kết trong email để kích hoạt.
+            {loading && (
+              <span className="block mt-2">
+                Đang xác minh email của bạn...
+              </span>
+            )}
+
+            {success && (
+              <span className="block mt-2">
+                {success}
+              </span>
+            )}
+
+            {error && (
+              <span className="block mt-2">
+                {error}
+              </span>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -23,13 +77,25 @@ export default function VerifyEmailPage() {
           </p>
         </CardContent>
         <CardFooter className="justify-center border-t border-border">
-          <Link href="/login">
-            <Button variant="primary" size="md">
-              Đến trang Đăng nhập
-            </Button>
-          </Link>
+          {!loading && ( 
+            <Link href="/login">
+              <Button variant="primary" size="md">
+                Đến trang Đăng nhập
+              </Button>
+            </Link> 
+          )}
         </CardFooter>
       </Card>
     </div>
   );
+}
+export default async function VerifyEmailPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ token?: string }>;
+}) {
+  const params = await searchParams;
+  const token = params.token ?? null;
+
+  return <VerifyEmailContent token={token} />;
 }
