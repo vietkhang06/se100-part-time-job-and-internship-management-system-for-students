@@ -1,4 +1,4 @@
-import { ApiErrorResponse } from '@campusjob/contracts';
+import { ApiErrorResponse, RefreshResponseDto } from '@campusjob/contracts';
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
@@ -25,6 +25,26 @@ export class ApiClientError extends Error {
     );
     this.name = 'ApiClientError';
   }
+}
+
+let refreshPromise: Promise<RefreshResponseDto> | null = null;
+
+export function refreshSession(): Promise<RefreshResponseDto> {
+  if (!refreshPromise) {
+    refreshPromise = apiClient<RefreshResponseDto>('/auth/refresh', { method: 'POST' })
+      .then((response) => {
+        setAccessToken(response.accessToken);
+        return response;
+      })
+      .catch((error) => {
+        setAccessToken(null);
+        throw error;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
 }
 
 export async function apiClient<T>(
