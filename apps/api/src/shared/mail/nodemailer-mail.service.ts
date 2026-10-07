@@ -42,7 +42,7 @@ export class NodemailerMailService implements IMailService {
   }
 
   async sendVerificationEmail(to: string, rawToken: string): Promise<void> {
-    const verificationUrl = `${this.webUrl}/verify-email?token=${encodeURIComponent(rawToken)}`;
+    const verificationUrl = `${this.webUrl}/verify-email?token=${encodeURIComponent(rawToken)}&email=${encodeURIComponent(to)}`;
     const subject = 'CampusJob — Xác thực địa chỉ email tài khoản';
     const html = `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; rounded: 8px;">

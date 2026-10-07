@@ -1,16 +1,35 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { apiClient, ApiClientError } from '@/lib/api-client';
 
-function VerifyEmailContent({ token }: { token: string | null }) {
+function VerifyEmailContent() {
 
+  const searchParams = useSearchParams();
+  const token = searchParams.get('token');
+  const emailFromUrl = searchParams.get('email');
   const [loading, setLoading] = useState(true);
-  const [success, setSuccess] = useState('');
+  const [verifySuccess, setVerifySuccess] = useState(false);
   const [error, setError] = useState('');
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState('');
+  const [cooldown, setCooldown] = useState(0);
 
+  // Cooldown timer for resend button
+  useEffect(() => {
+    if (cooldown <= 0) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setCooldown((prev) => prev - 1);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldown]);
+
+  //verify email
   useEffect(() => {
     if (!token) {
       setError('Liên kết xác minh không hợp lệ.');
@@ -25,7 +44,8 @@ function VerifyEmailContent({ token }: { token: string | null }) {
           body: JSON.stringify({ token }),
         });
 
-        setSuccess('Xác minh email thành công!');
+        setVerifySuccess(true);
+        setError('');
       } catch (error) {
         if (error instanceof ApiClientError) {
           setError(error.message);
@@ -39,6 +59,32 @@ function VerifyEmailContent({ token }: { token: string | null }) {
 
     verifyEmail();
   }, [token]);
+
+  const handleResend = async () => {
+    if (!emailFromUrl) {
+      setError('Không tìm thấy email để gửi lại xác minh. Vui lòng đăng ký lại.');
+      return;
+    }
+    setResendLoading(true);
+    setError('');
+    setResendMessage('');
+    try {
+      await apiClient('/auth/resend-verification', {
+        method: 'POST',
+        body: JSON.stringify({ email: emailFromUrl }),
+      });
+      setResendMessage('Email xác minh đã được gửi lại. Vui lòng kiểm tra hộp thư của bạn.');
+      setCooldown(60); // Set cooldown to 60 seconds
+    } catch (error) {
+      if (error instanceof ApiClientError) {
+        setError(error.message);
+      } else {
+        setError('Đã xảy ra lỗi. Vui lòng thử lại.');
+      }
+    } finally {
+      setResendLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background">
@@ -58,15 +104,21 @@ function VerifyEmailContent({ token }: { token: string | null }) {
               </span>
             )}
 
-            {success && (
+            {!loading && verifySuccess && (
               <span className="block mt-2">
-                {success}
+                Email của bạn đã được xác minh thành công!
               </span>
             )}
 
-            {error && (
+            {!loading && !verifySuccess && error && (
               <span className="block mt-2">
                 {error}
+              </span>
+            )}
+
+            {!loading && !verifySuccess && resendMessage && (
+              <span className="block mt-2">
+                {resendMessage}
               </span>
             )}
           </CardDescription>
@@ -77,7 +129,12 @@ function VerifyEmailContent({ token }: { token: string | null }) {
           </p>
         </CardContent>
         <CardFooter className="justify-center border-t border-border">
-          {!loading && ( 
+          {!loading && !verifySuccess && (
+            <Button type="button" variant="outline" size="md" onClick={handleResend} disabled={resendLoading || cooldown > 0 || !emailFromUrl}>
+              {resendLoading ? 'Đang gửi lại...' : cooldown > 0 ? `Gửi lại sau (${cooldown}s)` : 'Gửi lại email xác minh'}
+            </Button>
+          )}
+          {!loading && verifySuccess && (
             <Link href="/login">
               <Button variant="primary" size="md">
                 Đến trang Đăng nhập
@@ -89,13 +146,22 @@ function VerifyEmailContent({ token }: { token: string | null }) {
     </div>
   );
 }
-export default async function VerifyEmailPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ token?: string }>;
-}) {
-  const params = await searchParams;
-  const token = params.token ?? null;
+function VerifyEmailFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+      <Card className="w-full max-w-md text-center">
+        <CardContent className="pt-6">
+          Đang tải trang xác minh email...
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
-  return <VerifyEmailContent token={token} />;
+export default function VerifyEmailPage(){
+  return (
+    <Suspense fallback={<VerifyEmailFallback />}>
+      <VerifyEmailContent />
+    </Suspense>
+  );
 }
