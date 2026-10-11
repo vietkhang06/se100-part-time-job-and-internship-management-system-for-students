@@ -1,6 +1,7 @@
 import { Injectable, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Reflector } from '@nestjs/core';
+import { AuthErrorCode } from '@campusjob/contracts';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 
 @Injectable()
@@ -24,7 +25,13 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
   handleRequest(err: any, user: any) {
     if (err || !user) {
-      throw err || new UnauthorizedException('Vui lòng đăng nhập để tiếp tục.');
+      throw (
+        err ||
+        new UnauthorizedException({
+          message: 'Vui lòng đăng nhập để tiếp tục.',
+          code: AuthErrorCode.UNAUTHORIZED,
+        })
+      );
     }
     return user;
   }

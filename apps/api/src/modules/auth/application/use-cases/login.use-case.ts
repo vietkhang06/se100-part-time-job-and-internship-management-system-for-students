@@ -8,7 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
-import { UserStatus, AuthUserDto } from '@campusjob/contracts';
+import { UserStatus, AuthUserDto, AuthErrorCode } from '@campusjob/contracts';
 import {
   USER_REPOSITORY_TOKEN,
   IUserRepository,
@@ -54,28 +54,40 @@ export class LoginUseCase {
 
     const user = await this.userRepository.findByEmail(normalizedEmail);
     if (!user || !user.passwordHash) {
-      throw new UnauthorizedException('Email hoặc mật khẩu không chính xác.');
+      throw new UnauthorizedException({
+        message: 'Email hoặc mật khẩu không chính xác.',
+        code: AuthErrorCode.INVALID_CREDENTIALS,
+      });
     }
 
     if (user.status === UserStatus.SUSPENDED) {
-      throw new ForbiddenException('Tài khoản đã bị đình chỉ hoạt động.');
+      throw new ForbiddenException({
+        message: 'Tài khoản đã bị đình chỉ hoạt động.',
+        code: AuthErrorCode.ACCOUNT_SUSPENDED,
+      });
     }
 
     if (user.status === UserStatus.LOCKED) {
-      throw new ForbiddenException(
-        'Tài khoản đang bị khóa tạm thời. Vui lòng liên hệ quản trị viên.',
-      );
+      throw new ForbiddenException({
+        message: 'Tài khoản đang bị khóa tạm thời. Vui lòng liên hệ quản trị viên.',
+        code: AuthErrorCode.ACCOUNT_LOCKED,
+      });
     }
 
     if (user.status === UserStatus.PENDING_VERIFICATION) {
-      throw new ForbiddenException(
-        'Tài khoản chưa được xác minh email. Vui lòng kiểm tra email để kích hoạt hoặc yêu cầu gửi lại mã.',
-      );
+      throw new ForbiddenException({
+        message:
+          'Tài khoản chưa được xác minh email. Vui lòng kiểm tra email để kích hoạt hoặc yêu cầu gửi lại mã.',
+        code: AuthErrorCode.ACCOUNT_PENDING_VERIFICATION,
+      });
     }
 
     const isMatch = await PasswordHasher.verify(user.passwordHash, dto.password);
     if (!isMatch) {
-      throw new UnauthorizedException('Email hoặc mật khẩu không chính xác.');
+      throw new UnauthorizedException({
+        message: 'Email hoặc mật khẩu không chính xác.',
+        code: AuthErrorCode.INVALID_CREDENTIALS,
+      });
     }
 
     // Generate Refresh Token & Session

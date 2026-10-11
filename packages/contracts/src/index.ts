@@ -12,13 +12,35 @@ export enum UserStatus {
   LOCKED = 'LOCKED',
 }
 
+export enum AuthErrorCode {
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  ROLE_DISALLOWED = 'ROLE_DISALLOWED',
+  WEAK_PASSWORD = 'WEAK_PASSWORD',
+  EMAIL_ALREADY_EXISTS = 'EMAIL_ALREADY_EXISTS',
+  INVALID_CREDENTIALS = 'INVALID_CREDENTIALS',
+  ACCOUNT_PENDING_VERIFICATION = 'ACCOUNT_PENDING_VERIFICATION',
+  ACCOUNT_SUSPENDED = 'ACCOUNT_SUSPENDED',
+  ACCOUNT_LOCKED = 'ACCOUNT_LOCKED',
+  REFRESH_TOKEN_MISSING = 'REFRESH_TOKEN_MISSING',
+  REFRESH_TOKEN_INVALID = 'REFRESH_TOKEN_INVALID',
+  REFRESH_TOKEN_EXPIRED = 'REFRESH_TOKEN_EXPIRED',
+  REFRESH_TOKEN_REUSED = 'REFRESH_TOKEN_REUSED',
+  SESSION_REVOKED = 'SESSION_REVOKED',
+  UNAUTHORIZED = 'UNAUTHORIZED',
+}
+
 export interface ApiErrorResponse {
   statusCode: number;
   message: string | string[];
   error: string;
+  code?: AuthErrorCode | (string & {});
   timestamp: string;
   path: string;
   correlationId?: string;
+}
+
+export interface AuthErrorResponse extends ApiErrorResponse {
+  code?: AuthErrorCode;
 }
 
 export interface AuthUserDto {

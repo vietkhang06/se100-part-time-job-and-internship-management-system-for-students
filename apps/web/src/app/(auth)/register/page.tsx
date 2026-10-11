@@ -6,12 +6,13 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { apiClient, ApiClientError } from '@/lib/api-client';
+import { UserRole, type RegisterRequestDto, type RegisterResponseDto } from '@campusjob/contracts';
 
 export default function RegisterPage() {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<RegisterRequestDto>({
     fullName: '',
     email: '',
-    role: 'STUDENT',
+    role: UserRole.STUDENT,
     password: '',
   });
 
@@ -33,7 +34,7 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const result = await apiClient('/auth/register', {
+      const result = await apiClient<RegisterResponseDto>('/auth/register', {
         method: 'POST',
         body: JSON.stringify(formData),
       });
@@ -81,10 +82,15 @@ export default function RegisterPage() {
             <Select
               label="Vai trò"
               value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value})}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  role: e.target.value as UserRole.STUDENT | UserRole.EMPLOYER,
+                })
+              }
               options={[
-                { label: 'Sinh viên (Ứng viên)', value: 'STUDENT' },
-                { label: 'Nhà tuyển dụng (Doanh nghiệp)', value: 'EMPLOYER' },
+                { label: 'Sinh viên (Ứng viên)', value: UserRole.STUDENT },
+                { label: 'Nhà tuyển dụng (Doanh nghiệp)', value: UserRole.EMPLOYER },
               ]}
             />
             <Input 

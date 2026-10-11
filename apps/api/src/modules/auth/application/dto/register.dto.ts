@@ -9,10 +9,10 @@ import {
   Matches,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { UserRole } from '@campusjob/contracts';
+import { UserRole, RegisterRequestDto } from '@campusjob/contracts';
 import { PASSWORD_POLICY } from '../../infrastructure/security/password-hasher';
 
-export class RegisterDto {
+export class RegisterDto implements RegisterRequestDto {
   @ApiProperty({ example: 'student@example.com', description: 'User email address' })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
   @IsEmail({}, { message: 'Invalid email address' })

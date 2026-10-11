@@ -5,7 +5,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { UserRole, UserStatus, RegisterResponseDto } from '@campusjob/contracts';
+import { UserRole, UserStatus, RegisterResponseDto, AuthErrorCode } from '@campusjob/contracts';
 import {
   USER_REPOSITORY_TOKEN,
   IUserRepository,
@@ -34,9 +34,10 @@ export class RegisterUseCase {
   async execute(dto: RegisterDto): Promise<RegisterResponseDto> {
     // 1. Role Authorization enforcement
     if (dto.role !== UserRole.STUDENT && dto.role !== UserRole.EMPLOYER) {
-      throw new BadRequestException(
-        'Only STUDENT and EMPLOYER roles are permitted for self-registration',
-      );
+      throw new BadRequestException({
+        message: 'Only STUDENT and EMPLOYER roles are permitted for self-registration',
+        code: AuthErrorCode.ROLE_DISALLOWED,
+      });
     }
 
     // 2. Email normalization
@@ -45,14 +46,19 @@ export class RegisterUseCase {
     // 3. Check existing user
     const existing = await this.userRepository.findByEmail(normalizedEmail);
     if (existing) {
-      throw new ConflictException('Email is already registered');
+      throw new ConflictException({
+        message: 'Email is already registered',
+        code: AuthErrorCode.EMAIL_ALREADY_EXISTS,
+      });
     }
 
     // 4. Validate password policy
     if (!PasswordHasher.validatePolicy(dto.password)) {
-      throw new BadRequestException(
-        'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.',
-      );
+      throw new BadRequestException({
+        message:
+          'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.',
+        code: AuthErrorCode.WEAK_PASSWORD,
+      });
     }
 
     // 5. Hash password
@@ -81,7 +87,10 @@ export class RegisterUseCase {
       );
     } catch (err: any) {
       if (err.code === 'P2002' || err.message?.includes('Unique constraint')) {
-        throw new ConflictException('Email is already registered');
+        throw new ConflictException({
+          message: 'Email is already registered',
+          code: AuthErrorCode.EMAIL_ALREADY_EXISTS,
+        });
       }
       throw err;
     }

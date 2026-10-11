@@ -1,0 +1,291 @@
+# CAMPUSJOB — HỢP ĐỒNG API XÁC THỰC (AUTH API CONTRACT C-01)
+
+Tài liệu này chuẩn hóa hợp đồng giao tiếp API xác thực (Authentication API Contract) cho hệ thống CampusJob, đóng vai trò nguồn chân lý (Single Source of Truth) giữa Backend (`apps/api`), Frontend (`apps/web`), và gói hợp đồng dùng chung (`packages/contracts`).
+
+---
+
+## 1. Tiêu chuẩn chung
+
+- **Base URL:** `/api/v1`
+- **Format dữ liệu:** `application/json; charset=utf-8`
+- **Mã hóa mật khẩu:** Argon2id (`memoryCost: 65536`, `timeCost: 3`, `parallelism: 4`)
+- **Access Token:** Bearer JWT, thời hạn 15 phút, gửi qua header `Authorization: Bearer <accessToken>`. Được lưu trữ trong in-memory/RAM ở client, không lưu trong localStorage/sessionStorage.
+- **Refresh Token & Session:** Token ngẫu nhiên (40 bytes hex), băm SHA-256 lưu trong cơ sở dữ liệu (`AuthSession`), thời hạn mặc định 30 ngày.
+- **Cơ chế Cookie:** Gửi qua `Set-Cookie` với cấu hình:
+  - Tên cookie: `campusjob_refresh_token` (dự phòng tương thích: `refreshToken`)
+  - Thuộc tính: `HttpOnly`, `SameSite=Lax`, `Path=/api/v1/auth`, `Secure` (bật khi production hoặc `COOKIE_SECURE=true`), `Max-Age=2592000` (30 ngày).
+- **Cơ chế Token Rotation & Reuse Detection:** Mỗi lần refresh, refresh token cũ được thu hồi (`revokedAt = now`) và cấp refresh token mới cùng `tokenFamily`. Nếu phát hiện refresh token đã bị thu hồi được sử dụng lại (tấn công đánh cắp token), toàn bộ phiên thuộc `tokenFamily` sẽ bị thu hồi ngay lập tức.
+- **Chuẩn định dạng lỗi:** `ApiErrorResponse` (`packages/contracts`):
+  ```json
+  {
+    "statusCode": 400,
+    "message": "Chi tiết lỗi hoặc mảng lỗi validation",
+    "error": "Bad Request",
+    "code": "VALIDATION_ERROR",
+    "timestamp": "2026-10-11T00:00:00.000Z",
+    "path": "/api/v1/auth/register",
+    "correlationId": "optional-uuid"
+  }
+  ```
+
+---
+
+## 2. Chi tiết các Endpoint trong phạm vi C-01
+
+### 2.1 Đăng ký tài khoản (User Registration)
+
+- **Endpoint:** `POST /api/v1/auth/register`
+- **Yêu cầu xác thực:** Public (Không yêu cầu token)
+- **Mô tả:** Đăng ký tài khoản mới dành cho Sinh viên (`STUDENT`) hoặc Doanh nghiệp (`EMPLOYER`). Tài khoản khởi tạo với trạng thái `PENDING_VERIFICATION`, đồng thời tạo token xác minh email (thời hạn 24 giờ) và gửi email kích hoạt qua Mailpit/SMTP.
+
+#### Request Header
+```http
+Content-Type: application/json
+```
+
+#### Request Body (`RegisterRequestDto`)
+| Trường | Kiểu dữ liệu | Bắt buộc | Ràng buộc validation | Mô tả |
+|---|---|---|---|---|
+| `email` | `string` | Có | Chuẩn email RFC 5322, tự động lowercase & trim | Email đăng nhập |
+| `password` | `string` | Có | Tối thiểu 8 ký tự, gồm ít nhất: 1 chữ hoa, 1 chữ thường, 1 số, 1 ký tự đặc biệt (`@$!%*?&`) | Mật khẩu tài khoản |
+| `fullName` | `string` | Có | Tối thiểu 2 ký tự, tự động trim | Họ và tên người dùng |
+| `role` | `string` | Có | Giá trị chỉ cho phép: `STUDENT` hoặc `EMPLOYER` | Vai trò người dùng |
+| `phone` | `string` | Không | Chuỗi ký tự số điện thoại (tùy chọn) | Số điện thoại liên hệ |
+
+*Ví dụ Request Body:*
+```json
+{
+  "email": "student@example.com",
+  "password": "Password123!",
+  "fullName": "Nguyen Van A",
+  "role": "STUDENT",
+  "phone": "0901234567"
+}
+```
+
+#### Success Response
+- **HTTP Status:** `201 Created`
+- **Body (`RegisterResponseDto`):**
+```json
+{
+  "message": "Registration successful. Please check your email to verify your account.",
+  "user": {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "email": "student@example.com",
+    "fullName": "Nguyen Van A",
+    "role": "STUDENT",
+    "status": "PENDING_VERIFICATION",
+    "emailVerified": false
+  }
+}
+```
+
+#### Expected Error Responses
+- **400 Bad Request (`VALIDATION_ERROR`):** Dữ liệu không thỏa mãn DTO hoặc mật khẩu không đạt chính sách phức tạp.
+- **400 Bad Request (`ROLE_DISALLOWED`):** Cố tình gửi vai trò `ADMIN` hoặc `MODERATOR` qua API tự đăng ký.
+- **409 Conflict (`EMAIL_ALREADY_EXISTS`):** Email đã tồn tại trong hệ thống (kiểm tra không phân biệt chữ hoa/thường).
+
+---
+
+### 2.2 Đăng nhập (User Login)
+
+- **Endpoint:** `POST /api/v1/auth/login`
+- **Yêu cầu xác thực:** Public (Không yêu cầu token)
+- **Mô tả:** Xác thực người dùng bằng email và mật khẩu. Khi thành công, trả về Access Token trong body và gắn Refresh Token an toàn trong HttpOnly Cookie.
+
+#### Request Header
+```http
+Content-Type: application/json
+```
+
+#### Request Body (`LoginRequestDto`)
+| Trường | Kiểu dữ liệu | Bắt buộc | Ràng buộc validation | Mô tả |
+|---|---|---|---|---|
+| `email` | `string` | Có | Chuẩn email, tự động lowercase & trim | Email đã đăng ký |
+| `password` | `string` | Có | Không được để trống | Mật khẩu đăng nhập |
+
+*Ví dụ Request Body:*
+```json
+{
+  "email": "student@example.com",
+  "password": "Password123!"
+}
+```
+
+#### Success Response
+- **HTTP Status:** `200 OK`
+- **Response Headers:**
+```http
+Set-Cookie: campusjob_refresh_token=...; Path=/api/v1/auth; HttpOnly; SameSite=Lax; Max-Age=2592000
+```
+- **Body (`LoginResponseDto`):**
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "email": "student@example.com",
+    "fullName": "Nguyen Van A",
+    "role": "STUDENT",
+    "status": "ACTIVE",
+    "emailVerified": true
+  }
+}
+```
+
+#### Expected Error Responses
+- **400 Bad Request (`VALIDATION_ERROR`):** Email sai định dạng hoặc mật khẩu để trống.
+- **401 Unauthorized (`INVALID_CREDENTIALS`):** Sai email hoặc sai mật khẩu (thông báo đồng nhất: *"Email hoặc mật khẩu không chính xác."* để phòng chống tấn công dò tìm tài khoản).
+- **403 Forbidden (`ACCOUNT_PENDING_VERIFICATION`):** Tài khoản chưa kích hoạt qua email.
+- **403 Forbidden (`ACCOUNT_SUSPENDED`):** Tài khoản đã bị đình chỉ hoạt động.
+- **403 Forbidden (`ACCOUNT_LOCKED`):** Tài khoản đang bị khóa tạm thời.
+
+---
+
+### 2.3 Xoay vòng Refresh Token (Token Refresh)
+
+- **Endpoint:** `POST /api/v1/auth/refresh`
+- **Yêu cầu xác thực:** Public endpoint, nhưng yêu cầu có HttpOnly Cookie `campusjob_refresh_token` (hoặc header `x-refresh-token`).
+- **Mô tả:** Cấp mới Access Token và xoay vòng Refresh Token. Áp dụng cơ chế Token Family để phát hiện và ngăn chặn hành vi sử dụng lại token đã thu hồi.
+
+#### Request Header / Cookie
+```http
+Cookie: campusjob_refresh_token=<raw_refresh_token>
+```
+*(Tùy chọn: header `x-refresh-token: <raw_refresh_token>` phục vụ client phi trình duyệt).*
+
+#### Request Body
+*Không có (Body trống).*
+
+#### Success Response
+- **HTTP Status:** `200 OK`
+- **Response Headers:**
+```http
+Set-Cookie: campusjob_refresh_token=<new_rotated_token>; Path=/api/v1/auth; HttpOnly; SameSite=Lax; Max-Age=2592000
+```
+- **Body (`RefreshResponseDto`):**
+```json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "email": "student@example.com",
+    "fullName": "Nguyen Van A",
+    "role": "STUDENT",
+    "status": "ACTIVE",
+    "emailVerified": true
+  }
+}
+```
+
+#### Expected Error Responses
+- **401 Unauthorized (`REFRESH_TOKEN_MISSING`):** Không tìm thấy cookie hoặc header refresh token.
+- **401 Unauthorized (`REFRESH_TOKEN_INVALID`):** Token không tồn tại trong cơ sở dữ liệu.
+- **401 Unauthorized (`REFRESH_TOKEN_EXPIRED`):** Phiên đăng nhập đã hết hạn.
+- **401 Unauthorized (`REFRESH_TOKEN_REUSED`):** Phát hiện token cũ đã bị thu hồi được sử dụng lại (thu hồi tức thì toàn bộ token family).
+- **403 Forbidden (`ACCOUNT_SUSPENDED`):** Tài khoản sở hữu phiên đã bị đình chỉ hoặc khóa.
+
+---
+
+### 2.4 Đăng xuất phiên hiện tại (Logout)
+
+- **Endpoint:** `POST /api/v1/auth/logout`
+- **Yêu cầu xác thực:** Public endpoint (chấp nhận refresh token từ cookie/header).
+- **Mô tả:** Thu hồi phiên làm việc hiện tại trong cơ sở dữ liệu (`revokedAt = now`) và xóa bỏ refresh cookie trên trình duyệt. Tuân thủ nguyên lý Idempotent: luôn trả về thành công và xóa cookie ngay cả khi client không truyền token hoặc token không còn hợp lệ.
+
+#### Request Header / Cookie
+```http
+Cookie: campusjob_refresh_token=<raw_refresh_token>
+```
+
+#### Request Body
+*Không có (Body trống).*
+
+#### Success Response
+- **HTTP Status:** `200 OK`
+- **Response Headers:**
+```http
+Set-Cookie: campusjob_refresh_token=; Path=/api/v1/auth; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly
+```
+- **Body (`LogoutResponseDto`):**
+```json
+{
+  "ok": true,
+  "message": "Đăng xuất thành công."
+}
+```
+
+---
+
+### 2.5 Thu hồi tất cả phiên đăng xuất (Logout-All — Phụ thuộc mở rộng)
+
+- **Endpoint:** `POST /api/v1/auth/logout-all`
+- **Yêu cầu xác thực:** Bắt buộc Bearer Access Token (`@UseGuards(JwtAuthGuard)`).
+- **Mô tả:** Thu hồi toàn bộ các phiên làm việc đang kích hoạt của người dùng hiện tại trên mọi thiết bị và xóa refresh cookie trên trình duyệt gọi lệnh.
+
+#### Request Header
+```http
+Authorization: Bearer <accessToken>
+```
+
+#### Request Body
+*Không có (Body trống).*
+
+#### Success Response
+- **HTTP Status:** `200 OK`
+- **Response Headers:**
+```http
+Set-Cookie: campusjob_refresh_token=; Path=/api/v1/auth; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly
+```
+- **Body (`LogoutResponseDto`):**
+```json
+{
+  "ok": true,
+  "message": "Đã thu hồi tất cả phiên đăng nhập."
+}
+```
+
+#### Expected Error Responses
+- **401 Unauthorized (`UNAUTHORIZED`):** Không có Access Token hoặc Access Token không hợp lệ / hết hạn.
+
+---
+
+## 3. Cơ chế Lưu trữ Refresh Token & Hướng dẫn Kiểm thử thủ công
+
+### 3.1 Phân biệt Token Client nhận và Token lưu trong Cơ sở dữ liệu
+- **Giá trị Client nắm giữ:** Chuỗi ngẫu nhiên nguyên bản (raw token, 40 bytes hex, ví dụ: `d4e5f6...`), được gửi tự động qua cookie `campusjob_refresh_token` hoặc header `x-refresh-token`.
+- **Giá trị Cơ sở dữ liệu lưu trữ:** Cột `AuthSession.tokenHash` **không bao giờ** lưu chuỗi thô mà lưu bản băm SHA-256 (64 ký tự hex).
+- **Quy trình xác thực:** Khi client gửi `rawRefreshToken`, máy chủ thực hiện băm `SHA-256(rawRefreshToken)` rồi so khớp với cột `tokenHash` trong bảng `AuthSession`.
+- **Lưu ý cho Tester / Reviewer:** Khi kiểm tra trực tiếp PostgreSQL, không tìm kiếm chuỗi cookie thô trong cột `tokenHash`. Cần tra cứu theo `userId` hoặc so khớp với giá trị băm SHA-256.
+
+### 3.2 Cấu hình Cổng Môi trường & Công cụ Kiểm thử
+- **Swagger UI:** `http://localhost:8080/docs` (phục vụ từ cổng `API_PORT=8080` theo đúng cấu hình hệ thống, không sử dụng cổng 4000).
+- **REST API Endpoint:** `http://localhost:8080/api/v1`.
+- **Web Client:** `http://localhost:3000`.
+- **Mailpit Web UI:** `http://localhost:8026`.
+- **PostgreSQL Dev Port:** `localhost:5435` (database `campusjob`, user `campusjob`).
+
+---
+
+## 4. Kịch bản kiểm thử thủ công (Manual Testing Checklist)
+
+> **LƯU Ý NGHIÊM NGẶT VỀ TRẠNG THÁI NGHIỆM THU:**  
+> Toàn bộ các ca kiểm thử thủ công dưới đây được phân loại trạng thái là **`NOT RUN`** (Chưa thực hiện kiểm thử thủ công bởi con người trong phiên audit này). Kết quả kiểm thử tự động hồi quy đã được thực thi và chứng minh độc lập qua bộ test E2E (`apps/api/test/auth.e2e-spec.ts`).
+
+| Mã kịch bản | Luồng nghiệp vụ | Các bước thực hiện thủ công | Kết quả mong đợi | Trạng thái thủ công | Tham chiếu Test tự động |
+|---|---|---|---|---|---|
+| `TC-MAN-01` | Đăng ký tài khoản Sinh viên / Nhà tuyển dụng | 1. Mở Swagger UI tại `http://localhost:8080/docs`.<br>2. Gọi `POST /api/v1/auth/register` với payload hợp lệ.<br>3. Mở Mailpit tại `http://localhost:8026` kiểm tra email kích hoạt.<br>4. Tra cứu bảng `User` trong PostgreSQL (`port 5435`). | Trả về HTTP 201 `RegisterResponseDto`.<br>Trạng thái tài khoản là `PENDING_VERIFICATION`.<br>Email xác minh được gửi thành công đến Mailpit. | **NOT RUN** | `auth.e2e-spec.ts` (Lines 72-123) |
+| `TC-MAN-02` | Đăng nhập hệ thống | 1. Gọi `POST /api/v1/auth/login` với email đã kích hoạt và mật khẩu đúng.<br>2. Kiểm tra Response Body và Response Headers trong tab Network hoặc Postman. | HTTP 200 `LoginResponseDto` chứa `accessToken` JWT.<br>Header `Set-Cookie` chứa `campusjob_refresh_token` với cờ `HttpOnly`, `Path=/api/v1/auth`, `SameSite=Lax`. | **NOT RUN** | `auth.e2e-spec.ts` (Lines 487-510) |
+| `TC-MAN-03` | Kiểm tra tính bí mật & lưu trữ Refresh Token trong DB | 1. Lấy giá trị cookie thô `campusjob_refresh_token` (chuỗi hex 40 bytes) sau khi đăng nhập.<br>2. Thực hiện băm SHA-256 chuỗi cookie thô trên máy trạm tester.<br>3. Chạy câu lệnh SQL `SELECT id, "userId", "tokenHash", "revokedAt" FROM "AuthSession" WHERE "userId" = '...';`. | Cột `tokenHash` trong DB lưu chuỗi SHA-256 hex (64 ký tự), **hoàn toàn không** chứa raw token thô.<br>Chuỗi SHA-256 tính từ raw cookie khớp chính xác với `tokenHash`. | **NOT RUN** | `auth.e2e-spec.ts` (Lines 416-450, 640-701) |
+| `TC-MAN-04` | Xoay vòng Refresh Token (Token Rotation) | 1. Gọi `POST /api/v1/auth/refresh` kèm cookie `campusjob_refresh_token`.<br>2. Kiểm tra Response Body và `Set-Cookie`.<br>3. Kiểm tra bảng `AuthSession` trong PostgreSQL. | HTTP 200 trả về `accessToken` mới.<br>`Set-Cookie` cấp mới `campusjob_refresh_token`.<br>Session cũ có `revokedAt = now()`.<br>Session mới được tạo với cùng `tokenFamily`. | **NOT RUN** | `auth.e2e-spec.ts` (Lines 640-663) |
+| `TC-MAN-05` | Ngăn chặn tấn công tái sử dụng Token (Reuse Detection) | 1. Gửi lại request `POST /api/v1/auth/refresh` bằng cookie cũ đã xoay vòng ở `TC-MAN-04`.<br>2. Kiểm tra mã lỗi và trạng thái DB. | HTTP 401 với mã lỗi `REFRESH_TOKEN_REUSED`.<br>Toàn bộ phiên thuộc cùng `tokenFamily` lập tức bị đánh dấu thu hồi (`revokedAt != null`). | **NOT RUN** | `auth.e2e-spec.ts` (Lines 665-701) |
+| `TC-MAN-06` | Đăng xuất phiên hiện tại (Logout) | 1. Gọi `POST /api/v1/auth/logout` kèm cookie refresh token.<br>2. Kiểm tra Response Headers và DB. | HTTP 200 `{ ok: true, message: "..." }`.<br>Header `Set-Cookie` xóa cookie (`Expires=Thu, 01 Jan 1970`).<br>Phiên tương ứng trong DB có `revokedAt = now()`. | **NOT RUN** | `auth.e2e-spec.ts` (Lines 776-798) |
+| `TC-MAN-07` | Thu hồi tất cả phiên (Logout-All) | 1. Đăng nhập tạo 2 phiên từ 2 client khác nhau.<br>2. Gọi `POST /api/v1/auth/logout-all` kèm Bearer Access Token.<br>3. Kiểm tra bảng `AuthSession`. | HTTP 200 `{ ok: true, message: "Đã thu hồi tất cả phiên đăng nhập." }`.<br>Tất cả bản ghi trong `AuthSession` của người dùng đều có `revokedAt != null`. | **NOT RUN** | `auth.e2e-spec.ts` (Lines 801-836) |
+
+---
+
+## 5. Kế hoạch Chuyển giao Kỹ thuật (Technical Transition)
+
+- **Trạng thái Task Hiện tại (S2-M01-01):** Hoàn thành chuẩn hóa Auth API Contract (C-01), mã hóa mã lỗi `AuthErrorCode`, đồng bộ types `@campusjob/contracts`, đảm bảo 100% kiểm thử hồi quy tự động.
+- **Nhiệm vụ kế tiếp trong Sprint 2:** **`S2-M01-02` (Phân quyền người dùng & Kiểm soát truy cập dựa trên vai trò - RBAC - Role-Based Access Control)**. Nhiệm vụ này phụ thuộc trực tiếp vào C-01 để trích xuất `UserRole` và phân quyền endpoint qua Guard/Decorator. Nhiệm vụ này **không phải** là nhiệm vụ hồ sơ cá nhân (Personal Profile).
+
