@@ -23,6 +23,7 @@ import { AUTH_SESSION_REPOSITORY_TOKEN } from './domain/repositories/auth-sessio
 import { PrismaAuthSessionRepository } from './infrastructure/persistence/prisma-auth-session.repository';
 import { JwtStrategy } from './infrastructure/security/jwt.strategy';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
+import { RolesGuard } from '../../shared/guards/roles.guard';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
     LogoutAllUseCase,
     JwtStrategy,
     JwtAuthGuard,
+    RolesGuard,
   ],
   exports: [
     EMAIL_VERIFICATION_TOKEN_REPOSITORY_TOKEN,
@@ -87,6 +89,7 @@ import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
     PassportModule,
     JwtStrategy,
     JwtAuthGuard,
+    RolesGuard,
   ],
 })
 export class AuthModule {}

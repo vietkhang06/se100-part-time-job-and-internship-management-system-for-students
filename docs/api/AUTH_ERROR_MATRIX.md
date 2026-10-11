@@ -21,6 +21,8 @@ Tài liệu này xác định ma trận ánh xạ chính thức giữa tình hu�
 | `REFRESH_TOKEN_EXPIRED` | `401 Unauthorized` | `UnauthorizedException` | Refresh session trong cơ sở dữ liệu đã hết hạn | `"Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."` | `auth.e2e-spec.ts` (test expired session in DB) | **Verified (PASS)** |
 | `REFRESH_TOKEN_REUSED` | `401 Unauthorized` | `UnauthorizedException` | Tái sử dụng token cũ đã bị thu hồi (`revokedAt != null`) | `"Phát hiện hành vi sử dụng lại token đã thu hồi. Tất cả phiên đăng nhập liên quan đã bị hủy."` | `auth.e2e-spec.ts` (test token family reuse attack) | **Verified (PASS)** |
 | `UNAUTHORIZED` | `401 Unauthorized` | `UnauthorizedException` | Gọi endpoint bảo vệ JWT (`/logout-all`, `/me`) không có token / sai token | `"Unauthorized"` | `auth.e2e-spec.ts` (test unauthenticated / malformed token) | **Verified (PASS)** |
+| `FORBIDDEN` | `403 Forbidden` | `ForbiddenException` | Người dùng đã xác thực nhưng không có vai trò hợp lệ theo `@Roles()` | `"Bạn không có quyền truy cập tài nguyên này."` | `rbac.e2e-spec.ts`, `roles.guard.spec.ts` | **Verified (PASS)** |
+
 
 ---
 

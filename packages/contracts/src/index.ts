@@ -27,6 +27,7 @@ export enum AuthErrorCode {
   REFRESH_TOKEN_REUSED = 'REFRESH_TOKEN_REUSED',
   SESSION_REVOKED = 'SESSION_REVOKED',
   UNAUTHORIZED = 'UNAUTHORIZED',
+  FORBIDDEN = 'FORBIDDEN',
 }
 
 export interface ApiErrorResponse {
