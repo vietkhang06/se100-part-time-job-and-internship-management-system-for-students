@@ -1,4 +1,4 @@
-import { BadRequestException, HttpException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, HttpException } from '@nestjs/common';
 import { UserRole, UserStatus } from '@campusjob/contracts';
 import { ResendVerificationUseCase } from './resend-verification.use-case';
 import { IUserRepository } from '../../../users/domain/repositories/user.repository.interface';
@@ -139,6 +139,48 @@ describe('ResendVerificationUseCase', () => {
     const result = await useCase.execute({ email: 'nonexistent@example.com' });
 
     expect(result.message).toContain('If your account is registered');
+    expect(tokenRepository.create).not.toHaveBeenCalled();
+    expect(mailService.sendVerificationEmail).not.toHaveBeenCalled();
+  });
+
+  it('should reject resend for a suspended account with ForbiddenException', async () => {
+    const user = new UserEntity(
+      'user-1',
+      'suspended@example.com',
+      'hash',
+      'Nguyen Van B',
+      UserRole.STUDENT,
+      UserStatus.SUSPENDED,
+      null,
+      null,
+    );
+    userRepository.findByEmail.mockResolvedValue(user);
+
+    await expect(
+      useCase.execute({ email: 'suspended@example.com' }),
+    ).rejects.toThrow(ForbiddenException);
+
+    expect(tokenRepository.create).not.toHaveBeenCalled();
+    expect(mailService.sendVerificationEmail).not.toHaveBeenCalled();
+  });
+
+  it('should reject resend for a locked account with ForbiddenException', async () => {
+    const user = new UserEntity(
+      'user-1',
+      'locked@example.com',
+      'hash',
+      'Nguyen Van C',
+      UserRole.STUDENT,
+      UserStatus.LOCKED,
+      null,
+      null,
+    );
+    userRepository.findByEmail.mockResolvedValue(user);
+
+    await expect(
+      useCase.execute({ email: 'locked@example.com' }),
+    ).rejects.toThrow(ForbiddenException);
+
     expect(tokenRepository.create).not.toHaveBeenCalled();
     expect(mailService.sendVerificationEmail).not.toHaveBeenCalled();
   });

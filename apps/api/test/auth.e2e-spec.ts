@@ -770,6 +770,68 @@ describe('AuthModule (e2e)', () => {
         data: { status: UserStatus.ACTIVE },
       });
     });
+
+    it('should reject refresh when account is locked', async () => {
+      const loginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      const cookies = loginRes.headers['set-cookie'];
+      const user = await prisma.user.findUnique({ where: { email: testStudentEmail } });
+      await prisma.user.update({
+        where: { id: user!.id },
+        data: { status: UserStatus.LOCKED },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', cookies)
+        .expect(403);
+
+      expect(res.body.code).toBe(AuthErrorCode.ACCOUNT_LOCKED);
+      expect(res.body.statusCode).toBe(403);
+
+      // Restore status to ACTIVE
+      await prisma.user.update({
+        where: { id: user!.id },
+        data: { status: UserStatus.ACTIVE },
+      });
+    });
+
+    it('should reject refresh when account is pending verification', async () => {
+      const loginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      const cookies = loginRes.headers['set-cookie'];
+      const user = await prisma.user.findUnique({ where: { email: testStudentEmail } });
+      await prisma.user.update({
+        where: { id: user!.id },
+        data: { status: UserStatus.PENDING_VERIFICATION },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', cookies)
+        .expect(403);
+
+      expect(res.body.code).toBe(AuthErrorCode.ACCOUNT_PENDING_VERIFICATION);
+      expect(res.body.statusCode).toBe(403);
+
+      // Restore status to ACTIVE
+      await prisma.user.update({
+        where: { id: user!.id },
+        data: { status: UserStatus.ACTIVE },
+      });
+    });
   });
 
   describe('POST /api/v1/auth/logout', () => {
