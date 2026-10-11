@@ -137,3 +137,13 @@ Quá trình kiểm soát quyền truy cập tuân theo mô hình 2 lớp bảo v
   "correlationId": "488821ca-d339-4f4f-bd04-f9a5e7744601"
 }
 ```
+
+---
+
+## 5. Kết luận Kiểm toán Kích hoạt trên Tuyến đường Sản xuất (Production Wiring Audit)
+
+1. **Bản chất hiện thực hóa:** Hiện thực hóa RBAC trong task S2-M01-02 là một **Cơ chế phân quyền tái sử dụng (Reusable Authorization Mechanism)**, hoàn chỉnh về mặt hạ tầng (`@Roles`, `RolesGuard`, mã lỗi `FORBIDDEN`, unit tests, E2E tests).
+2. **Trạng thái đăng ký Guard:** `RolesGuard` được khai báo provider và export tại `AuthModule`. Guard **không** đăng ký dạng `APP_GUARD` toàn cục (đúng theo quy ước kiến trúc NestJS của dự án: áp dụng tường minh qua `@UseGuards(JwtAuthGuard, RolesGuard)`).
+3. **Trạng thái kích hoạt trên Route sản xuất:** **Chưa kích hoạt trên bất kỳ route sản xuất nào**, vì toàn bộ các endpoint sản xuất hiện có trong repository đều là Public hoặc cho phép tất cả vai trò đã đăng nhập (`/auth/me`, `/auth/logout-all`). Endpoint `GET /api/v1/users/:id` là mã scaffold ban đầu chưa có yêu cầu phân quyền được phê duyệt.
+4. **Phân biệt Route kiểm thử E2E:** 21 test case trong `apps/api/test/rbac.e2e-spec.ts` kiểm thử trên 2 controller thử nghiệm (`RbacTestController`, `RbacPrecedenceTestController`) gắn vào fixture test, tương tác với tài khoản thật và token thật sinh ra từ PostgreSQL qua endpoint sản xuất `POST /api/v1/auth/login`.
+5. **Kích hoạt thực tế trong tương lai:** Việc kích hoạt `@Roles(...)` trên các route sản xuất sẽ diễn ra tại các task nghiệp vụ tương ứng (S2-M01-03+, FR-06, FR-07, FR-09, FR-16, FR-19) khi các controller sản xuất đó được triển khai.
