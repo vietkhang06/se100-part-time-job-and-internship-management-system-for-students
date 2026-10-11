@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { UserStatus, AuthUserDto } from '@campusjob/contracts';
+import { UserStatus, AuthUserDto, AuthErrorCode } from '@campusjob/contracts';
 import {
   USER_REPOSITORY_TOKEN,
   IUserRepository,
@@ -48,14 +48,20 @@ export class RefreshUseCase {
     ipAddress?: string,
   ): Promise<RefreshResult> {
     if (!refreshToken) {
-      throw new UnauthorizedException('Không tìm thấy refresh token.');
+      throw new UnauthorizedException({
+        message: 'Không tìm thấy refresh token.',
+        code: AuthErrorCode.REFRESH_TOKEN_MISSING,
+      });
     }
 
     const tokenHash = TokenUtils.hashToken(refreshToken);
     const session = await this.authSessionRepository.findByTokenHash(tokenHash);
 
     if (!session) {
-      throw new UnauthorizedException('Phiên đăng nhập không hợp lệ hoặc đã hết hạn.');
+      throw new UnauthorizedException({
+        message: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.',
+        code: AuthErrorCode.REFRESH_TOKEN_INVALID,
+      });
     }
 
     // Reuse detection: If session was already revoked, revoke the entire token family!
@@ -64,13 +70,18 @@ export class RefreshUseCase {
         `Refresh token reuse detected for family ${session.tokenFamily}! Revoking all sessions.`,
       );
       await this.authSessionRepository.revokeFamily(session.tokenFamily);
-      throw new UnauthorizedException(
-        'Phát hiện hành vi sử dụng lại token đã thu hồi. Tất cả phiên đăng nhập liên quan đã bị hủy.',
-      );
+      throw new UnauthorizedException({
+        message:
+          'Phát hiện hành vi sử dụng lại token đã thu hồi. Tất cả phiên đăng nhập liên quan đã bị hủy.',
+        code: AuthErrorCode.REFRESH_TOKEN_REUSED,
+      });
     }
 
     if (session.isExpired()) {
-      throw new UnauthorizedException('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+      throw new UnauthorizedException({
+        message: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+        code: AuthErrorCode.REFRESH_TOKEN_EXPIRED,
+      });
     }
 
     // Rotate token
@@ -94,7 +105,10 @@ export class RefreshUseCase {
 
     const user = await this.userRepository.findById(session.userId);
     if (!user || user.status === UserStatus.SUSPENDED) {
-      throw new ForbiddenException('Tài khoản không hợp lệ hoặc đã bị khóa.');
+      throw new ForbiddenException({
+        message: 'Tài khoản không hợp lệ hoặc đã bị khóa.',
+        code: AuthErrorCode.ACCOUNT_SUSPENDED,
+      });
     }
 
     const accessToken = this.jwtService.sign({

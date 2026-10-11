@@ -5,7 +5,7 @@ import cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/shared/database/prisma.service';
 import { GlobalExceptionFilter } from '../src/shared/filters/http-exception.filter';
-import { UserRole, UserStatus } from '@campusjob/contracts';
+import { UserRole, UserStatus, AuthErrorCode } from '@campusjob/contracts';
 import { TokenUtils } from '../src/modules/auth/infrastructure/security/token.utils';
 import { PasswordHasher } from '../src/modules/auth/infrastructure/security/password-hasher';
 
@@ -122,7 +122,7 @@ describe('AuthModule (e2e)', () => {
     });
 
     it('should reject registration with ADMIN or MODERATOR role', async () => {
-      await request(app.getHttpServer())
+      const resAdmin = await request(app.getHttpServer())
         .post('/api/v1/auth/register')
         .send({
           email: 'fakeadmin@campusjob.local',
@@ -132,7 +132,10 @@ describe('AuthModule (e2e)', () => {
         })
         .expect(400);
 
-      await request(app.getHttpServer())
+      expect(resAdmin.body.code).toBe(AuthErrorCode.ROLE_DISALLOWED);
+      expect(resAdmin.body.statusCode).toBe(400);
+
+      const resMod = await request(app.getHttpServer())
         .post('/api/v1/auth/register')
         .send({
           email: 'fakemod@campusjob.local',
@@ -141,10 +144,12 @@ describe('AuthModule (e2e)', () => {
           role: UserRole.MODERATOR,
         })
         .expect(400);
+
+      expect(resMod.body.code).toBe(AuthErrorCode.ROLE_DISALLOWED);
     });
 
     it('should reject registration with invalid email format', async () => {
-      await request(app.getHttpServer())
+      const res = await request(app.getHttpServer())
         .post('/api/v1/auth/register')
         .send({
           email: 'not-an-email',
@@ -153,10 +158,13 @@ describe('AuthModule (e2e)', () => {
           role: UserRole.STUDENT,
         })
         .expect(400);
+
+      expect(res.body.code).toBe(AuthErrorCode.VALIDATION_ERROR);
+      expect(Array.isArray(res.body.message)).toBe(true);
     });
 
     it('should reject registration with duplicate email regardless of casing', async () => {
-      await request(app.getHttpServer())
+      const res = await request(app.getHttpServer())
         .post('/api/v1/auth/register')
         .send({
           email: testStudentEmail.toUpperCase(),
@@ -165,10 +173,13 @@ describe('AuthModule (e2e)', () => {
           role: UserRole.STUDENT,
         })
         .expect(409);
+
+      expect(res.body.code).toBe(AuthErrorCode.EMAIL_ALREADY_EXISTS);
+      expect(res.body.statusCode).toBe(409);
     });
 
     it('should reject registration with weak password not meeting policy', async () => {
-      await request(app.getHttpServer())
+      const res = await request(app.getHttpServer())
         .post('/api/v1/auth/register')
         .send({
           email: 'weakpass@campusjob.local',
@@ -177,6 +188,9 @@ describe('AuthModule (e2e)', () => {
           role: UserRole.STUDENT,
         })
         .expect(400);
+
+      expect(res.body.code).toBe(AuthErrorCode.WEAK_PASSWORD);
+      expect(res.body.statusCode).toBe(400);
     });
   });
 
@@ -495,33 +509,89 @@ describe('AuthModule (e2e)', () => {
     });
 
     it('should reject login with incorrect password', async () => {
-      await request(app.getHttpServer())
+      const res = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
         .send({
           email: testStudentEmail,
           password: 'WrongPassword123!',
         })
         .expect(401);
+
+      expect(res.body.code).toBe(AuthErrorCode.INVALID_CREDENTIALS);
     });
 
     it('should reject login for non-existent email', async () => {
-      await request(app.getHttpServer())
+      const res = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
         .send({
           email: 'unknown-user@campusjob.local',
           password: 'Password123!',
         })
         .expect(401);
+
+      expect(res.body.code).toBe(AuthErrorCode.INVALID_CREDENTIALS);
     });
 
     it('should reject login when account is pending verification', async () => {
-      await request(app.getHttpServer())
+      const res = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
         .send({
           email: testEmployerEmail,
           password: testStrongPassword,
         })
         .expect(403);
+
+      expect(res.body.code).toBe(AuthErrorCode.ACCOUNT_PENDING_VERIFICATION);
+    });
+
+    it('should reject login when account is suspended', async () => {
+      // Temporarily mark student as SUSPENDED
+      const user = await prisma.user.findUnique({ where: { email: testStudentEmail } });
+      await prisma.user.update({
+        where: { id: user!.id },
+        data: { status: UserStatus.SUSPENDED },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(403);
+
+      expect(res.body.code).toBe(AuthErrorCode.ACCOUNT_SUSPENDED);
+
+      // Restore status to ACTIVE
+      await prisma.user.update({
+        where: { id: user!.id },
+        data: { status: UserStatus.ACTIVE },
+      });
+    });
+
+    it('should reject login when account is locked', async () => {
+      const user = await prisma.user.findUnique({ where: { email: testStudentEmail } });
+      await prisma.user.update({
+        where: { id: user!.id },
+        data: { status: UserStatus.LOCKED },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(403);
+
+      expect(res.body.code).toBe(AuthErrorCode.ACCOUNT_LOCKED);
+      expect(res.body.statusCode).toBe(403);
+
+      // Restore status to ACTIVE
+      await prisma.user.update({
+        where: { id: user!.id },
+        data: { status: UserStatus.ACTIVE },
+      });
     });
   });
 
@@ -548,9 +618,21 @@ describe('AuthModule (e2e)', () => {
     });
 
     it('should return 401 when no token is provided', async () => {
-      await request(app.getHttpServer())
+      const res = await request(app.getHttpServer())
         .get('/api/v1/auth/me')
         .expect(401);
+
+      expect(res.body.code).toBe(AuthErrorCode.UNAUTHORIZED);
+    });
+
+    it('should return 401 when invalid token is provided', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/auth/me')
+        .set('Authorization', 'Bearer invalid-malformed-access-token')
+        .expect(401);
+
+      expect(res.body.code).toBe(AuthErrorCode.UNAUTHORIZED);
+      expect(res.body.statusCode).toBe(401);
     });
   });
 
@@ -573,6 +655,8 @@ describe('AuthModule (e2e)', () => {
 
       expect(refreshRes.body).toHaveProperty('accessToken');
       expect(refreshRes.body.accessToken).not.toBe(loginRes.body.accessToken);
+      expect(refreshRes.body).toHaveProperty('user');
+      expect(refreshRes.body.user.email).toBe(testStudentEmail);
 
       const rotatedCookies = refreshRes.headers['set-cookie'];
       expect(rotatedCookies).toBeDefined();
@@ -606,6 +690,7 @@ describe('AuthModule (e2e)', () => {
         .expect(401);
 
       expect(reuseRes.body.message).toContain('thu hồi');
+      expect(reuseRes.body.code).toBe(AuthErrorCode.REFRESH_TOKEN_REUSED);
 
       // Verify in DB that all sessions for this user have been revoked
       const user = await prisma.user.findUnique({ where: { email: testStudentEmail } });
@@ -613,6 +698,77 @@ describe('AuthModule (e2e)', () => {
         where: { userId: user!.id, revokedAt: null },
       });
       expect(activeSessions.length).toBe(0);
+    });
+
+    it('should reject refresh when refresh token is missing', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .expect(401);
+
+      expect(res.body.code).toBe(AuthErrorCode.REFRESH_TOKEN_MISSING);
+    });
+
+    it('should reject refresh when refresh token is invalid', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', ['campusjob_refresh_token=invalid_non_existent_token_hex_12345678'])
+        .expect(401);
+
+      expect(res.body.code).toBe(AuthErrorCode.REFRESH_TOKEN_INVALID);
+      expect(res.body.statusCode).toBe(401);
+    });
+
+    it('should reject refresh when refresh token is expired', async () => {
+      const user = await prisma.user.findUnique({ where: { email: testStudentEmail } });
+      const expiredRawToken = 'expired_raw_token_' + Date.now();
+      const expiredTokenHash = TokenUtils.hashToken(expiredRawToken);
+      await prisma.authSession.create({
+        data: {
+          userId: user!.id,
+          tokenHash: expiredTokenHash,
+          tokenFamily: 'expired-family-' + Date.now(),
+          expiresAt: new Date(Date.now() - 60000), // 1 minute in the past
+        },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', [`campusjob_refresh_token=${expiredRawToken}`])
+        .expect(401);
+
+      expect(res.body.code).toBe(AuthErrorCode.REFRESH_TOKEN_EXPIRED);
+      expect(res.body.statusCode).toBe(401);
+    });
+
+    it('should reject refresh when account is suspended', async () => {
+      const loginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      const cookies = loginRes.headers['set-cookie'];
+      const user = await prisma.user.findUnique({ where: { email: testStudentEmail } });
+      await prisma.user.update({
+        where: { id: user!.id },
+        data: { status: UserStatus.SUSPENDED },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', cookies)
+        .expect(403);
+
+      expect(res.body.code).toBe(AuthErrorCode.ACCOUNT_SUSPENDED);
+      expect(res.body.statusCode).toBe(403);
+
+      // Restore status to ACTIVE
+      await prisma.user.update({
+        where: { id: user!.id },
+        data: { status: UserStatus.ACTIVE },
+      });
     });
   });
 
@@ -677,6 +833,14 @@ describe('AuthModule (e2e)', () => {
         where: { userId: user!.id, revokedAt: null },
       });
       expect(remainingActiveSessions.length).toBe(0);
+    });
+
+    it('should reject logout-all when unauthenticated', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/logout-all')
+        .expect(401);
+
+      expect(res.body.code).toBe(AuthErrorCode.UNAUTHORIZED);
     });
   });
 });

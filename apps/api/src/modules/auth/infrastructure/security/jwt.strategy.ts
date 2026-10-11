@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException, ForbiddenException, Inject } from '@
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
-import { UserStatus } from '@campusjob/contracts';
+import { UserStatus, AuthErrorCode } from '@campusjob/contracts';
 import {
   USER_REPOSITORY_TOKEN,
   IUserRepository,
@@ -36,15 +36,24 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     const user = await this.userRepository.findById(payload.sub);
 
     if (!user) {
-      throw new UnauthorizedException('Tài khoản không tồn tại.');
+      throw new UnauthorizedException({
+        message: 'Tài khoản không tồn tại.',
+        code: AuthErrorCode.UNAUTHORIZED,
+      });
     }
 
     if (user.status === UserStatus.SUSPENDED) {
-      throw new ForbiddenException('Tài khoản đã bị đình chỉ hoạt động.');
+      throw new ForbiddenException({
+        message: 'Tài khoản đã bị đình chỉ hoạt động.',
+        code: AuthErrorCode.ACCOUNT_SUSPENDED,
+      });
     }
 
     if (user.status === UserStatus.LOCKED) {
-      throw new ForbiddenException('Tài khoản đang bị khóa tạm thời.');
+      throw new ForbiddenException({
+        message: 'Tài khoản đang bị khóa tạm thời.',
+        code: AuthErrorCode.ACCOUNT_LOCKED,
+      });
     }
 
     return {

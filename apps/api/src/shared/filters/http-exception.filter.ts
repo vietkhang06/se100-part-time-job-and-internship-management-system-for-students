@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { ApiErrorResponse } from '@campusjob/contracts';
+import { ApiErrorResponse, AuthErrorCode } from '@campusjob/contracts';
 
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
@@ -28,6 +28,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     let message: string | string[] = 'Internal server error';
     let error = 'Internal Server Error';
+    let code: string | undefined = undefined;
 
     if (typeof exceptionResponse === 'string') {
       message = exceptionResponse;
@@ -35,8 +36,42 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       const respObj = exceptionResponse as Record<string, any>;
       message = respObj['message'] || message;
       error = respObj['error'] || (exception instanceof HttpException ? exception.name : error);
+      code = respObj['code'] || respObj['errorCode'];
     } else if (exception instanceof Error) {
       message = exception.message;
+    }
+
+    if (!code) {
+      if (status === HttpStatus.BAD_REQUEST) {
+        if (Array.isArray(message)) {
+          if (message.some((m) => typeof m === 'string' && m.includes('Only STUDENT and EMPLOYER roles are permitted'))) {
+            code = AuthErrorCode.ROLE_DISALLOWED;
+          } else if (
+            message.some(
+              (m) =>
+                typeof m === 'string' &&
+                (m.includes('Password must be at least 8 characters long') ||
+                  m.includes('password must be at least 8 characters long')),
+            )
+          ) {
+            code = AuthErrorCode.WEAK_PASSWORD;
+          } else {
+            code = AuthErrorCode.VALIDATION_ERROR;
+          }
+        } else if (typeof message === 'string') {
+          if (message.includes('Only STUDENT and EMPLOYER roles are permitted')) {
+            code = AuthErrorCode.ROLE_DISALLOWED;
+          } else if (message.includes('Password must be at least 8 characters long')) {
+            code = AuthErrorCode.WEAK_PASSWORD;
+          } else {
+            code = AuthErrorCode.VALIDATION_ERROR;
+          }
+        }
+      } else if (status === HttpStatus.UNAUTHORIZED) {
+        code = AuthErrorCode.UNAUTHORIZED;
+      } else if (status === HttpStatus.CONFLICT) {
+        code = AuthErrorCode.EMAIL_ALREADY_EXISTS;
+      }
     }
 
     const correlationId = (request.headers['x-correlation-id'] ||
@@ -47,6 +82,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       statusCode: status,
       message,
       error,
+      ...(code ? { code } : {}),
       timestamp: new Date().toISOString(),
       path: request.url,
       correlationId,

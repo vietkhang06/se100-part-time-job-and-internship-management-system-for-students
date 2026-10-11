@@ -131,6 +131,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Authenticate user with email and password' })
   @ApiResponse({ status: 200, description: 'Login successful. Returns access token and sets HttpOnly refresh cookie.' })
+  @ApiResponse({ status: 400, description: 'Validation failed (invalid email or empty password)' })
   @ApiResponse({ status: 401, description: 'Invalid email or password' })
   @ApiResponse({ status: 403, description: 'Account locked, suspended, or pending verification' })
   async login(
@@ -155,7 +156,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Rotate refresh token and issue new access token' })
   @ApiResponse({ status: 200, description: 'Token refreshed successfully' })
-  @ApiResponse({ status: 401, description: 'Invalid, expired, or reused refresh token' })
+  @ApiResponse({ status: 401, description: 'Invalid, expired, missing, or reused refresh token' })
+  @ApiResponse({ status: 403, description: 'Account suspended, locked, or user not found' })
   async refresh(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
