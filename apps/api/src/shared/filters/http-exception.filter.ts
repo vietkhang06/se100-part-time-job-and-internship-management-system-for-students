@@ -69,6 +69,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         }
       } else if (status === HttpStatus.UNAUTHORIZED) {
         code = AuthErrorCode.UNAUTHORIZED;
+      } else if (status === HttpStatus.FORBIDDEN) {
+        code = AuthErrorCode.FORBIDDEN;
       } else if (status === HttpStatus.CONFLICT) {
         code = AuthErrorCode.EMAIL_ALREADY_EXISTS;
       }

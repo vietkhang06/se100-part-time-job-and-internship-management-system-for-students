@@ -7,3 +7,4 @@
 ## Danh mục Hợp đồng API (API Contracts)
 - [Hợp đồng API Xác thực C-01 (Auth API Contract)](./AUTH_API_CONTRACT.md)
 - [Ma trận mã lỗi Xác thực (Auth Error Matrix)](./AUTH_ERROR_MATRIX.md)
+- [Ma trận phân quyền vai trò RBAC (RBAC Matrix)](./RBAC_MATRIX.md)
