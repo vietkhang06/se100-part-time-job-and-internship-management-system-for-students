@@ -8,6 +8,7 @@ import { GlobalExceptionFilter } from '../src/shared/filters/http-exception.filt
 import { UserRole, UserStatus, AuthErrorCode } from '@campusjob/contracts';
 import { TokenUtils } from '../src/modules/auth/infrastructure/security/token.utils';
 import { PasswordHasher } from '../src/modules/auth/infrastructure/security/password-hasher';
+import { MAIL_SERVICE_TOKEN } from '../src/shared/mail/mail.service.interface';
 
 const request = (typeof supertest === 'function' ? supertest : (supertest as any).default) as typeof supertest;
 
@@ -38,6 +39,10 @@ describe('AuthModule (e2e)', () => {
 
     await app.init();
     prisma = app.get(PrismaService);
+
+    // Không gửi mail qua SMTP thật
+    const mailService = app.get(MAIL_SERVICE_TOKEN, { strict: false }) as any;
+    mailService.transporter = { sendMail: async () => ({ messageId: 'e2e' }) };
 
     // Clean up test records
     await cleanupDatabase();
