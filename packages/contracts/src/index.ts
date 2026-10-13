@@ -30,11 +30,19 @@ export enum AuthErrorCode {
   FORBIDDEN = 'FORBIDDEN',
 }
 
+export enum StudentProfileErrorCode {
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  INVALID_JOB_SEEKING_STATUS = 'INVALID_JOB_SEEKING_STATUS',
+  STUDENT_PROFILE_NOT_FOUND = 'STUDENT_PROFILE_NOT_FOUND',
+  UNAUTHORIZED = 'UNAUTHORIZED',
+  FORBIDDEN = 'FORBIDDEN',
+}
+
 export interface ApiErrorResponse {
   statusCode: number;
   message: string | string[];
   error: string;
-  code?: AuthErrorCode | (string & {});
+  code?: AuthErrorCode | StudentProfileErrorCode | (string & {});
   timestamp: string;
   path: string;
   correlationId?: string;
@@ -42,6 +50,10 @@ export interface ApiErrorResponse {
 
 export interface AuthErrorResponse extends ApiErrorResponse {
   code?: AuthErrorCode;
+}
+
+export interface StudentProfileErrorResponse extends ApiErrorResponse {
+  code?: StudentProfileErrorCode;
 }
 
 export interface AuthUserDto {
@@ -155,5 +167,48 @@ export interface JwtPayload {
   email: string;
   role: UserRole;
   sessionId?: string;
+}
+
+// ==========================================
+// M02: STUDENT PROFILE & CV CONTRACTS
+// ==========================================
+
+export enum JobSeekingStatus {
+  ACTIVELY_LOOKING = 'ACTIVELY_LOOKING',
+  OPEN_FOR_OPPORTUNITIES = 'OPEN_FOR_OPPORTUNITIES',
+  NOT_LOOKING = 'NOT_LOOKING',
+}
+
+export interface StudentProfileDto {
+  id: string;
+  userId: string;
+  fullName: string;
+  email: string;
+  phone?: string | null;
+  avatarUrl?: string | null;
+  university?: string | null;
+  major?: string | null;
+  graduationYear?: number | null;
+  jobSeekingStatus: JobSeekingStatus;
+  bio?: string | null;
+  skills: string[];
+  isCampusVerified: boolean;
+  campusEmail?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateStudentProfileRequestDto {
+  university?: string;
+  major?: string;
+  graduationYear?: number;
+  jobSeekingStatus?: JobSeekingStatus;
+  bio?: string;
+  skills?: string[];
+}
+
+export interface StudentProfileResponseDto {
+  message?: string;
+  profile: StudentProfileDto;
 }
 
