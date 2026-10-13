@@ -10,3 +10,6 @@
 - [Ma trận phân quyền vai trò RBAC (RBAC Matrix)](./RBAC_MATRIX.md)
 - [Hợp đồng API Hồ sơ sinh viên C-03/C-05 (Student Profile Contract)](./STUDENT_PROFILE_API_CONTRACT.md)
 - [Ma trận mã lỗi Hồ sơ sinh viên (Student Profile Error Matrix)](./STUDENT_PROFILE_ERROR_MATRIX.md)
+- [Hợp đồng API Quản lý CV C-03/C-04/C-05 (CV & Resume API Contract)](./CV_API_CONTRACT.md)
+- [Ma trận mã lỗi Quản lý CV (CV Error Matrix)](./CV_ERROR_MATRIX.md)
+
