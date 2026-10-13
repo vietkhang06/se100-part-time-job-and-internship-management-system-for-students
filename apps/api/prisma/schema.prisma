@@ -21,6 +21,12 @@ enum UserStatus {
   LOCKED
 }
 
+enum JobSeekingStatus {
+  ACTIVELY_LOOKING
+  OPEN_FOR_OPPORTUNITIES
+  NOT_LOOKING
+}
+
 model User {
   id                      String                   @id @default(uuid())
   email                   String                   @unique
@@ -33,6 +39,7 @@ model User {
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
 
+  studentProfile          StudentProfile?
   authSessions            AuthSession[]
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
@@ -101,4 +108,21 @@ model AuditLog {
   @@index([actorId])
   @@index([entityType, entityId])
   @@index([createdAt])
+}
+
+model StudentProfile {
+  id               String           @id @default(uuid())
+  userId           String           @unique
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  university       String?
+  major            String?
+  graduationYear   Int?
+  jobSeekingStatus JobSeekingStatus @default(ACTIVELY_LOOKING)
+  bio              String?
+  skills           String[]         @default([])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([userId])
+  @@index([jobSeekingStatus])
 }
