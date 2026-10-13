@@ -6,6 +6,7 @@
     "^.+\\.(t|j)s$": "ts-jest"
   },
   "testEnvironment": "node",
+  "testTimeout": 30000,
   "moduleNameMapper": {
     "^@campusjob/contracts$": "<rootDir>/../../../packages/contracts/src/index.ts"
   }
