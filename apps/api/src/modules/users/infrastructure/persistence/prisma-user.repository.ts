@@ -100,4 +100,45 @@ export class PrismaUserRepository implements IUserRepository {
     });
     return this.toDomain(raw);
   }
+
+  async updatePassword(id: string, passwordHash: string): Promise<UserEntity> {
+    const raw = await this.prisma.user.update({
+      where: { id },
+      data: { passwordHash },
+    });
+    return this.toDomain(raw);
+  }
+
+  async changePasswordAndRevokeSessions(
+    userId: string,
+    newPasswordHash: string,
+  ): Promise<void> {
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { passwordHash: newPasswordHash },
+      });
+
+      await tx.authSession.updateMany({
+        where: {
+          userId,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: now,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: userId,
+          action: 'PASSWORD_CHANGED',
+          entityType: 'User',
+          entityId: userId,
+          metadata: { note: 'Password changed by user and existing sessions revoked' },
+        },
+      });
+    });
+  }
 }

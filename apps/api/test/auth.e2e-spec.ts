@@ -1002,5 +1002,157 @@ describe('AuthModule (e2e)', () => {
       expect(res.body.code).toBe(AuthErrorCode.UNAUTHORIZED);
     });
   });
+
+  describe('POST /api/v1/auth/change-password', () => {
+    it('should reject change-password when unauthenticated', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/change-password')
+        .send({
+          currentPassword: 'AnyPassword123!',
+          newPassword: 'BrandNewPassword123!',
+        })
+        .expect(401);
+
+      expect(res.body.code).toBe(AuthErrorCode.UNAUTHORIZED);
+    });
+
+    it('should reject change-password when current password is incorrect', async () => {
+      const loginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      const token = loginRes.body.accessToken;
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/change-password')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          currentPassword: 'WrongCurrentPassword123!',
+          newPassword: 'BrandNewChangedPass456!@#',
+        })
+        .expect(400);
+
+      expect(res.body.code).toBe(AuthErrorCode.INVALID_CREDENTIALS);
+      expect(res.body.message).toContain('Current password is incorrect');
+    });
+
+    it('should reject change-password when new password is identical to current password', async () => {
+      const loginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      const token = loginRes.body.accessToken;
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/change-password')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          currentPassword: 'BrandNewPassword999!@#',
+          newPassword: 'BrandNewPassword999!@#',
+        })
+        .expect(400);
+
+      expect(res.body.code).toBe(AuthErrorCode.VALIDATION_ERROR);
+      expect(res.body.message).toContain('must be different');
+    });
+
+    it('should reject change-password when new password violates complexity policy', async () => {
+      const loginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      const token = loginRes.body.accessToken;
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/change-password')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          currentPassword: 'BrandNewPassword999!@#',
+          newPassword: 'weak',
+        })
+        .expect(400);
+
+      expect(res.body.code).toBe(AuthErrorCode.WEAK_PASSWORD);
+    });
+
+    it('should successfully change password, revoke all refresh sessions, authenticate with new password, and reject old password', async () => {
+      // 1. Login to get token and create refresh session
+      const loginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      const token = loginRes.body.accessToken;
+      const oldCookies = loginRes.headers['set-cookie'];
+
+      // 2. Change password
+      const newPassword = 'FullyChangedPassword789!@#';
+      const changeRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/change-password')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          currentPassword: 'BrandNewPassword999!@#',
+          newPassword,
+        })
+        .expect(200);
+
+      expect(changeRes.body.message).toContain('Password has been changed successfully');
+
+      // 3. Verify in DB that refresh sessions were revoked
+      const user = await prisma.user.findUnique({ where: { email: testStudentEmail } });
+      const activeSessions = await prisma.authSession.findMany({
+        where: { userId: user!.id, revokedAt: null },
+      });
+      expect(activeSessions.length).toBe(0);
+
+      // 4. Old refresh token should be rejected
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', oldCookies)
+        .expect(401);
+
+      // 5. Old password should fail login
+      const oldLoginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(401);
+      expect(oldLoginRes.body.code).toBe(AuthErrorCode.INVALID_CREDENTIALS);
+
+      // 6. New password should succeed login
+      const newLoginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: newPassword,
+        })
+        .expect(200);
+      expect(newLoginRes.body.accessToken).toBeDefined();
+
+      // Restore password back to testStrongPassword for test idempotence
+      const newHashed = await PasswordHasher.hash(testStrongPassword);
+      await prisma.user.update({
+        where: { id: user!.id },
+        data: { passwordHash: newHashed },
+      });
+    });
+  });
 });
 

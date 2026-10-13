@@ -23,4 +23,6 @@ export interface IUserRepository {
     expiresAt: Date,
   ): Promise<{ user: UserEntity; tokenId: string }>;
   updateStatus(id: string, status: UserEntity['status']): Promise<UserEntity>;
+  updatePassword(id: string, passwordHash: string): Promise<UserEntity>;
+  changePasswordAndRevokeSessions(userId: string, newPasswordHash: string): Promise<void>;
 }

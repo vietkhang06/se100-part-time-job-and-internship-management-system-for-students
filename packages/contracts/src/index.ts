@@ -152,6 +152,15 @@ export interface ResetPasswordResponseDto {
   message: string;
 }
 
+export interface ChangePasswordRequestDto {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface ChangePasswordResponseDto {
+  message: string;
+}
+
 export interface LoginRequestDto {
   email: string;
   password: string;
