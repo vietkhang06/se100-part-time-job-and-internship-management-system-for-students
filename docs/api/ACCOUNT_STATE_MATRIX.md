@@ -72,7 +72,7 @@ Các quy định về trạng thái người dùng trong hệ thống CampusJob 
    - Chặn người dùng `SUSPENDED` và `LOCKED` gửi yêu cầu cấp lại mã kích hoạt, trả về mã lỗi 403 tương ứng.
 
 ### 3.4 Vấn đề chính sách chưa giải quyết / Cần quyết định từ PM (Unresolved Policy Decisions)
-- **Thu hồi chủ động tất cả Refresh Session khi tài khoản bị khóa (`SUSPENDED` / `LOCKED`):** Hiện tại, khi Admin đổi trạng thái người dùng trong DB, `JwtStrategy` và `RefreshUseCase` sẽ chặn ngay lập tức mọi request kế tiếp. Tuy nhiên, nếu muốn xóa cứng/thu hồi ngay lập tức toàn bộ record trong bảng `AuthSession` ngay thời điểm Admin thao tác, cần triển khai hook/event tại module Admin Users (`UC-21`). Quyết định này thuộc phạm vi module Quản trị người dùng & Audit Log.
+- **Thu hồi chủ động tất cả Refresh Session khi tài khoản bị khóa (`SUSPENDED` / `LOCKED`):** Hiện tại, khi Admin đổi trạng thái người dùng trong DB, `JwtStrategy` và `RefreshUseCase` sẽ chặn ngay lập tức mọi request kế tiếp. Tuy nhiên, nếu muốn xóa cứng/thu hồi ngay lập tức toàn bộ record trong bảng `AuthSession` ngay thời điểm Admin thao tác, cần triển khai hook/event tại module Quản trị người dùng (Admin Users) (mã Use Case cho phân hệ Quản trị người dùng & Audit Log hiện đang chờ xác định chính thức / pending identification; lưu ý UC21 theo danh mục chuẩn là Quản lý chi nhánh doanh nghiệp). Quyết định này thuộc phạm vi module Quản trị người dùng & Audit Log.
 
 ---
 
