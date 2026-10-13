@@ -84,6 +84,37 @@ export class RefreshUseCase {
       });
     }
 
+    // Check user and account status before rotating session
+    const user = await this.userRepository.findById(session.userId);
+    if (!user) {
+      throw new UnauthorizedException({
+        message: 'Tài khoản không tồn tại.',
+        code: AuthErrorCode.UNAUTHORIZED,
+      });
+    }
+
+    if (user.status === UserStatus.SUSPENDED) {
+      throw new ForbiddenException({
+        message: 'Tài khoản đã bị đình chỉ hoạt động.',
+        code: AuthErrorCode.ACCOUNT_SUSPENDED,
+      });
+    }
+
+    if (user.status === UserStatus.LOCKED) {
+      throw new ForbiddenException({
+        message: 'Tài khoản đang bị khóa tạm thời. Vui lòng liên hệ quản trị viên.',
+        code: AuthErrorCode.ACCOUNT_LOCKED,
+      });
+    }
+
+    if (user.status === UserStatus.PENDING_VERIFICATION) {
+      throw new ForbiddenException({
+        message:
+          'Tài khoản chưa được xác minh email. Vui lòng kiểm tra email để kích hoạt hoặc yêu cầu gửi lại mã.',
+        code: AuthErrorCode.ACCOUNT_PENDING_VERIFICATION,
+      });
+    }
+
     // Rotate token
     const newRefreshToken = TokenUtils.generateRandomToken(40);
     const newTokenHash = TokenUtils.hashToken(newRefreshToken);
@@ -102,14 +133,6 @@ export class RefreshUseCase {
         expiresAt,
       },
     );
-
-    const user = await this.userRepository.findById(session.userId);
-    if (!user || user.status === UserStatus.SUSPENDED) {
-      throw new ForbiddenException({
-        message: 'Tài khoản không hợp lệ hoặc đã bị khóa.',
-        code: AuthErrorCode.ACCOUNT_SUSPENDED,
-      });
-    }
 
     const accessToken = this.jwtService.sign({
       sub: user.id,

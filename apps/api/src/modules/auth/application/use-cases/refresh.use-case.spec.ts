@@ -144,20 +144,11 @@ describe('RefreshUseCase', () => {
     );
   });
 
-  it('should throw ForbiddenException if user is suspended during refresh', async () => {
+  it('should throw ForbiddenException if user is suspended during refresh and NOT rotate session', async () => {
     const existingSession = new AuthSessionEntity(
       'session-1',
       'user-1',
       'hash-1',
-      'family-1',
-      new Date(Date.now() + 1000000),
-      null,
-    );
-
-    const rotatedSession = new AuthSessionEntity(
-      'session-2',
-      'user-1',
-      'hash-2',
       'family-1',
       new Date(Date.now() + 1000000),
       null,
@@ -173,11 +164,86 @@ describe('RefreshUseCase', () => {
     );
 
     authSessionRepository.findByTokenHash.mockResolvedValue(existingSession);
-    authSessionRepository.rotateSession.mockResolvedValue(rotatedSession);
     userRepository.findById.mockResolvedValue(suspendedUser);
 
     await expect(useCase.execute('valid_raw_token')).rejects.toThrow(
       ForbiddenException,
     );
+    expect(authSessionRepository.rotateSession).not.toHaveBeenCalled();
+  });
+
+  it('should throw ForbiddenException if user is locked during refresh and NOT rotate session', async () => {
+    const existingSession = new AuthSessionEntity(
+      'session-1',
+      'user-1',
+      'hash-1',
+      'family-1',
+      new Date(Date.now() + 1000000),
+      null,
+    );
+
+    const lockedUser = new UserEntity(
+      'user-1',
+      'student@example.com',
+      'hash',
+      'Student Name',
+      UserRole.STUDENT,
+      UserStatus.LOCKED,
+    );
+
+    authSessionRepository.findByTokenHash.mockResolvedValue(existingSession);
+    userRepository.findById.mockResolvedValue(lockedUser);
+
+    await expect(useCase.execute('valid_raw_token')).rejects.toThrow(
+      ForbiddenException,
+    );
+    expect(authSessionRepository.rotateSession).not.toHaveBeenCalled();
+  });
+
+  it('should throw ForbiddenException if user is pending verification during refresh and NOT rotate session', async () => {
+    const existingSession = new AuthSessionEntity(
+      'session-1',
+      'user-1',
+      'hash-1',
+      'family-1',
+      new Date(Date.now() + 1000000),
+      null,
+    );
+
+    const pendingUser = new UserEntity(
+      'user-1',
+      'student@example.com',
+      'hash',
+      'Student Name',
+      UserRole.STUDENT,
+      UserStatus.PENDING_VERIFICATION,
+    );
+
+    authSessionRepository.findByTokenHash.mockResolvedValue(existingSession);
+    userRepository.findById.mockResolvedValue(pendingUser);
+
+    await expect(useCase.execute('valid_raw_token')).rejects.toThrow(
+      ForbiddenException,
+    );
+    expect(authSessionRepository.rotateSession).not.toHaveBeenCalled();
+  });
+
+  it('should throw UnauthorizedException if user does not exist during refresh and NOT rotate session', async () => {
+    const existingSession = new AuthSessionEntity(
+      'session-1',
+      'user-1',
+      'hash-1',
+      'family-1',
+      new Date(Date.now() + 1000000),
+      null,
+    );
+
+    authSessionRepository.findByTokenHash.mockResolvedValue(existingSession);
+    userRepository.findById.mockResolvedValue(null);
+
+    await expect(useCase.execute('valid_raw_token')).rejects.toThrow(
+      UnauthorizedException,
+    );
+    expect(authSessionRepository.rotateSession).not.toHaveBeenCalled();
   });
 });

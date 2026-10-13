@@ -51,8 +51,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     if (user.status === UserStatus.LOCKED) {
       throw new ForbiddenException({
-        message: 'Tài khoản đang bị khóa tạm thời.',
+        message: 'Tài khoản đang bị khóa tạm thời. Vui lòng liên hệ quản trị viên.',
         code: AuthErrorCode.ACCOUNT_LOCKED,
+      });
+    }
+
+    if (user.status === UserStatus.PENDING_VERIFICATION) {
+      throw new ForbiddenException({
+        message:
+          'Tài khoản chưa được xác minh email. Vui lòng kiểm tra email để kích hoạt hoặc yêu cầu gửi lại mã.',
+        code: AuthErrorCode.ACCOUNT_PENDING_VERIFICATION,
       });
     }
 
