@@ -123,6 +123,28 @@ model StudentProfile {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
+  cvs              Cv[]
+
   @@index([userId])
   @@index([jobSeekingStatus])
+}
+
+model Cv {
+  id               String         @id @default(uuid())
+  studentProfileId String
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  title            String
+  summary          String?
+  isDefault        Boolean        @default(false)
+  fileUrl          String?
+  skills           String[]       @default([])
+  educations       Json           @default("[]")
+  experiences      Json           @default("[]")
+  projects         Json           @default("[]")
+  certifications   Json           @default("[]")
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([studentProfileId])
+  @@index([studentProfileId, isDefault])
 }
