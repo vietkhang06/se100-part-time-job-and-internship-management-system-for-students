@@ -37,6 +37,31 @@ export class M04Workflow {
     return this.repository.changeApplicationStatus({ id, expected: application.status, next, actorId: studentId });
   }
 
+  async listCandidates(employerId: string, jobId: string): Promise<ApplicationRecord[]> {
+    await this.jobs.assertManagedBy(jobId, employerId);
+    const applications = await this.repository.listJobApplications(jobId);
+    return applications.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }
+
+  async getCandidate(employerId: string, id: string): Promise<ApplicationRecord> {
+    const application = await this.requireApplication(id);
+    await this.jobs.assertManagedBy(application.jobId, employerId);
+    return application;
+  }
+
+  async markViewed(employerId: string, id: string): Promise<ApplicationRecord> {
+    const application = await this.getCandidate(employerId, id);
+    const next = nextApplicationStatus(application.status, 'MARK_VIEWED', UserRole.EMPLOYER);
+    return this.repository.changeApplicationStatus({ id, expected: application.status, next, actorId: employerId });
+  }
+
+  async reject(employerId: string, id: string, reason: string): Promise<ApplicationRecord> {
+    if (!reason.trim()) throw new M04WorkflowError('INVALID_INPUT');
+    const application = await this.getCandidate(employerId, id);
+    const next = nextApplicationStatus(application.status, 'REJECT', UserRole.EMPLOYER);
+    return this.repository.changeApplicationStatus({ id, expected: application.status, next, actorId: employerId, reason: reason.trim() });
+  }
+
   private async requireApplication(id: string): Promise<ApplicationRecord> {
     const application = await this.repository.getApplication(id);
     if (!application) throw new M04WorkflowError('NOT_FOUND');

@@ -5,7 +5,7 @@ import { Roles } from '../../../shared/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
 import { M04Workflow } from '../application/m04-workflow';
-import { SubmitApplicationDto } from './m04.dto';
+import { SubmitApplicationDto, RejectApplicationDto } from './m04.dto';
 import { M04ExceptionFilter } from './m04-exception.filter';
 
 /** Registered only after real M02/M03 adapters are supplied to M04Module. */
@@ -32,5 +32,29 @@ export class M04Controller {
   @Patch('applications/me/:id/withdraw')
   @Roles(UserRole.STUDENT)
   withdraw(@CurrentUser('id') studentId: string, @Param('id') id: string) { return this.workflow.withdraw(studentId, id); }
+
+  @Get('employer/jobs/:jobId/applications')
+  @Roles(UserRole.EMPLOYER)
+  candidates(@CurrentUser('id') employerId: string, @Param('jobId') jobId: string) {
+    return this.workflow.listCandidates(employerId, jobId);
+  }
+
+  @Get('employer/applications/:id')
+  @Roles(UserRole.EMPLOYER)
+  candidate(@CurrentUser('id') employerId: string, @Param('id') id: string) {
+    return this.workflow.getCandidate(employerId, id);
+  }
+
+  @Patch('employer/applications/:id/viewed')
+  @Roles(UserRole.EMPLOYER)
+  markViewed(@CurrentUser('id') employerId: string, @Param('id') id: string) {
+    return this.workflow.markViewed(employerId, id);
+  }
+
+  @Patch('employer/applications/:id/reject')
+  @Roles(UserRole.EMPLOYER)
+  reject(@CurrentUser('id') employerId: string, @Param('id') id: string, @Body() dto: RejectApplicationDto) {
+    return this.workflow.reject(employerId, id, dto.reason);
+  }
 
 }

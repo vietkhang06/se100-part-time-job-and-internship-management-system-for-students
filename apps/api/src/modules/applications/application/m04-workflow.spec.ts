@@ -13,9 +13,11 @@ const snapshot: CvSnapshotDto = {
 describe('M04 application slice with fixture sources', () => {
   let records: ApplicationRecord[];
   let workflow: M04Workflow;
+  let managingEmployer: string;
 
   beforeEach(() => {
     records = [];
+    managingEmployer = 'employer-a';
     const repository: M04Repository = {
       createApplication: async (input) => {
         if (records.some((r) => r.studentId === input.studentId && r.jobId === input.jobId)) {
@@ -30,10 +32,11 @@ describe('M04 application slice with fixture sources', () => {
       },
       getApplication: async (id) => records.find((r) => r.id === id) ?? null,
       listStudentApplications: async (id) => records.filter((r) => r.studentId === id),
-      changeApplicationStatus: async ({ id, expected, next }) => {
+      listJobApplications: async (jobId) => records.filter((r) => r.jobId === jobId),
+      changeApplicationStatus: async ({ id, expected, next, reason }) => {
         const index = records.findIndex((r) => r.id === id && r.status === expected);
         if (index < 0) throw new M04WorkflowError('CONCURRENT_CHANGE');
-        records[index] = { ...records[index], status: next };
+        records[index] = { ...records[index], status: next, rejectionReason: reason ?? records[index].rejectionReason };
         return records[index];
       },
     };
@@ -43,7 +46,9 @@ describe('M04 application slice with fixture sources', () => {
         assertAcceptingApplications: async (jobId) => {
           if (jobId !== 'job-a') throw new M04WorkflowError('INVALID_INPUT');
         },
-        assertManagedBy: async () => undefined,
+        assertManagedBy: async (jobId, employerId) => {
+          if (jobId !== 'job-a' || employerId !== managingEmployer) throw new M04WorkflowError('FORBIDDEN');
+        },
       },
     );
   });
@@ -64,5 +69,17 @@ describe('M04 application slice with fixture sources', () => {
     await expect(workflow.withdraw('student-b', application.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect((await workflow.withdraw('student-a', application.id)).status).toBe(ApplicationStatus.WITHDRAWN);
     await expect(workflow.withdraw('student-a', application.id)).rejects.toThrow();
+  });
+
+  it('restricts candidate processing to the managing employer and records rejection reason', async () => {
+    const application = await workflow.submit('student-a', 'job-a', 'cv-1');
+    await expect(workflow.listCandidates('employer-b', 'job-a')).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(workflow.getCandidate('employer-b', application.id)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(await workflow.listCandidates('employer-a', 'job-a')).toHaveLength(1);
+    expect((await workflow.markViewed('employer-a', application.id)).status).toBe(ApplicationStatus.REVIEWING);
+    await expect(workflow.reject('employer-a', application.id, '  ')).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    const rejected = await workflow.reject('employer-a', application.id, 'Not a fit');
+    expect(rejected.status).toBe(ApplicationStatus.REJECTED);
+    expect(rejected.rejectionReason).toBe('Not a fit');
   });
 });

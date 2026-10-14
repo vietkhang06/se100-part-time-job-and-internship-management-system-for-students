@@ -34,6 +34,7 @@ export interface M04Repository {
   }): Promise<ApplicationRecord>;
   getApplication(id: string): Promise<ApplicationRecord | null>;
   listStudentApplications(studentId: string): Promise<ApplicationRecord[]>;
+  listJobApplications(jobId: string): Promise<ApplicationRecord[]>;
   changeApplicationStatus(input: {
     id: string;
     expected: ApplicationStatus;

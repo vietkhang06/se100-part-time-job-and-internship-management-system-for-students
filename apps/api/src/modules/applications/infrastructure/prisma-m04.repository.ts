@@ -41,6 +41,11 @@ export class PrismaM04Repository implements M04Repository {
     return rows.map((row) => this.application(row));
   }
 
+  async listJobApplications(jobId: string): Promise<ApplicationRecord[]> {
+    const rows = await this.prisma.application.findMany({ where: { jobId }, orderBy: { createdAt: 'asc' } });
+    return rows.map((row) => this.application(row));
+  }
+
   async changeApplicationStatus(input: {
     id: string; expected: ApplicationStatus; next: ApplicationStatus; actorId: string; reason?: string;
   }): Promise<ApplicationRecord> {
