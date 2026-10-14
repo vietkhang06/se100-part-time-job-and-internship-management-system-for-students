@@ -126,3 +126,45 @@ model StudentProfile {
   @@index([userId])
   @@index([jobSeekingStatus])
 }
+
+enum ApplicationStatus {
+  SUBMITTED
+  REVIEWING
+  INTERVIEW_SCHEDULED
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+// M04 owns these records. studentId, jobId and cvId remain scalar contract IDs
+// until M02/M03 publish their persistence models; M04 never owns their data.
+model Application {
+  id              String                     @id @default(uuid())
+  studentId       String
+  jobId           String
+  cvId            String
+  cvSnapshot      Json
+  coverLetter     String?
+  status          ApplicationStatus          @default(SUBMITTED)
+  rejectionReason String?
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+  statusHistory   ApplicationStatusHistory[]
+
+  @@unique([studentId, jobId])
+  @@index([studentId, status])
+  @@index([jobId, status])
+}
+
+model ApplicationStatusHistory {
+  id            String            @id @default(uuid())
+  applicationId String
+  application   Application       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  actorId       String
+  fromStatus    ApplicationStatus?
+  toStatus      ApplicationStatus
+  reason        String?
+  createdAt     DateTime          @default(now())
+
+  @@index([applicationId, createdAt])
+}
