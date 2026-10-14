@@ -250,6 +250,140 @@ Set-Cookie: campusjob_refresh_token=; Path=/api/v1/auth; Expires=Thu, 01 Jan 197
 
 ---
 
+### 2.6 Yêu cầu đặt lại mật khẩu (Forgot Password)
+
+- **Endpoint:** `POST /api/v1/auth/forgot-password`
+- **Yêu cầu xác thực:** Public (Không yêu cầu token)
+- **Mô tả:** Tiếp nhận email và gửi hướng dẫn đặt lại mật khẩu kèm mã token xác thực (32 bytes ngẫu nhiên, lưu băm SHA-256 trong `PasswordResetToken`, hiệu lực 1 giờ).
+- **Chống lộ diện tài khoản (Anti-enumeration):** Luôn trả về phản hồi trung tính (`200 OK`) bất kể email có tồn tại hay không trong hệ thống.
+- **Giới hạn tần suất (Rate Limiting / Cooldown):** Áp dụng thời gian chờ tối thiểu 60 giây giữa 2 lần yêu cầu liên tiếp cho cùng một tài khoản. Nếu vi phạm, trả về `429 Too Many Requests`.
+
+#### Request Header
+```http
+Content-Type: application/json
+```
+
+#### Request Body (`ForgotPasswordDto`)
+| Trường | Kiểu dữ liệu | Bắt buộc | Ràng buộc validation | Mô tả |
+|---|---|---|---|---|
+| `email` | `string` | Có | Chuẩn email RFC 5322, tự động lowercase & trim | Email đã đăng ký |
+
+*Ví dụ Request Body:*
+```json
+{
+  "email": "student@example.com"
+}
+```
+
+#### Success Response
+- **HTTP Status:** `200 OK`
+- **Body (`ForgotPasswordResponseDto`):**
+```json
+{
+  "message": "If this email address is registered, instructions to reset your password have been sent."
+}
+```
+
+#### Expected Error Responses
+- **400 Bad Request (`VALIDATION_ERROR`):** Email không đúng định dạng.
+- **429 Too Many Requests:** Gửi yêu cầu lặp lại trong thời gian chờ cooldown (< 60s).
+
+---
+
+### 2.7 Đặt lại mật khẩu (Reset Password)
+
+- **Endpoint:** `POST /api/v1/auth/reset-password`
+- **Yêu cầu xác thực:** Public (Xác thực qua one-time token trong body)
+- **Mô tả:** Đặt lại mật khẩu mới cho tài khoản dựa trên raw reset token nhận qua email.
+- **Tính toàn vẹn & Tiêu thụ 1 lần (One-time Use & Atomic Consumption):** Token reset chỉ có giá trị sử dụng đúng 1 lần duy nhất (`usedAt != null`). Quá trình kiểm tra token, cập nhật mật khẩu mới (băm Argon2id), đánh dấu tiêu thụ token và thu hồi toàn bộ phiên đăng nhập cũ (`AuthSession`) được thực thi trong một Database Transaction duy nhất (`$transaction`). Nếu có nhiều request đồng thời với cùng một token, chỉ duy nhất 1 request thành công.
+- **Chính sách thu hồi phiên (Session Revocation Policy):** Khi đặt lại mật khẩu thành công, toàn bộ các phiên làm việc của người dùng trong bảng `AuthSession` lập tức bị thu hồi (`revokedAt = now()`), ngăn chặn việc sử dụng refresh token cũ để gia hạn phiên. (Lưu ý: Access Token JWT ngắn hạn 15m đã cấp trước đó sẽ tự động hết hạn tự nhiên sau 15 phút).
+
+#### Request Header
+```http
+Content-Type: application/json
+```
+
+#### Request Body (`ResetPasswordDto`)
+| Trường | Kiểu dữ liệu | Bắt buộc | Ràng buộc validation | Mô tả |
+|---|---|---|---|---|
+| `token` | `string` | Có | Không được để trống | Chuỗi raw token nhận từ liên kết email |
+| `newPassword` | `string` | Có | Tối thiểu 8 ký tự, gồm ít nhất: 1 chữ hoa, 1 chữ thường, 1 số, 1 ký tự đặc biệt | Mật khẩu mới đáp ứng chính sách bảo mật |
+
+*Ví dụ Request Body:*
+```json
+{
+  "token": "4f9a8b1c2d3e4f5a6b7c8d9e0f1a2b3c...",
+  "newPassword": "BrandNewSecurePassword123!@#"
+}
+```
+
+#### Success Response
+- **HTTP Status:** `200 OK`
+- **Body (`ResetPasswordResponseDto`):**
+```json
+{
+  "message": "Password has been reset successfully. Please log in with your new password."
+}
+```
+
+#### Expected Error Responses
+- **400 Bad Request (`VALIDATION_ERROR`):** Dữ liệu không thỏa mãn DTO.
+- **400 Bad Request (`WEAK_PASSWORD`):** Mật khẩu mới không thỏa mãn độ phức tạp chính sách bảo mật.
+- **400 Bad Request:** Token không hợp lệ, token đã hết hạn, hoặc token đã được sử dụng trước đó.
+
+---
+
+### 2.8 Đổi mật khẩu khi đang đăng nhập (Change Password)
+
+- **Endpoint:** `POST /api/v1/auth/change-password`
+- **Yêu cầu xác thực:** Đã đăng nhập (`Bearer <JWT>` qua `JwtAuthGuard`)
+- **Mô tả:** Người dùng đã xác thực tự thay đổi mật khẩu tài khoản của chính mình.
+- **Quy tắc bảo mật & Tiêu chuẩn kỹ thuật:**
+  - **Xác minh mật khẩu hiện tại:** Hệ thống sử dụng Argon2id để kiểm tra `currentPassword` với `user.passwordHash`. Nếu sai, trả về `400 Bad Request` với mã lỗi `INVALID_CREDENTIALS`.
+  - **Chống đặt lại mật khẩu cũ:** `newPassword` bắt buộc phải khác `currentPassword`. Nếu trùng, trả về `400 Bad Request` với mã lỗi `VALIDATION_ERROR`.
+  - **Độ phức tạp mật khẩu mới:** Tuân thủ chặt chẽ chính sách mật khẩu hệ thống (tối thiểu 8 ký tự, gồm ít nhất: 1 chữ hoa, 1 chữ thường, 1 chữ số, 1 ký tự đặc biệt). Nếu vi phạm, trả về `400 Bad Request` với mã lỗi `WEAK_PASSWORD`.
+  - **Băm mật khẩu an toàn:** Mật khẩu mới được băm bằng thuật toán **Argon2id** trước khi lưu vào cơ sở dữ liệu.
+  - **Chính sách thu hồi phiên (Session Revocation Policy):** Khi đổi mật khẩu thành công, toàn bộ các phiên làm việc của người dùng trong bảng `AuthSession` bị thu hồi (`revokedAt = now()`), đồng thời header `Set-Cookie` xóa cookie refresh token của client hiện tại. Bất kỳ refresh token cũ nào sử dụng sau đó đều bị từ chối với `401 Unauthorized`. (Lưu ý: Access Token JWT ngắn hạn 15m đã cấp trước đó sẽ hết hạn tự nhiên sau 15 phút).
+  - **Ghi nhật ký kiểm toán (Audit Logging):** Tạo bản ghi trong bảng `AuditLog` với `action: "PASSWORD_CHANGED"`, `entityType: "User"`, `entityId: userId`, `actorId: userId`.
+
+#### Request Header
+```http
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+```
+
+#### Request Body (`ChangePasswordDto`)
+| Trường | Kiểu dữ liệu | Bắt buộc | Ràng buộc validation | Mô tả |
+|---|---|---|---|---|
+| `currentPassword` | `string` | Có | Không được để trống | Mật khẩu hiện tại để xác minh danh tính |
+| `newPassword` | `string` | Có | Tối thiểu 8 ký tự, gồm ít nhất: 1 chữ hoa, 1 chữ thường, 1 số, 1 ký tự đặc biệt; khác `currentPassword` | Mật khẩu mới |
+
+*Ví dụ Request Body:*
+```json
+{
+  "currentPassword": "CurrentPassword123!@#",
+  "newPassword": "BrandNewSecurePassword456!@#"
+}
+```
+
+#### Success Response
+- **HTTP Status:** `200 OK`
+- **Header:** `Set-Cookie: campusjob_refresh_token=; Path=/api/v1/auth; Expires=Thu, 01 Jan 1970 00:00:00 GMT`
+- **Body (`ChangePasswordResponseDto`):**
+```json
+{
+  "message": "Password has been changed successfully. Please log in with your new password."
+}
+```
+
+#### Expected Error Responses
+- **401 Unauthorized (`UNAUTHORIZED`):** Không truyền Bearer token hoặc token không hợp lệ / hết hạn.
+- **400 Bad Request (`INVALID_CREDENTIALS`):** Mật khẩu hiện tại không chính xác (`"Current password is incorrect."`).
+- **400 Bad Request (`VALIDATION_ERROR`):** Mật khẩu mới trùng với mật khẩu hiện tại (`"New password must be different from the current password."`).
+- **400 Bad Request (`WEAK_PASSWORD`):** Mật khẩu mới không thỏa mãn độ phức tạp chính sách bảo mật.
+
+---
+
 ## 3. Cơ chế Lưu trữ Refresh Token & Hướng dẫn Kiểm thử thủ công
 
 ### 3.1 Phân biệt Token Client nhận và Token lưu trong Cơ sở dữ liệu
@@ -281,6 +415,11 @@ Set-Cookie: campusjob_refresh_token=; Path=/api/v1/auth; Expires=Thu, 01 Jan 197
 | `TC-MAN-05` | Ngăn chặn tấn công tái sử dụng Token (Reuse Detection) | 1. Gửi lại request `POST /api/v1/auth/refresh` bằng cookie cũ đã xoay vòng ở `TC-MAN-04`.<br>2. Kiểm tra mã lỗi và trạng thái DB. | HTTP 401 với mã lỗi `REFRESH_TOKEN_REUSED`.<br>Toàn bộ phiên thuộc cùng `tokenFamily` lập tức bị đánh dấu thu hồi (`revokedAt != null`). | **NOT RUN** | `auth.e2e-spec.ts` (Lines 665-701) |
 | `TC-MAN-06` | Đăng xuất phiên hiện tại (Logout) | 1. Gọi `POST /api/v1/auth/logout` kèm cookie refresh token.<br>2. Kiểm tra Response Headers và DB. | HTTP 200 `{ ok: true, message: "..." }`.<br>Header `Set-Cookie` xóa cookie (`Expires=Thu, 01 Jan 1970`).<br>Phiên tương ứng trong DB có `revokedAt = now()`. | **NOT RUN** | `auth.e2e-spec.ts` (Lines 776-798) |
 | `TC-MAN-07` | Thu hồi tất cả phiên (Logout-All) | 1. Đăng nhập tạo 2 phiên từ 2 client khác nhau.<br>2. Gọi `POST /api/v1/auth/logout-all` kèm Bearer Access Token.<br>3. Kiểm tra bảng `AuthSession`. | HTTP 200 `{ ok: true, message: "Đã thu hồi tất cả phiên đăng nhập." }`.<br>Tất cả bản ghi trong `AuthSession` của người dùng đều có `revokedAt != null`. | **NOT RUN** | `auth.e2e-spec.ts` (Lines 801-836) |
+| `TC-MAN-08` | Yêu cầu đặt lại mật khẩu (Forgot Password) | 1. Gọi `POST /api/v1/auth/forgot-password` với email tài khoản đã có.<br>2. Kiểm tra phản hồi HTTP và mở Mailpit tại `http://localhost:8026`.<br>3. Thử lại với email không tồn tại. | HTTP 200 `{ message: "If this email address is registered..." }`.<br>Email reset mật khẩu gửi thành công tới Mailpit.<br>Email không tồn tại vẫn trả về cùng thông điệp 200 OK (không tiết lộ tài khoản). | **NOT RUN** | `auth.e2e-spec.ts` (Lines 368-405) |
+| `TC-MAN-09` | Đặt lại mật khẩu thành công (Reset Password) | 1. Lấy `rawToken` từ email trong Mailpit.<br>2. Gọi `POST /api/v1/auth/reset-password` với `rawToken` và mật khẩu mới hợp lệ.<br>3. Kiểm tra bảng `User` và `PasswordResetToken` trong DB. | HTTP 200 `{ message: "Password has been reset successfully..." }`.<br>Bản ghi token có `usedAt != null`.<br>Mật khẩu người dùng được băm lại bằng Argon2id. | **NOT RUN** | `auth.e2e-spec.ts` (Lines 406-456) |
+| `TC-MAN-10` | Đăng nhập với mật khẩu mới và từ chối mật khẩu cũ | 1. Đăng nhập với mật khẩu cũ trước khi reset.<br>2. Đăng nhập với mật khẩu mới vừa đổi. | Mật khẩu cũ trả về HTTP 401 `INVALID_CREDENTIALS`.<br>Mật khẩu mới trả về HTTP 200 kèm Access Token. | **NOT RUN** | `auth.e2e-spec.ts` |
+| `TC-MAN-11` | Thu hồi toàn bộ Refresh Session cũ sau khi Reset Password | 1. Trước khi reset, tạo phiên đăng nhập để có cookie refresh token.<br>2. Thực hiện reset password thành công.<br>3. Dùng cookie refresh token cũ gọi `POST /api/v1/auth/refresh`. | Phiên cũ trong DB có `revokedAt != null`.<br>Gọi refresh bằng token cũ bị từ chối với HTTP 401. | **NOT RUN** | `auth.e2e-spec.ts` |
+| `TC-MAN-12` | Đổi mật khẩu khi đang đăng nhập (Change Password) | 1. Đăng nhập lấy Bearer token.<br>2. Gọi `POST /api/v1/auth/change-password` với `currentPassword` đúng và `newPassword` hợp lệ.<br>3. Kiểm tra DB và gọi refresh bằng cookie cũ.<br>4. Thử đăng nhập lại bằng mật khẩu cũ và mới. | HTTP 200 `{ message: "Password has been changed successfully..." }`.<br>Header `Set-Cookie` xóa cookie refresh.<br>Toàn bộ phiên cũ trong bảng `AuthSession` bị thu hồi (`revokedAt = now()`).<br>Mật khẩu cũ bị từ chối 401 `INVALID_CREDENTIALS`.<br>Mật khẩu mới đăng nhập thành công. | **NOT RUN** | `auth.e2e-spec.ts` |
 
 ---
 

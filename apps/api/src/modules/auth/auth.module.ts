@@ -11,6 +11,7 @@ import { VerifyEmailUseCase } from './application/use-cases/verify-email.use-cas
 import { ResendVerificationUseCase } from './application/use-cases/resend-verification.use-case';
 import { ForgotPasswordUseCase } from './application/use-cases/forgot-password.use-case';
 import { ResetPasswordUseCase } from './application/use-cases/reset-password.use-case';
+import { ChangePasswordUseCase } from './application/use-cases/change-password.use-case';
 import { LoginUseCase } from './application/use-cases/login.use-case';
 import { RefreshUseCase } from './application/use-cases/refresh.use-case';
 import { LogoutUseCase } from './application/use-cases/logout.use-case';
@@ -64,6 +65,7 @@ import { RolesGuard } from '../../shared/guards/roles.guard';
     ResendVerificationUseCase,
     ForgotPasswordUseCase,
     ResetPasswordUseCase,
+    ChangePasswordUseCase,
     LoginUseCase,
     RefreshUseCase,
     LogoutUseCase,
@@ -81,6 +83,7 @@ import { RolesGuard } from '../../shared/guards/roles.guard';
     ResendVerificationUseCase,
     ForgotPasswordUseCase,
     ResetPasswordUseCase,
+    ChangePasswordUseCase,
     LoginUseCase,
     RefreshUseCase,
     LogoutUseCase,

@@ -4,7 +4,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { ResetPasswordResponseDto } from '@campusjob/contracts';
+import { ResetPasswordResponseDto, AuthErrorCode } from '@campusjob/contracts';
 import {
   PASSWORD_RESET_TOKEN_REPOSITORY_TOKEN,
   IPasswordResetTokenRepository,
@@ -45,9 +45,11 @@ export class ResetPasswordUseCase {
 
     // 2. Validate new password against complexity policy
     if (!PasswordHasher.validatePolicy(dto.newPassword)) {
-      throw new BadRequestException(
-        'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.',
-      );
+      throw new BadRequestException({
+        message:
+          'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.',
+        code: AuthErrorCode.WEAK_PASSWORD,
+      });
     }
 
     // 3. Hash new password with Argon2id
