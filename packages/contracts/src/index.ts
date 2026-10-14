@@ -1,3 +1,4 @@
+
 export enum UserRole {
   STUDENT = 'STUDENT',
   EMPLOYER = 'EMPLOYER',
@@ -30,11 +31,29 @@ export enum AuthErrorCode {
   FORBIDDEN = 'FORBIDDEN',
 }
 
+export enum StudentProfileErrorCode {
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  INVALID_JOB_SEEKING_STATUS = 'INVALID_JOB_SEEKING_STATUS',
+  STUDENT_PROFILE_NOT_FOUND = 'STUDENT_PROFILE_NOT_FOUND',
+  UNAUTHORIZED = 'UNAUTHORIZED',
+  FORBIDDEN = 'FORBIDDEN',
+}
+
+export enum CvErrorCode {
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  CV_NOT_FOUND = 'CV_NOT_FOUND',
+  CV_LIMIT_EXCEEDED = 'CV_LIMIT_EXCEEDED',
+  CV_IN_USE_CANNOT_DELETE = 'CV_IN_USE_CANNOT_DELETE',
+  CANNOT_UNSET_ONLY_DEFAULT_CV = 'CANNOT_UNSET_ONLY_DEFAULT_CV',
+  UNAUTHORIZED = 'UNAUTHORIZED',
+  FORBIDDEN = 'FORBIDDEN',
+}
+
 export interface ApiErrorResponse {
   statusCode: number;
   message: string | string[];
   error: string;
-  code?: AuthErrorCode | (string & {});
+  code?: AuthErrorCode | StudentProfileErrorCode | CvErrorCode | (string & {});
   timestamp: string;
   path: string;
   correlationId?: string;
@@ -42,6 +61,14 @@ export interface ApiErrorResponse {
 
 export interface AuthErrorResponse extends ApiErrorResponse {
   code?: AuthErrorCode;
+}
+
+export interface StudentProfileErrorResponse extends ApiErrorResponse {
+  code?: StudentProfileErrorCode;
+}
+
+export interface CvErrorResponse extends ApiErrorResponse {
+  code?: CvErrorCode;
 }
 
 export interface AuthUserDto {
@@ -160,6 +187,7 @@ export interface JwtPayload {
 // ============================================================================
 // M05 · Notification (C-20 — DRAFT, chờ Lead/Owner M03-M04 chốt payload)
 // ============================================================================
+
 export enum NotificationEventType {
   JOB_SUBMITTED_FOR_REVIEW = 'JOB_SUBMITTED_FOR_REVIEW',
   JOB_APPROVED = 'JOB_APPROVED',
@@ -201,4 +229,188 @@ export interface UnreadCountResponseDto {
 
 export interface MarkAllReadResponseDto {
   updatedCount: number;
+}
+
+// ==========================================
+// M02: STUDENT PROFILE & CV CONTRACTS
+// ==========================================
+
+export enum JobSeekingStatus {
+  ACTIVELY_LOOKING = 'ACTIVELY_LOOKING',
+  OPEN_FOR_OPPORTUNITIES = 'OPEN_FOR_OPPORTUNITIES',
+  NOT_LOOKING = 'NOT_LOOKING',
+}
+
+export interface StudentProfileDto {
+  id: string;
+  userId: string;
+  fullName: string;
+  email: string;
+  phone?: string | null;
+  avatarUrl?: string | null;
+  university?: string | null;
+  major?: string | null;
+  graduationYear?: number | null;
+  jobSeekingStatus: JobSeekingStatus;
+  bio?: string | null;
+  skills: string[];
+  isCampusVerified: boolean;
+  campusEmail?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateStudentProfileRequestDto {
+  university?: string;
+  major?: string;
+  graduationYear?: number;
+  jobSeekingStatus?: JobSeekingStatus;
+  bio?: string;
+  skills?: string[];
+}
+
+export interface StudentProfileResponseDto {
+  message?: string;
+  profile: StudentProfileDto;
+}
+
+// ==========================================
+// M02: CV & RESUME CONTRACTS (UC31–UC35)
+// ==========================================
+
+export interface EducationItemDto {
+  id?: string;
+  school: string;
+  major: string;
+  startDate: string; // YYYY-MM
+  endDate?: string | null; // YYYY-MM
+  isCurrent?: boolean;
+  gpa?: string | null;
+  description?: string | null;
+}
+
+export interface ExperienceItemDto {
+  id?: string;
+  company: string;
+  position: string;
+  startDate: string; // YYYY-MM
+  endDate?: string | null; // YYYY-MM
+  isCurrent?: boolean;
+  description?: string | null;
+}
+
+export interface ProjectItemDto {
+  id?: string;
+  name: string;
+  role?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  url?: string | null;
+  description?: string | null;
+}
+
+export interface CertificationItemDto {
+  id?: string;
+  name: string;
+  issuer: string;
+  issueDate?: string | null;
+  url?: string | null;
+}
+
+export interface CvDto {
+  id: string;
+  studentId: string;
+  userId: string;
+  title: string;
+  summary?: string | null;
+  isDefault: boolean;
+  fileUrl?: string | null;
+  educations: EducationItemDto[];
+  experiences: ExperienceItemDto[];
+  skills: string[];
+  projects: ProjectItemDto[];
+  certifications: CertificationItemDto[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CvListItemDto {
+  id: string;
+  title: string;
+  isDefault: boolean;
+  fileUrl?: string | null;
+  skills: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateCvRequestDto {
+  title: string;
+  summary?: string;
+  isDefault?: boolean;
+  fileUrl?: string;
+  skills?: string[];
+  educations?: EducationItemDto[];
+  experiences?: ExperienceItemDto[];
+  projects?: ProjectItemDto[];
+  certifications?: CertificationItemDto[];
+}
+
+export interface UpdateCvRequestDto {
+  title?: string;
+  summary?: string;
+  isDefault?: boolean;
+  fileUrl?: string | null;
+  skills?: string[];
+  educations?: EducationItemDto[];
+  experiences?: ExperienceItemDto[];
+  projects?: ProjectItemDto[];
+  certifications?: CertificationItemDto[];
+}
+
+export interface CvResponseDto {
+  message?: string;
+  cv: CvDto;
+}
+
+export interface CvListResponseDto {
+  data: CvListItemDto[];
+  total: number;
+}
+
+export interface CvDetailResponseDto {
+  cv: CvDto;
+}
+
+export interface SetDefaultCvResponseDto {
+  message: string;
+  cvId: string;
+  isDefault: boolean;
+}
+
+export interface DeleteCvResponseDto {
+  message: string;
+  deletedCvId: string;
+}
+
+/**
+ * Contract C-03: M02 (CV) → M04 (Application)
+ * Lưu bản chụp CV tại thời điểm nộp đơn để bảo toàn tính bất biến
+ */
+export interface CvSnapshotDto {
+  snapshotId: string;
+  originalCvId: string;
+  studentId: string;
+  fullName: string;
+  email: string;
+  phone?: string | null;
+  title: string;
+  summary?: string | null;
+  educations: EducationItemDto[];
+  experiences: ExperienceItemDto[];
+  skills: string[];
+  projects: ProjectItemDto[];
+  certifications: CertificationItemDto[];
+  fileUrl?: string | null;
+  capturedAt: string;
 }

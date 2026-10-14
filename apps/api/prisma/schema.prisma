@@ -1,3 +1,4 @@
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -21,6 +22,19 @@ enum UserStatus {
   LOCKED
 }
 
+enum JobSeekingStatus {
+  ACTIVELY_LOOKING
+  OPEN_FOR_OPPORTUNITIES
+  NOT_LOOKING
+}
+
+enum NotificationEmailStatus {
+  NOT_REQUIRED
+  PENDING
+  SENT
+  FAILED
+}
+
 model User {
   id                      String                   @id @default(uuid())
   email                   String                   @unique
@@ -33,6 +47,7 @@ model User {
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
 
+  studentProfile          StudentProfile?
   authSessions            AuthSession[]
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
@@ -41,6 +56,23 @@ model User {
   @@index([email])
   @@index([role])
   @@index([status])
+}
+
+model StudentProfile {
+  id               String           @id @default(uuid())
+  userId           String           @unique
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  university       String?
+  major            String?
+  graduationYear   Int?
+  jobSeekingStatus JobSeekingStatus @default(ACTIVELY_LOOKING)
+  bio              String?
+  skills           String[]         @default([])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([userId])
+  @@index([jobSeekingStatus])
 }
 
 model AuthSession {
@@ -108,13 +140,6 @@ model AuditLog {
 // recipientId cố ý KHÔNG khai báo FK sang User để không sửa model của M01.
 // Tính toàn vẹn được kiểm tra ở tầng use case; có thể thêm FK sau khi Lead đồng ý.
 // ============================================================================
-enum NotificationEmailStatus {
-  NOT_REQUIRED
-  PENDING
-  SENT
-  FAILED
-}
-
 model Notification {
   id               String                  @id @default(uuid())
   recipientId      String

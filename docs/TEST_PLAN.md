@@ -18,6 +18,10 @@
 - Kiểm thử toàn bộ luồng REST API từ HTTP request đến database thông qua Supertest.
 - Xác nhận các HTTP Status code, format chuẩn `ApiErrorResponse`, header, cookie.
 - Tối thiểu kiểm thử: Health check endpoint (`GET /api/v1/health`) xác nhận NestJS và PostgreSQL đều sẵn sàng.
+- **Auth E2E (`apps/api/test/auth-flow.e2e-spec.ts`, task W1-QA-01):**
+  - Happy path liền mạch chỉ qua HTTP: đăng ký → nhận email (bắt email tại transport, lấy token từ link trong email) → xác minh → đăng nhập → `/me` → refresh (rotate) → logout → refresh bị từ chối.
+  - Error path: email trùng, dữ liệu đăng ký không hợp lệ, token xác minh sai/hết hạn/đã dùng, mật khẩu sai, access token sai/giả mạo/hết hạn, refresh token sai/hết hạn/bị dùng lại/sau logout, logout & logout-all.
+  - Email được bắt trong process nên không cần Mailpit/SMTP trong CI.
 
 ### 2.4 Static Analysis & Type Checking
 - `pnpm lint`: Đảm bảo quy tắc mã nguồn nhất quán.

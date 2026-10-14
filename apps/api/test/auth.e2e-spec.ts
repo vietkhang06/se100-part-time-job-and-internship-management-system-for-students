@@ -8,6 +8,7 @@ import { GlobalExceptionFilter } from '../src/shared/filters/http-exception.filt
 import { UserRole, UserStatus, AuthErrorCode } from '@campusjob/contracts';
 import { TokenUtils } from '../src/modules/auth/infrastructure/security/token.utils';
 import { PasswordHasher } from '../src/modules/auth/infrastructure/security/password-hasher';
+import { MAIL_SERVICE_TOKEN } from '../src/shared/mail/mail.service.interface';
 
 const request = (typeof supertest === 'function' ? supertest : (supertest as any).default) as typeof supertest;
 
@@ -38,6 +39,10 @@ describe('AuthModule (e2e)', () => {
 
     await app.init();
     prisma = app.get(PrismaService);
+
+    // Không gửi mail qua SMTP thật
+    const mailService = app.get(MAIL_SERVICE_TOKEN, { strict: false }) as any;
+    mailService.transporter = { sendMail: async () => ({ messageId: 'e2e' }) };
 
     // Clean up test records
     await cleanupDatabase();
@@ -762,6 +767,68 @@ describe('AuthModule (e2e)', () => {
         .expect(403);
 
       expect(res.body.code).toBe(AuthErrorCode.ACCOUNT_SUSPENDED);
+      expect(res.body.statusCode).toBe(403);
+
+      // Restore status to ACTIVE
+      await prisma.user.update({
+        where: { id: user!.id },
+        data: { status: UserStatus.ACTIVE },
+      });
+    });
+
+    it('should reject refresh when account is locked', async () => {
+      const loginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      const cookies = loginRes.headers['set-cookie'];
+      const user = await prisma.user.findUnique({ where: { email: testStudentEmail } });
+      await prisma.user.update({
+        where: { id: user!.id },
+        data: { status: UserStatus.LOCKED },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', cookies)
+        .expect(403);
+
+      expect(res.body.code).toBe(AuthErrorCode.ACCOUNT_LOCKED);
+      expect(res.body.statusCode).toBe(403);
+
+      // Restore status to ACTIVE
+      await prisma.user.update({
+        where: { id: user!.id },
+        data: { status: UserStatus.ACTIVE },
+      });
+    });
+
+    it('should reject refresh when account is pending verification', async () => {
+      const loginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      const cookies = loginRes.headers['set-cookie'];
+      const user = await prisma.user.findUnique({ where: { email: testStudentEmail } });
+      await prisma.user.update({
+        where: { id: user!.id },
+        data: { status: UserStatus.PENDING_VERIFICATION },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', cookies)
+        .expect(403);
+
+      expect(res.body.code).toBe(AuthErrorCode.ACCOUNT_PENDING_VERIFICATION);
       expect(res.body.statusCode).toBe(403);
 
       // Restore status to ACTIVE

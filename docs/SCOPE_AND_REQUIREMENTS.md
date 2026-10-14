@@ -59,7 +59,7 @@ Các tính năng sau đã được ghi nhận trong lộ trình phát triển nh
 | **FR-04** | Quên & Đặt lại mật khẩu | UC-06: Khôi phục mật khẩu | `PasswordResetToken` | `POST /api/v1/auth/forgot-password`<br>`POST /api/v1/auth/reset-password` | `/(auth)/forgot-password`<br>`/(auth)/reset-password` | `auth.e2e-spec.ts` |
 | **FR-05** | Hồ sơ cá nhân | UC-07: Xem/Cập nhật thông tin | `User`, `UserProfile` | `GET /api/v1/users/me`<br>`PATCH /api/v1/users/me` | `/candidate/profile`<br>`/employer/company` | `users.e2e-spec.ts` |
 | **FR-06** | Xác thực email trường | UC-08: Gửi mã & xác nhận trường | `StudentCampusVerification` | `POST /api/v1/students/verify-campus-email` | `/candidate/profile` | `students.spec.ts` |
-| **FR-07** | Hồ sơ doanh nghiệp & Chi nhánh | UC-09: Quản lý công ty / chi nhánh | `Company`, `CompanyBranch` | `POST /api/v1/companies`<br>`POST /api/v1/companies/branches` | `/employer/company`<br>`/employer/branches` | `companies.spec.ts` |
+| **FR-07** | Hồ sơ doanh nghiệp & Chi nhánh | UC-09: Quản lý công ty / UC-21: Quản lý chi nhánh | `Company`, `CompanyBranch` | `POST /api/v1/companies`<br>`POST /api/v1/companies/branches` | `/employer/company`<br>`/employer/branches` | `companies.spec.ts` |
 | **FR-08** | Quản lý CV sinh viên | UC-10: Upload/Quản lý CV | `Resume` | `GET /api/v1/resumes`<br>`POST /api/v1/resumes` | `/candidate/cvs` | `resumes.spec.ts` |
 | **FR-09** | Đăng tin & Quản lý tin tuyển dụng | UC-11: Tạo/Sửa tin tuyển dụng | `JobPosting` | `POST /api/v1/jobs`<br>`PATCH /api/v1/jobs/:id` | `/employer/jobs` | `jobs.spec.ts` |
 | **FR-10** | Tìm kiếm & Lưu việc làm | UC-12: Tra cứu & Lưu tin | `JobPosting`, `SavedJob` | `GET /api/v1/jobs`<br>`POST /api/v1/jobs/:id/save` | `/(public)/jobs`<br>`/candidate/saved-jobs` | `jobs.spec.ts` |
@@ -71,5 +71,5 @@ Các tính năng sau đã được ghi nhận trong lộ trình phát triển nh
 | **FR-16** | Kiểm duyệt nội dung | UC-18: Duyệt tin, duyệt công ty | `JobPosting`, `Company` | `PATCH /api/v1/moderation/jobs/:id`<br>`PATCH /api/v1/moderation/companies/:id` | `/moderator/moderation` | `moderation.spec.ts` |
 | **FR-17** | Thông báo hệ thống | UC-19: Nhận & đọc thông báo | `Notification` | `GET /api/v1/notifications`<br>`PATCH /api/v1/notifications/:id/read` | `AppHeader Notification Bell` | `notifications.spec.ts` |
 | **FR-18** | Quản lý tải lên tệp tin | UC-20: Upload avatar/CV/giấy tờ | `StorageFile` | `POST /api/v1/storage/upload` | Upload UI components | `storage.spec.ts` |
-| **FR-19** | Quản trị người dùng & Audit | UC-21: Quản trị tài khoản, Audit log | `User`, `AuditLog` | `GET /api/v1/admin/users`<br>`GET /api/v1/admin/audit-logs` | `/admin/users`<br>`/admin/reports` | `admin.spec.ts` |
+| **FR-19** | Quản trị người dùng & Audit | [Chờ xác định mã UC / Pending Identification]: Quản trị tài khoản, Audit log | `User`, `AuditLog` | `GET /api/v1/admin/users`<br>`GET /api/v1/admin/audit-logs` | `/admin/users`<br>`/admin/reports` | `admin.spec.ts` |
 | **FR-20** | Healthcheck & Vận hành | UC-22: Giám sát trạng thái hệ thống | `SystemHealth` | `GET /api/v1/health` | Status monitoring | `app.e2e-spec.ts` |
