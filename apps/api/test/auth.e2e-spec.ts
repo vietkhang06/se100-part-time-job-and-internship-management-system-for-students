@@ -56,20 +56,26 @@ describe('AuthModule (e2e)', () => {
   });
 
   async function cleanupDatabase() {
+    const testEmails = [
+      testStudentEmail,
+      testEmployerEmail,
+      'concurrent@campusjob.local',
+      'concurrent-reset@campusjob.local',
+    ];
     await prisma.authSession.deleteMany({
-      where: { user: { email: { in: [testStudentEmail, testEmployerEmail, 'concurrent@campusjob.local'] } } },
+      where: { user: { email: { in: testEmails } } },
     });
     await prisma.emailVerificationToken.deleteMany({
-      where: { user: { email: { in: [testStudentEmail, testEmployerEmail, 'concurrent@campusjob.local'] } } },
+      where: { user: { email: { in: testEmails } } },
     });
     await prisma.passwordResetToken.deleteMany({
-      where: { user: { email: { in: [testStudentEmail, testEmployerEmail, 'concurrent@campusjob.local'] } } },
+      where: { user: { email: { in: testEmails } } },
     });
     await prisma.auditLog.deleteMany({
-      where: { actor: { email: { in: [testStudentEmail, testEmployerEmail, 'concurrent@campusjob.local'] } } },
+      where: { actor: { email: { in: testEmails } } },
     });
     await prisma.user.deleteMany({
-      where: { email: { in: [testStudentEmail, testEmployerEmail, 'concurrent@campusjob.local'] } },
+      where: { email: { in: testEmails } },
     });
   }
 
@@ -488,13 +494,22 @@ describe('AuthModule (e2e)', () => {
     });
 
     it('should handle concurrent reset requests gracefully (only 1 succeeds)', async () => {
-      const user = await prisma.user.findUnique({ where: { email: testStudentEmail } });
+      // Use dedicated user to avoid mutating testStudentEmail fixture
+      const concurrentUser = await prisma.user.create({
+        data: {
+          email: 'concurrent-reset@campusjob.local',
+          passwordHash: await PasswordHasher.hash(testStrongPassword),
+          fullName: 'Concurrent Reset User',
+          role: UserRole.STUDENT,
+          status: UserStatus.ACTIVE,
+        },
+      });
       const rawToken = 'concurrent-reset-token-999';
       const tokenHash = TokenUtils.hashToken(rawToken);
 
       await prisma.passwordResetToken.create({
         data: {
-          userId: user!.id,
+          userId: concurrentUser.id,
           tokenHash,
           expiresAt: new Date(Date.now() + 3600000),
         },
@@ -532,10 +547,10 @@ describe('AuthModule (e2e)', () => {
         .send({
           email: testStudentEmail,
           password: 'BrandNewPassword999!@#',
-        });
+        })
+        .expect(200);
 
-      // User might be set to ConcurPass depending on previous test, so accept valid pass
-      expect([200, 401]).toContain(newLoginRes.status);
+      expect(newLoginRes.body.accessToken).toBeDefined();
     });
 
     it('should not revoke unrelated user sessions during password reset', async () => {
@@ -577,6 +592,13 @@ describe('AuthModule (e2e)', () => {
         where: { id: employerSession.id },
       });
       expect(freshEmployerSession!.revokedAt).toBeNull();
+
+      // Restore student password back to BrandNewPassword999!@# for subsequent login tests
+      const restoredHash = await PasswordHasher.hash('BrandNewPassword999!@#');
+      await prisma.user.update({
+        where: { id: student!.id },
+        data: { passwordHash: restoredHash },
+      });
     });
   });
 
