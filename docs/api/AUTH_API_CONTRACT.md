@@ -28,6 +28,31 @@ Tài liệu này chuẩn hóa hợp đồng giao tiếp API xác thực (Authent
   }
   ```
 
+### 1.1 Chuẩn hóa Ngữ cảnh Xác thực Liên phân hệ (AuthContext C-01)
+
+Nhằm đảm bảo các module tiêu thụ danh tính (Student Profile & CV, Application & Interview, Notifications) nhận ngữ cảnh xác thực chuẩn tắc mà không phụ thuộc trực tiếp vào triển khai nội bộ của M01, `AuthContext` được xuất bản chính thức trong `@campusjob/contracts` và kết nối trực tiếp với kết quả giải mã token của `JwtStrategy.validate`:
+
+#### Bảng cấu trúc trường dữ liệu `AuthContext`:
+| Trường | Kiểu dữ liệu | Bắt buộc | Mô tả & Ý nghĩa hợp đồng |
+|---|---|---|---|
+| `id` | `string` (UUID) | Có | **Định danh người dùng chuẩn tắc (Canonical Authenticated User ID)**. Ánh xạ trực tiếp từ `payload.sub` và thẩm định qua `userRepository.findById`. Gắn trên `req.user.id`. Toàn bộ module tiêu thụ trích xuất qua `@CurrentUser('id')`. |
+| `email` | `string` | Có | Địa chỉ email đã đăng ký của tài khoản. |
+| `fullName` | `string` | Có | Họ và tên hiển thị của người dùng. |
+| `role` | `UserRole` | Có | Vai trò người dùng theo phân quyền RBAC (`STUDENT`, `EMPLOYER`, `MODERATOR`, `ADMIN`). |
+| `status` | `UserStatus` | Có | Trạng thái tài khoản (`ACTIVE`, `SUSPENDED`, `LOCKED`, `PENDING_VERIFICATION`). |
+| `phone` | `string \| null` | Không | Số điện thoại liên hệ của người dùng (tùy chọn). |
+| `emailVerified` | `boolean` | Có | Cờ xác nhận địa chỉ email đã được kích hoạt thành công (`user.isVerified()`). |
+| `sessionId` | `string` | Không | Định danh phiên làm việc `AuthSession` gắn kèm token. |
+
+#### Nguyên tắc Định danh & Ủy quyền trong Sprint 2:
+1. **Định danh chuẩn tắc (Canonical User ID):** `req.user.id` là trường định danh chuẩn tắc duy nhất trong runtime. Không thêm bí danh `userId` trên `AuthContext` để tránh dư thừa và bảo toàn tính toàn vẹn.
+2. **Chống can thiệp danh tính (Anti-Spoofing):** Mọi module tiêu thụ bắt buộc phải lấy danh tính người dùng từ token đã xác thực (`@CurrentUser('id')`), tuyệt đối không tin cậy hay cho phép trường `userId` trong request body/params ghi đè lên danh tính này.
+3. **Mô hình Phân quyền Sprint 2:** Hệ thống thực thi ủy quyền thông qua:
+   - **RBAC (Role-Based Access Control):** Kiểm tra vai trò qua `RolesGuard` và `@Roles(...)`.
+   - **Resource Ownership:** So khớp quyền sở hữu tài nguyên qua `req.user.id` với trường quan hệ trong cơ sở dữ liệu (ví dụ: `studentId`, `userId`, `employerId`).
+   - **Account State:** Từ chối ngay lập tức các tài khoản `SUSPENDED`, `LOCKED`, hoặc `PENDING_VERIFICATION` tại tầng Guard/Strategy.
+4. **Quy định về Permissions:** Hợp đồng C-01 trong Sprint 2 **không chứa mảng `permissions: string[]`** trong runtime và không giới thiệu permission registry phân mảnh. Mọi mô hình fine-grained permissions trong tương lai bắt buộc phải thông qua quyết định hợp đồng (RFC/Contract Decision) riêng biệt và được phê duyệt chính thức.
+
 ---
 
 ## 2. Chi tiết các Endpoint trong phạm vi C-01
@@ -425,6 +450,9 @@ Content-Type: application/json
 
 ## 5. Kế hoạch Chuyển giao Kỹ thuật (Technical Transition)
 
-- **Trạng thái Task Hiện tại (S2-M01-01):** Hoàn thành chuẩn hóa Auth API Contract (C-01), mã hóa mã lỗi `AuthErrorCode`, đồng bộ types `@campusjob/contracts`, đảm bảo 100% kiểm thử hồi quy tự động.
-- **Nhiệm vụ kế tiếp trong Sprint 2:** **`S2-M01-02` (Phân quyền người dùng & Kiểm soát truy cập dựa trên vai trò - RBAC - Role-Based Access Control)**. Nhiệm vụ này phụ thuộc trực tiếp vào C-01 để trích xuất `UserRole` và phân quyền endpoint qua Guard/Decorator. Nhiệm vụ này **không phải** là nhiệm vụ hồ sơ cá nhân (Personal Profile).
+- **Trạng thái Task S2-M01-01:** Hoàn thành chuẩn hóa Auth API Contract (C-01), mã hóa mã lỗi `AuthErrorCode`, đồng bộ types `@campusjob/contracts`.
+- **Trạng thái Task S2-M01-02:** Hoàn thành ma trận phân quyền người dùng và kiểm soát truy cập dựa trên vai trò (RBAC).
+- **Trạng thái Task S2-M01-04:** Hoàn thành luồng đặt lại mật khẩu và đổi mật khẩu an toàn (Password Reset & Change Password).
+- **Trạng thái Task S2-M01-05:** Hoàn thành kiểm thử phân quyền liên phân hệ (Cross-Module Authorization).
+- **Nhiệm vụ S2-M01-06 (Account Integration):** Đóng gói và chuẩn hóa hợp đồng ngữ cảnh xác thực `AuthContext` (8 trường chuẩn), kết nối trực tiếp với `JwtStrategy.validate`, xác lập `req.user.id` làm canonical identity, thực thi kiểm thử tích hợp liên phân hệ giữa `StudentsModule`, `NotificationsModule` và `M04Module` (Contract-Boundary), bảo đảm chống giả mạo danh tính qua body/params và thực thi nghiêm ngặt trạng thái tài khoản.
 

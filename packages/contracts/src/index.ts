@@ -80,6 +80,23 @@ export interface AuthUserDto {
   emailVerified: boolean;
 }
 
+/**
+ * AuthContext — Ngữ cảnh xác thực và định danh người dùng liên phân hệ (Contract C-01)
+ *
+ * Phản ánh chính xác đối tượng principal do JwtStrategy gắn vào request (req.user).
+ * Đại diện cho ngữ cảnh xác thực được truyền và tiêu thụ xuyên suốt các module.
+ */
+export interface AuthContext {
+  id: string;
+  email: string;
+  fullName: string;
+  role: UserRole;
+  status: UserStatus;
+  phone?: string | null;
+  emailVerified: boolean;
+  sessionId?: string;
+}
+
 export interface HealthResponseDto {
   status: 'ok' | 'error';
   timestamp: string;
