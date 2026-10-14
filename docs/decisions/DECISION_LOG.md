@@ -15,3 +15,4 @@
 | ADR-011 | Mailpit được dùng để kiểm tra email local | Chấp thuận |
 | ADR-012 | Payment và messaging thuộc giai đoạn 2 | Chấp thuận |
 | ADR-013 | Không chạy seed trong production | Chấp thuận |
+| ADR-014 | Chuẩn hóa AuthContext (C-01) gồm 8 trường, ủy quyền qua RBAC và Resource Ownership, không dùng permissions array ở Sprint 2 | Chấp thuận |
