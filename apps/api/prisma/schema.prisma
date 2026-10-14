@@ -102,3 +102,36 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
 }
+
+// ============================================================================
+// M05 · Notification (C-20)
+// recipientId cố ý KHÔNG khai báo FK sang User để không sửa model của M01.
+// Tính toàn vẹn được kiểm tra ở tầng use case; có thể thêm FK sau khi Lead đồng ý.
+// ============================================================================
+enum NotificationEmailStatus {
+  NOT_REQUIRED
+  PENDING
+  SENT
+  FAILED
+}
+
+model Notification {
+  id               String                  @id @default(uuid())
+  recipientId      String
+  eventType        String
+  title            String
+  body             String
+  payload          Json?
+  dedupeKey        String?                 @unique
+  readAt           DateTime?
+  emailStatus      NotificationEmailStatus @default(NOT_REQUIRED)
+  emailAttempts    Int                     @default(0)
+  emailLastError   String?
+  emailSentAt      DateTime?
+  emailNextRetryAt DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  @@index([recipientId, readAt, createdAt])
+  @@index([emailStatus, emailNextRetryAt])
+}

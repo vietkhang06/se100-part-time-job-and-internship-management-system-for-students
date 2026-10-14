@@ -157,3 +157,48 @@ export interface JwtPayload {
   sessionId?: string;
 }
 
+// ============================================================================
+// M05 · Notification (C-20 — DRAFT, chờ Lead/Owner M03-M04 chốt payload)
+// ============================================================================
+export enum NotificationEventType {
+  JOB_SUBMITTED_FOR_REVIEW = 'JOB_SUBMITTED_FOR_REVIEW',
+  JOB_APPROVED = 'JOB_APPROVED',
+  JOB_REJECTED = 'JOB_REJECTED',
+  JOB_HIDDEN = 'JOB_HIDDEN',
+  COMPANY_VERIFICATION_RESULT = 'COMPANY_VERIFICATION_RESULT',
+  APPLICATION_SUBMITTED = 'APPLICATION_SUBMITTED',
+  APPLICATION_STATUS_CHANGED = 'APPLICATION_STATUS_CHANGED',
+  INTERVIEW_INVITED = 'INTERVIEW_INVITED',
+  INTERVIEW_CONFIRMED = 'INTERVIEW_CONFIRMED',
+  INTERVIEW_RESCHEDULE_REQUESTED = 'INTERVIEW_RESCHEDULE_REQUESTED',
+  INTERVIEW_RESCHEDULE_RESOLVED = 'INTERVIEW_RESCHEDULE_RESOLVED',
+  REPORT_RECEIVED = 'REPORT_RECEIVED',
+  REPORT_RESOLVED = 'REPORT_RESOLVED',
+  SANCTION_APPLIED = 'SANCTION_APPLIED',
+}
+
+export enum NotificationEmailStatus {
+  NOT_REQUIRED = 'NOT_REQUIRED',
+  PENDING = 'PENDING',
+  SENT = 'SENT',
+  FAILED = 'FAILED',
+}
+
+export interface NotificationDto {
+  id: string;
+  eventType: string;
+  title: string;
+  body: string;
+  payload: Record<string, unknown> | null;
+  isRead: boolean;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface UnreadCountResponseDto {
+  unreadCount: number;
+}
+
+export interface MarkAllReadResponseDto {
+  updatedCount: number;
+}
