@@ -79,6 +79,41 @@ describe('AuthModule (e2e)', () => {
     });
   }
 
+  async function ensureActiveStudent(password = 'BrandNewPassword999!@#') {
+    const hash = await PasswordHasher.hash(password);
+    return prisma.user.upsert({
+      where: { email: testStudentEmail },
+      create: {
+        email: testStudentEmail,
+        passwordHash: hash,
+        fullName: 'Sinh Vien E2E',
+        role: UserRole.STUDENT,
+        status: UserStatus.ACTIVE,
+        emailVerifiedAt: new Date(),
+      },
+      update: {
+        passwordHash: hash,
+        status: UserStatus.ACTIVE,
+        emailVerifiedAt: new Date(),
+      },
+    });
+  }
+
+  async function ensureActiveEmployer(password = testStrongPassword) {
+    const hash = await PasswordHasher.hash(password);
+    return prisma.user.upsert({
+      where: { email: testEmployerEmail },
+      create: {
+        email: testEmployerEmail,
+        passwordHash: hash,
+        fullName: 'Doanh Nghiep E2E',
+        role: UserRole.EMPLOYER,
+        status: UserStatus.PENDING_VERIFICATION,
+      },
+      update: {},
+    });
+  }
+
   describe('POST /api/v1/auth/register', () => {
     it('should register a Student successfully', async () => {
       const res = await request(app.getHttpServer())
@@ -372,6 +407,10 @@ describe('AuthModule (e2e)', () => {
   });
 
   describe('POST /api/v1/auth/forgot-password & /api/v1/auth/reset-password', () => {
+    beforeAll(async () => {
+      await ensureActiveStudent(testStrongPassword);
+    });
+
     it('should return neutral response when email exists without leaking', async () => {
       // Ensure cooldown does not block by clearing recent tokens
       const user = await prisma.user.findUnique({ where: { email: testStudentEmail } });
@@ -402,7 +441,17 @@ describe('AuthModule (e2e)', () => {
     });
 
     it('should enforce cooldown on forgot password (< 60s)', async () => {
-      // Calling immediately after the previous request
+      const user = await prisma.user.findUnique({ where: { email: testStudentEmail } });
+      await prisma.passwordResetToken.deleteMany({ where: { userId: user!.id } });
+      await prisma.passwordResetToken.create({
+        data: {
+          userId: user!.id,
+          tokenHash: 'cooldown-token-hash-e2e',
+          expiresAt: new Date(Date.now() + 3600000),
+          createdAt: new Date(),
+        },
+      });
+
       await request(app.getHttpServer())
         .post('/api/v1/auth/forgot-password')
         .send({ email: testStudentEmail })
@@ -603,6 +652,15 @@ describe('AuthModule (e2e)', () => {
   });
 
   describe('POST /api/v1/auth/login', () => {
+    beforeAll(async () => {
+      await ensureActiveStudent('BrandNewPassword999!@#');
+      await ensureActiveEmployer();
+    });
+
+    afterEach(async () => {
+      await ensureActiveStudent('BrandNewPassword999!@#');
+    });
+
     it('should login successfully with valid credentials and return access token + refresh cookie', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
@@ -715,6 +773,10 @@ describe('AuthModule (e2e)', () => {
   });
 
   describe('GET /api/v1/auth/me', () => {
+    beforeAll(async () => {
+      await ensureActiveStudent('BrandNewPassword999!@#');
+    });
+
     it('should return current user when valid Bearer access token is provided', async () => {
       const loginRes = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
@@ -756,6 +818,15 @@ describe('AuthModule (e2e)', () => {
   });
 
   describe('POST /api/v1/auth/refresh', () => {
+    beforeAll(async () => {
+      await ensureActiveStudent('BrandNewPassword999!@#');
+      await ensureActiveEmployer();
+    });
+
+    afterEach(async () => {
+      await ensureActiveStudent('BrandNewPassword999!@#');
+    });
+
     it('should rotate refresh token and issue new access token', async () => {
       const loginRes = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
@@ -954,6 +1025,10 @@ describe('AuthModule (e2e)', () => {
   });
 
   describe('POST /api/v1/auth/logout', () => {
+    beforeAll(async () => {
+      await ensureActiveStudent('BrandNewPassword999!@#');
+    });
+
     it('should logout current session and clear refresh cookie', async () => {
       const loginRes = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
@@ -979,6 +1054,10 @@ describe('AuthModule (e2e)', () => {
   });
 
   describe('POST /api/v1/auth/logout-all', () => {
+    beforeAll(async () => {
+      await ensureActiveStudent('BrandNewPassword999!@#');
+    });
+
     it('should revoke all active sessions for current user', async () => {
       // Create session 1
       const loginRes1 = await request(app.getHttpServer())
@@ -1026,6 +1105,14 @@ describe('AuthModule (e2e)', () => {
   });
 
   describe('POST /api/v1/auth/change-password', () => {
+    beforeAll(async () => {
+      await ensureActiveStudent('BrandNewPassword999!@#');
+    });
+
+    beforeEach(async () => {
+      await ensureActiveStudent('BrandNewPassword999!@#');
+    });
+
     it('should reject change-password when unauthenticated', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/auth/change-password')
