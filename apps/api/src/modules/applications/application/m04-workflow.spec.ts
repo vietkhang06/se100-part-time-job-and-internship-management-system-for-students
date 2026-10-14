@@ -175,4 +175,32 @@ describe('M04 workflow with contract fixtures', () => {
     expect((await workflow.withdraw('student-a', app.id)).status).toBe(ApplicationStatus.WITHDRAWN);
     await expect(workflow.markViewed('employer-a', app.id)).rejects.toThrow();
   });
+
+  it('keeps invitation, confirmation, one reschedule and final result linked to the application', async () => {
+    const app = await workflow.submit('student-a', 'job-a', 'cv-1');
+    await workflow.markViewed('employer-a', app.id);
+    const first = new Date('2026-10-15T10:00:00.000Z');
+    const second = new Date('2026-10-16T10:00:00.000Z');
+    const interview = await workflow.invite('employer-a', app.id, {
+      scheduledAt: first, mode: 'ONLINE', locationOrLink: 'https://example.org/room',
+    });
+    expect((await workflow.getMine('student-a', app.id)).status).toBe(ApplicationStatus.INTERVIEW_SCHEDULED);
+    await expect(workflow.confirmInterview('student-b', interview.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect((await workflow.confirmInterview('student-a', interview.id)).confirmedAt).toEqual(current);
+    await workflow.requestReschedule('student-a', interview.id, second, 'Exam');
+    await expect(workflow.requestReschedule('student-a', interview.id, second)).rejects.toThrow();
+    await expect(workflow.decideReschedule('employer-b', interview.id, 'APPROVED')).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect((await workflow.decideReschedule('employer-a', interview.id, 'APPROVED')).decision).toBe('APPROVED');
+    expect((await repository.getInterview(interview.id))?.scheduledAt).toEqual(second);
+    await expect(workflow.decideReschedule('employer-a', interview.id, 'APPROVED')).rejects.toThrow();
+    await expect(workflow.recordResult('employer-a', interview.id, 'ACCEPTED')).rejects.toThrow();
+    current = new Date('2026-10-17T10:00:00.000Z');
+    expect((await workflow.recordResult('employer-a', interview.id, 'ACCEPTED')).result).toBe('ACCEPTED');
+    expect((await workflow.getMine('student-a', app.id)).status).toBe(ApplicationStatus.ACCEPTED);
+    await expect(workflow.recordResult('employer-a', interview.id, 'REJECTED')).rejects.toThrow();
+    expect(repository.history.map((h) => h.to)).toEqual([
+      ApplicationStatus.SUBMITTED, ApplicationStatus.REVIEWING,
+      ApplicationStatus.INTERVIEW_SCHEDULED, ApplicationStatus.ACCEPTED,
+    ]);
+  });
 });
