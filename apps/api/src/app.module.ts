@@ -7,6 +7,7 @@ import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { StudentsModule } from './modules/students/students.module';
 import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
     UsersModule,
     AuthModule,
     StudentsModule,
+    NotificationsModule,
   ],
 })
 export class AppModule implements NestModule {

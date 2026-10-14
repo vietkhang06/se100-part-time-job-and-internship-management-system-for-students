@@ -27,6 +27,13 @@ enum JobSeekingStatus {
   NOT_LOOKING
 }
 
+enum NotificationEmailStatus {
+  NOT_REQUIRED
+  PENDING
+  SENT
+  FAILED
+}
+
 model User {
   id                      String                   @id @default(uuid())
   email                   String                   @unique
@@ -48,6 +55,25 @@ model User {
   @@index([email])
   @@index([role])
   @@index([status])
+}
+
+model StudentProfile {
+  id               String           @id @default(uuid())
+  userId           String           @unique
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  university       String?
+  major            String?
+  graduationYear   Int?
+  jobSeekingStatus JobSeekingStatus @default(ACTIVELY_LOOKING)
+  bio              String?
+  skills           String[]         @default([])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  cvs              Cv[]
+
+  @@index([userId])
+  @@index([jobSeekingStatus])
 }
 
 model AuthSession {
@@ -110,23 +136,30 @@ model AuditLog {
   @@index([createdAt])
 }
 
-model StudentProfile {
-  id               String           @id @default(uuid())
-  userId           String           @unique
-  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  university       String?
-  major            String?
-  graduationYear   Int?
-  jobSeekingStatus JobSeekingStatus @default(ACTIVELY_LOOKING)
-  bio              String?
-  skills           String[]         @default([])
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+// ============================================================================
+// M05 · Notification (C-20)
+// recipientId cố ý KHÔNG khai báo FK sang User để không sửa model của M01.
+// Tính toàn vẹn được kiểm tra ở tầng use case; có thể thêm FK sau khi Lead đồng ý.
+// ============================================================================
+model Notification {
+  id               String                  @id @default(uuid())
+  recipientId      String
+  eventType        String
+  title            String
+  body             String
+  payload          Json?
+  dedupeKey        String?                 @unique
+  readAt           DateTime?
+  emailStatus      NotificationEmailStatus @default(NOT_REQUIRED)
+  emailAttempts    Int                     @default(0)
+  emailLastError   String?
+  emailSentAt      DateTime?
+  emailNextRetryAt DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
 
-  cvs              Cv[]
-
-  @@index([userId])
-  @@index([jobSeekingStatus])
+  @@index([recipientId, readAt, createdAt])
+  @@index([emailStatus, emailNextRetryAt])
 }
 
 model Cv {

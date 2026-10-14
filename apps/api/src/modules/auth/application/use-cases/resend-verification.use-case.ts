@@ -2,11 +2,16 @@ import {
   Injectable,
   Inject,
   BadRequestException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { ResendVerificationResponseDto } from '@campusjob/contracts';
+import {
+  ResendVerificationResponseDto,
+  UserStatus,
+  AuthErrorCode,
+} from '@campusjob/contracts';
 import {
   USER_REPOSITORY_TOKEN,
   IUserRepository,
@@ -47,6 +52,20 @@ export class ResendVerificationUseCase {
       return {
         message: 'If your account is registered, a new verification email has been sent.',
       };
+    }
+
+    if (user.status === UserStatus.SUSPENDED) {
+      throw new ForbiddenException({
+        message: 'Tài khoản đã bị đình chỉ hoạt động.',
+        code: AuthErrorCode.ACCOUNT_SUSPENDED,
+      });
+    }
+
+    if (user.status === UserStatus.LOCKED) {
+      throw new ForbiddenException({
+        message: 'Tài khoản đang bị khóa tạm thời. Vui lòng liên hệ quản trị viên.',
+        code: AuthErrorCode.ACCOUNT_LOCKED,
+      });
     }
 
     if (user.isVerified()) {
