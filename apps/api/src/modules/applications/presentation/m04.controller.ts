@@ -5,7 +5,10 @@ import { Roles } from '../../../shared/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
 import { M04Workflow } from '../application/m04-workflow';
-import { SubmitApplicationDto, RejectApplicationDto } from './m04.dto';
+import {
+  DecideRescheduleDto, InviteInterviewDto, RecordInterviewResultDto,
+  RejectApplicationDto, RequestRescheduleDto, SubmitApplicationDto,
+} from './m04.dto';
 import { M04ExceptionFilter } from './m04-exception.filter';
 
 /** Registered only after real M02/M03 adapters are supplied to M04Module. */
@@ -57,4 +60,37 @@ export class M04Controller {
     return this.workflow.reject(employerId, id, dto.reason);
   }
 
+  @Post('employer/applications/:id/interviews')
+  @Roles(UserRole.EMPLOYER)
+  invite(@CurrentUser('id') employerId: string, @Param('id') id: string, @Body() dto: InviteInterviewDto) {
+    return this.workflow.invite(employerId, id, { ...dto, scheduledAt: new Date(dto.scheduledAt) });
+  }
+
+  @Get('interviews/me')
+  @Roles(UserRole.STUDENT)
+  myInterviews(@CurrentUser('id') studentId: string) { return this.workflow.listMyInterviews(studentId); }
+
+  @Post('interviews/:id/confirm')
+  @Roles(UserRole.STUDENT)
+  confirm(@CurrentUser('id') studentId: string, @Param('id') id: string) {
+    return this.workflow.confirmInterview(studentId, id);
+  }
+
+  @Post('interviews/:id/change-request')
+  @Roles(UserRole.STUDENT)
+  requestChange(@CurrentUser('id') studentId: string, @Param('id') id: string, @Body() dto: RequestRescheduleDto) {
+    return this.workflow.requestReschedule(studentId, id, new Date(dto.proposedAt), dto.message);
+  }
+
+  @Patch('employer/interviews/:id/change-request')
+  @Roles(UserRole.EMPLOYER)
+  decideChange(@CurrentUser('id') employerId: string, @Param('id') id: string, @Body() dto: DecideRescheduleDto) {
+    return this.workflow.decideReschedule(employerId, id, dto.decision);
+  }
+
+  @Patch('employer/interviews/:id/result')
+  @Roles(UserRole.EMPLOYER)
+  result(@CurrentUser('id') employerId: string, @Param('id') id: string, @Body() dto: RecordInterviewResultDto) {
+    return this.workflow.recordResult(employerId, id, dto.result, dto.reason);
+  }
 }

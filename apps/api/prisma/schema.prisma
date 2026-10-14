@@ -27,6 +27,31 @@ enum JobSeekingStatus {
   NOT_LOOKING
 }
 
+enum ApplicationStatus {
+  SUBMITTED
+  REVIEWING
+  INTERVIEW_SCHEDULED
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+enum InterviewMode {
+  ONSITE
+  ONLINE
+}
+
+enum InterviewResult {
+  ACCEPTED
+  REJECTED
+}
+
+enum InterviewChangeDecision {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id                      String                   @id @default(uuid())
   email                   String                   @unique
@@ -127,15 +152,6 @@ model StudentProfile {
   @@index([jobSeekingStatus])
 }
 
-enum ApplicationStatus {
-  SUBMITTED
-  REVIEWING
-  INTERVIEW_SCHEDULED
-  ACCEPTED
-  REJECTED
-  WITHDRAWN
-}
-
 // M04 owns these records. studentId, jobId and cvId remain scalar contract IDs
 // until M02/M03 publish their persistence models; M04 never owns their data.
 model Application {
@@ -150,6 +166,7 @@ model Application {
   createdAt       DateTime                   @default(now())
   updatedAt       DateTime                   @updatedAt
   statusHistory   ApplicationStatusHistory[]
+  interviews      Interview[]
 
   @@unique([studentId, jobId])
   @@index([studentId, status])
@@ -167,4 +184,34 @@ model ApplicationStatusHistory {
   createdAt     DateTime          @default(now())
 
   @@index([applicationId, createdAt])
+}
+
+model Interview {
+  id                String                  @id @default(uuid())
+  applicationId     String
+  application       Application             @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  scheduledAt       DateTime
+  mode              InterviewMode
+  locationOrLink    String
+  message           String?
+  confirmedAt       DateTime?
+  result            InterviewResult?
+  resultAt          DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  changeRequest     InterviewChangeRequest?
+
+  @@index([applicationId, scheduledAt])
+}
+
+model InterviewChangeRequest {
+  id          String                  @id @default(uuid())
+  interviewId String                  @unique
+  interview   Interview               @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  proposedAt  DateTime
+  message     String?
+  decision    InterviewChangeDecision @default(PENDING)
+  decidedBy   String?
+  decidedAt   DateTime?
+  createdAt   DateTime                @default(now())
 }
