@@ -20,6 +20,7 @@ export class InMemoryCvRepository implements ICvRepository {
       new CvEntity(
         'cv-sample-test',
         'default-student-profile',
+        'default-user-id',
         'CV Lập trình viên Backend NestJS (Mẫu thử nghiệm UC38)',
         'Đam mê phát triển microservices và kiến trúc phần mềm sạch',
         true,
@@ -64,6 +65,7 @@ export class InMemoryCvRepository implements ICvRepository {
       new CvEntity(
         'cv-alien-forbidden',
         'other-stranger-student-profile-id',
+        'stranger-user-id',
         'CV của người khác (Bảo mật Anti-IDOR)',
         'Hồ sơ bảo mật của sinh viên khác',
         false,
@@ -87,6 +89,7 @@ export class InMemoryCvRepository implements ICvRepository {
         new CvEntity(
           existing.id,
           profileId,
+          existing.userId,
           existing.title,
           existing.summary,
           existing.isDefault,
@@ -113,6 +116,104 @@ export class InMemoryCvRepository implements ICvRepository {
     );
   }
 
+  async countByStudentProfileId(studentProfileId: string): Promise<number> {
+    return (await this.findByStudentProfileId(studentProfileId)).length;
+  }
+
+  async create(data: any): Promise<CvEntity> {
+    const cv = new CvEntity(
+      `cv-${Date.now()}`,
+      data.studentProfileId,
+      'user-id',
+      data.title,
+      data.summary,
+      data.isDefault ?? false,
+      data.fileUrl,
+      data.skills ?? [],
+      data.educations ?? [],
+      data.experiences ?? [],
+      data.projects ?? [],
+      data.certifications ?? [],
+    );
+    this.store.set(cv.id, cv);
+    return cv;
+  }
+
+  async update(id: string, data: any): Promise<CvEntity> {
+    const existing = await this.findById(id);
+    if (!existing) throw new Error('CV not found');
+    const updated = new CvEntity(
+      existing.id,
+      existing.studentProfileId,
+      existing.userId,
+      data.title ?? existing.title,
+      data.summary ?? existing.summary,
+      data.isDefault ?? existing.isDefault,
+      data.fileUrl ?? existing.fileUrl,
+      data.skills ?? existing.skills,
+      data.educations ?? existing.educations,
+      data.experiences ?? existing.experiences,
+      data.projects ?? existing.projects,
+      data.certifications ?? existing.certifications,
+      existing.createdAt,
+      new Date(),
+    );
+    this.store.set(id, updated);
+    return updated;
+  }
+
+  async setDefault(studentProfileId: string, cvId: string): Promise<void> {
+    for (const [id, cv] of this.store.entries()) {
+      if (cv.studentProfileId === studentProfileId) {
+        this.store.set(
+          id,
+          new CvEntity(
+            cv.id,
+            cv.studentProfileId,
+            cv.userId,
+            cv.title,
+            cv.summary,
+            cv.id === cvId,
+            cv.fileUrl,
+            cv.skills,
+            cv.educations,
+            cv.experiences,
+            cv.projects,
+            cv.certifications,
+            cv.createdAt,
+            cv.updatedAt,
+          ),
+        );
+      }
+    }
+  }
+
+  async delete(id: string): Promise<void> {
+    this.store.delete(id);
+  }
+
+  async findDefaultByStudentProfileId(studentProfileId: string): Promise<CvEntity | null> {
+    return (
+      Array.from(this.store.values()).find(
+        (cv) => cv.studentProfileId === studentProfileId && cv.isDefault,
+      ) ?? null
+    );
+  }
+
+  async findLatestByStudentProfileId(
+    studentProfileId: string,
+    excludeId?: string,
+  ): Promise<CvEntity | null> {
+    const list = Array.from(this.store.values())
+      .filter((cv) => cv.studentProfileId === studentProfileId && cv.id !== excludeId)
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    return list[0] ?? null;
+  }
+
+  async isCvInUse(_cvId: string): Promise<boolean> {
+    return false;
+  }
+
   save(cv: CvEntity): void {
     this.store.set(cv.id, cv);
   }
@@ -121,4 +222,3 @@ export class InMemoryCvRepository implements ICvRepository {
     this.store.clear();
   }
 }
-

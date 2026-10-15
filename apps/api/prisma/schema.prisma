@@ -27,6 +27,38 @@ enum JobSeekingStatus {
   NOT_LOOKING
 }
 
+enum NotificationEmailStatus {
+  NOT_REQUIRED
+  PENDING
+  SENT
+  FAILED
+}
+
+enum ApplicationStatus {
+  SUBMITTED
+  REVIEWING
+  INTERVIEW_SCHEDULED
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+enum InterviewMode {
+  ONSITE
+  ONLINE
+}
+
+enum InterviewResult {
+  ACCEPTED
+  REJECTED
+}
+
+enum InterviewChangeDecision {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id                      String                   @id @default(uuid())
   email                   String                   @unique
@@ -48,6 +80,25 @@ model User {
   @@index([email])
   @@index([role])
   @@index([status])
+}
+
+model StudentProfile {
+  id               String           @id @default(uuid())
+  userId           String           @unique
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  university       String?
+  major            String?
+  graduationYear   Int?
+  jobSeekingStatus JobSeekingStatus @default(ACTIVELY_LOOKING)
+  bio              String?
+  skills           String[]         @default([])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  cvs              Cv[]
+
+  @@index([userId])
+  @@index([jobSeekingStatus])
 }
 
 model AuthSession {
@@ -110,19 +161,118 @@ model AuditLog {
   @@index([createdAt])
 }
 
-model StudentProfile {
-  id               String           @id @default(uuid())
-  userId           String           @unique
-  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  university       String?
-  major            String?
-  graduationYear   Int?
-  jobSeekingStatus JobSeekingStatus @default(ACTIVELY_LOOKING)
-  bio              String?
-  skills           String[]         @default([])
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+// ============================================================================
+// M05 · Notification (C-20)
+// recipientId cố ý KHÔNG khai báo FK sang User để không sửa model của M01.
+// Tính toàn vẹn được kiểm tra ở tầng use case; có thể thêm FK sau khi Lead đồng ý.
+// ============================================================================
+model Notification {
+  id               String                  @id @default(uuid())
+  recipientId      String
+  eventType        String
+  title            String
+  body             String
+  payload          Json?
+  dedupeKey        String?                 @unique
+  readAt           DateTime?
+  emailStatus      NotificationEmailStatus @default(NOT_REQUIRED)
+  emailAttempts    Int                     @default(0)
+  emailLastError   String?
+  emailSentAt      DateTime?
+  emailNextRetryAt DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
 
-  @@index([userId])
-  @@index([jobSeekingStatus])
+  @@index([recipientId, readAt, createdAt])
+  @@index([emailStatus, emailNextRetryAt])
+}
+
+// ============================================================================
+// M04 · Application & Interview
+// M04 owns these records. studentId, jobId and cvId remain scalar contract IDs
+// until M02/M03 publish their persistence models; M04 never owns their data.
+// ============================================================================
+model Application {
+  id              String                     @id @default(uuid())
+  studentId       String
+  jobId           String
+  cvId            String
+  cvSnapshot      Json
+  coverLetter     String?
+  status          ApplicationStatus          @default(SUBMITTED)
+  rejectionReason String?
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+  statusHistory   ApplicationStatusHistory[]
+  interviews      Interview[]
+
+  @@unique([studentId, jobId])
+  @@index([studentId, status])
+  @@index([jobId, status])
+}
+
+model ApplicationStatusHistory {
+  id            String            @id @default(uuid())
+  applicationId String
+  application   Application       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  actorId       String
+  fromStatus    ApplicationStatus?
+  toStatus      ApplicationStatus
+  reason        String?
+  createdAt     DateTime          @default(now())
+
+  @@index([applicationId, createdAt])
+}
+
+model Interview {
+  id             String                  @id @default(uuid())
+  applicationId  String
+  application    Application             @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  scheduledAt    DateTime
+  mode           InterviewMode
+  locationOrLink String
+  message        String?
+  confirmedAt    DateTime?
+  result         InterviewResult?
+  resultAt       DateTime?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  changeRequest  InterviewChangeRequest?
+
+  @@index([applicationId, scheduledAt])
+}
+
+model InterviewChangeRequest {
+  id          String                  @id @default(uuid())
+  interviewId String                  @unique
+  interview   Interview               @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  proposedAt  DateTime
+  message     String?
+  decision    InterviewChangeDecision @default(PENDING)
+  decidedBy   String?
+  decidedAt   DateTime?
+  createdAt   DateTime                @default(now())
+}
+
+// ============================================================================
+// M02 · CV & Resume
+// ============================================================================
+model Cv {
+  id               String         @id @default(uuid())
+  studentProfileId String
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  title            String
+  summary          String?
+  isDefault        Boolean        @default(false)
+  fileUrl          String?
+  skills           String[]       @default([])
+  educations       Json           @default("[]")
+  experiences      Json           @default("[]")
+  projects         Json           @default("[]")
+  certifications   Json           @default("[]")
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([studentProfileId])
+  @@index([studentProfileId, isDefault])
 }

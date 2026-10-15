@@ -14,4 +14,5 @@
 - [Hợp đồng API Quản lý CV C-03/C-04/C-05 (CV & Resume API Contract)](./CV_API_CONTRACT.md)
 - [Ma trận mã lỗi Quản lý CV (CV Error Matrix)](./CV_ERROR_MATRIX.md)
 - [Hợp đồng Tích hợp CV → Đơn ứng tuyển C-03 (CV Application Integration Contract)](./CV_APPLICATION_INTEGRATION_CONTRACT.md)
+- [Ma trận kiểm thử bảo mật liên phân hệ (Security Test Matrix)](../testing/SECURITY_TEST_MATRIX.md)
 

@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { AuthErrorCode } from '@campusjob/contracts';
 import { ResetPasswordUseCase } from './reset-password.use-case';
 import { IPasswordResetTokenRepository } from '../../domain/repositories/password-reset-token.repository.interface';
 import { PasswordResetTokenEntity } from '../../domain/entities/password-reset-token.entity';
@@ -133,12 +134,17 @@ describe('ResetPasswordUseCase', () => {
       ),
     );
 
-    await expect(
-      useCase.execute({
+    try {
+      await useCase.execute({
         token: rawToken,
         newPassword: 'weak',
-      }),
-    ).rejects.toThrow(BadRequestException);
+      });
+      fail('Expected BadRequestException');
+    } catch (err: any) {
+      expect(err).toBeInstanceOf(BadRequestException);
+      const res = err.getResponse();
+      expect(res.code).toBe(AuthErrorCode.WEAK_PASSWORD);
+    }
 
     expect(tokenRepository.resetPasswordAndRevokeSessions).not.toHaveBeenCalled();
   });

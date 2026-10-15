@@ -18,6 +18,7 @@ import {
   ResendVerificationResponseDto,
   ForgotPasswordResponseDto,
   ResetPasswordResponseDto,
+  ChangePasswordResponseDto,
   LoginResponseDto,
   RefreshResponseDto,
   LogoutResponseDto,
@@ -28,12 +29,14 @@ import { VerifyEmailDto } from '../../application/dto/verify-email.dto';
 import { ResendVerificationDto } from '../../application/dto/resend-verification.dto';
 import { ForgotPasswordDto } from '../../application/dto/forgot-password.dto';
 import { ResetPasswordDto } from '../../application/dto/reset-password.dto';
+import { ChangePasswordDto } from '../../application/dto/change-password.dto';
 import { LoginDto } from '../../application/dto/login.dto';
 import { RegisterUseCase } from '../../application/use-cases/register.use-case';
 import { VerifyEmailUseCase } from '../../application/use-cases/verify-email.use-case';
 import { ResendVerificationUseCase } from '../../application/use-cases/resend-verification.use-case';
 import { ForgotPasswordUseCase } from '../../application/use-cases/forgot-password.use-case';
 import { ResetPasswordUseCase } from '../../application/use-cases/reset-password.use-case';
+import { ChangePasswordUseCase } from '../../application/use-cases/change-password.use-case';
 import { LoginUseCase } from '../../application/use-cases/login.use-case';
 import { RefreshUseCase } from '../../application/use-cases/refresh.use-case';
 import { LogoutUseCase } from '../../application/use-cases/logout.use-case';
@@ -56,6 +59,7 @@ export class AuthController {
     private readonly resendVerificationUseCase: ResendVerificationUseCase,
     private readonly forgotPasswordUseCase: ForgotPasswordUseCase,
     private readonly resetPasswordUseCase: ResetPasswordUseCase,
+    private readonly changePasswordUseCase: ChangePasswordUseCase,
     private readonly loginUseCase: LoginUseCase,
     private readonly refreshUseCase: RefreshUseCase,
     private readonly logoutUseCase: LogoutUseCase,
@@ -265,5 +269,23 @@ export class AuthController {
     @Body() dto: ResetPasswordDto,
   ): Promise<ResetPasswordResponseDto> {
     return this.resetPasswordUseCase.execute(dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Change password for authenticated user' })
+  @ApiResponse({ status: 200, description: 'Password changed successfully' })
+  @ApiResponse({ status: 400, description: 'Incorrect current password, weak new password, or same password' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async changePassword(
+    @CurrentUser('id') userId: string,
+    @Body() dto: ChangePasswordDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<ChangePasswordResponseDto> {
+    const result = await this.changePasswordUseCase.execute(userId, dto);
+    this.clearRefreshCookie(res);
+    return result;
   }
 }

@@ -58,6 +58,7 @@ describe('GetCvSnapshotUseCase – Contract C-03 (UC37–UC38)', () => {
   const cvOfStudentA = new CvEntity(
     'cv-id-100',
     'student-profile-id-1',
+    'user-id-1',
     'CV Lập trình viên Backend NestJS',
     'Có đam mê với kiến trúc hệ thống và microservices',
     true,
@@ -104,6 +105,7 @@ describe('GetCvSnapshotUseCase – Contract C-03 (UC37–UC38)', () => {
   const cvOfStudentB = new CvEntity(
     'cv-id-200',
     'student-profile-id-2',
+    'user-id-2',
     'CV Chuyên viên UI/UX Frontend',
     'Thiết kế giao diện đẹp và tối ưu UX',
     true,
@@ -239,6 +241,7 @@ describe('GetCvSnapshotUseCase – Contract C-03 (UC37–UC38)', () => {
       const modifiedCv = new CvEntity(
         cvOfStudentA.id,
         cvOfStudentA.studentProfileId,
+        cvOfStudentA.userId,
         'CV AI Engineer (Đã đổi ngành)',
         'Mục tiêu chuyển sang nghiên cứu Trí tuệ nhân tạo',
         true,

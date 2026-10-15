@@ -56,20 +56,61 @@ describe('AuthModule (e2e)', () => {
   });
 
   async function cleanupDatabase() {
+    const testEmails = [
+      testStudentEmail,
+      testEmployerEmail,
+      'concurrent@campusjob.local',
+      'concurrent-reset@campusjob.local',
+    ];
     await prisma.authSession.deleteMany({
-      where: { user: { email: { in: [testStudentEmail, testEmployerEmail, 'concurrent@campusjob.local'] } } },
+      where: { user: { email: { in: testEmails } } },
     });
     await prisma.emailVerificationToken.deleteMany({
-      where: { user: { email: { in: [testStudentEmail, testEmployerEmail, 'concurrent@campusjob.local'] } } },
+      where: { user: { email: { in: testEmails } } },
     });
     await prisma.passwordResetToken.deleteMany({
-      where: { user: { email: { in: [testStudentEmail, testEmployerEmail, 'concurrent@campusjob.local'] } } },
+      where: { user: { email: { in: testEmails } } },
     });
     await prisma.auditLog.deleteMany({
-      where: { actor: { email: { in: [testStudentEmail, testEmployerEmail, 'concurrent@campusjob.local'] } } },
+      where: { actor: { email: { in: testEmails } } },
     });
     await prisma.user.deleteMany({
-      where: { email: { in: [testStudentEmail, testEmployerEmail, 'concurrent@campusjob.local'] } },
+      where: { email: { in: testEmails } },
+    });
+  }
+
+  async function ensureActiveStudent(password = 'BrandNewPassword999!@#') {
+    const hash = await PasswordHasher.hash(password);
+    return prisma.user.upsert({
+      where: { email: testStudentEmail },
+      create: {
+        email: testStudentEmail,
+        passwordHash: hash,
+        fullName: 'Sinh Vien E2E',
+        role: UserRole.STUDENT,
+        status: UserStatus.ACTIVE,
+        emailVerifiedAt: new Date(),
+      },
+      update: {
+        passwordHash: hash,
+        status: UserStatus.ACTIVE,
+        emailVerifiedAt: new Date(),
+      },
+    });
+  }
+
+  async function ensureActiveEmployer(password = testStrongPassword) {
+    const hash = await PasswordHasher.hash(password);
+    return prisma.user.upsert({
+      where: { email: testEmployerEmail },
+      create: {
+        email: testEmployerEmail,
+        passwordHash: hash,
+        fullName: 'Doanh Nghiep E2E',
+        role: UserRole.EMPLOYER,
+        status: UserStatus.PENDING_VERIFICATION,
+      },
+      update: {},
     });
   }
 
@@ -366,6 +407,10 @@ describe('AuthModule (e2e)', () => {
   });
 
   describe('POST /api/v1/auth/forgot-password & /api/v1/auth/reset-password', () => {
+    beforeAll(async () => {
+      await ensureActiveStudent(testStrongPassword);
+    });
+
     it('should return neutral response when email exists without leaking', async () => {
       // Ensure cooldown does not block by clearing recent tokens
       const user = await prisma.user.findUnique({ where: { email: testStudentEmail } });
@@ -396,7 +441,17 @@ describe('AuthModule (e2e)', () => {
     });
 
     it('should enforce cooldown on forgot password (< 60s)', async () => {
-      // Calling immediately after the previous request
+      const user = await prisma.user.findUnique({ where: { email: testStudentEmail } });
+      await prisma.passwordResetToken.deleteMany({ where: { userId: user!.id } });
+      await prisma.passwordResetToken.create({
+        data: {
+          userId: user!.id,
+          tokenHash: 'cooldown-token-hash-e2e',
+          expiresAt: new Date(Date.now() + 3600000),
+          createdAt: new Date(),
+        },
+      });
+
       await request(app.getHttpServer())
         .post('/api/v1/auth/forgot-password')
         .send({ email: testStudentEmail })
@@ -486,9 +541,126 @@ describe('AuthModule (e2e)', () => {
         })
         .expect(400);
     });
+
+    it('should handle concurrent reset requests gracefully (only 1 succeeds)', async () => {
+      // Use dedicated user to avoid mutating testStudentEmail fixture
+      const concurrentUser = await prisma.user.create({
+        data: {
+          email: 'concurrent-reset@campusjob.local',
+          passwordHash: await PasswordHasher.hash(testStrongPassword),
+          fullName: 'Concurrent Reset User',
+          role: UserRole.STUDENT,
+          status: UserStatus.ACTIVE,
+        },
+      });
+      const rawToken = 'concurrent-reset-token-999';
+      const tokenHash = TokenUtils.hashToken(rawToken);
+
+      await prisma.passwordResetToken.create({
+        data: {
+          userId: concurrentUser.id,
+          tokenHash,
+          expiresAt: new Date(Date.now() + 3600000),
+        },
+      });
+
+      // Fire 2 simultaneous requests
+      const [res1, res2] = await Promise.all([
+        request(app.getHttpServer())
+          .post('/api/v1/auth/reset-password')
+          .send({ token: rawToken, newPassword: 'ConcurPass1!@#' }),
+        request(app.getHttpServer())
+          .post('/api/v1/auth/reset-password')
+          .send({ token: rawToken, newPassword: 'ConcurPass2!@#' }),
+      ]);
+
+      const statuses = [res1.status, res2.status].sort();
+      expect(statuses).toEqual([200, 400]);
+    });
+
+    it('should reject login with old password and allow login with new password after reset', async () => {
+      // Old password must fail
+      const oldLoginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: testStrongPassword,
+        })
+        .expect(401);
+
+      expect(oldLoginRes.body.code).toBe(AuthErrorCode.INVALID_CREDENTIALS);
+
+      // New password must succeed
+      const newLoginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      expect(newLoginRes.body.accessToken).toBeDefined();
+    });
+
+    it('should not revoke unrelated user sessions during password reset', async () => {
+      const employer = await prisma.user.findUnique({ where: { email: testEmployerEmail } });
+      const student = await prisma.user.findUnique({ where: { email: testStudentEmail } });
+
+      // Create an active session for employer
+      const employerSession = await prisma.authSession.create({
+        data: {
+          userId: employer!.id,
+          tokenHash: 'unrelated-employer-token-hash',
+          tokenFamily: 'family-employer-keep',
+          expiresAt: new Date(Date.now() + 86400000),
+        },
+      });
+
+      // Create a reset token for student and reset password
+      const rawToken = 'student-reset-isolate-token';
+      const tokenHash = TokenUtils.hashToken(rawToken);
+
+      await prisma.passwordResetToken.create({
+        data: {
+          userId: student!.id,
+          tokenHash,
+          expiresAt: new Date(Date.now() + 3600000),
+        },
+      });
+
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/reset-password')
+        .send({
+          token: rawToken,
+          newPassword: 'BrandNewStudentPassword777!@#',
+        })
+        .expect(200);
+
+      // Verify employer session is still ACTIVE (revokedAt is null)
+      const freshEmployerSession = await prisma.authSession.findUnique({
+        where: { id: employerSession.id },
+      });
+      expect(freshEmployerSession!.revokedAt).toBeNull();
+
+      // Restore student password back to BrandNewPassword999!@# for subsequent login tests
+      const restoredHash = await PasswordHasher.hash('BrandNewPassword999!@#');
+      await prisma.user.update({
+        where: { id: student!.id },
+        data: { passwordHash: restoredHash },
+      });
+    });
   });
 
   describe('POST /api/v1/auth/login', () => {
+    beforeAll(async () => {
+      await ensureActiveStudent('BrandNewPassword999!@#');
+      await ensureActiveEmployer();
+    });
+
+    afterEach(async () => {
+      await ensureActiveStudent('BrandNewPassword999!@#');
+    });
+
     it('should login successfully with valid credentials and return access token + refresh cookie', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
@@ -601,6 +773,10 @@ describe('AuthModule (e2e)', () => {
   });
 
   describe('GET /api/v1/auth/me', () => {
+    beforeAll(async () => {
+      await ensureActiveStudent('BrandNewPassword999!@#');
+    });
+
     it('should return current user when valid Bearer access token is provided', async () => {
       const loginRes = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
@@ -642,6 +818,15 @@ describe('AuthModule (e2e)', () => {
   });
 
   describe('POST /api/v1/auth/refresh', () => {
+    beforeAll(async () => {
+      await ensureActiveStudent('BrandNewPassword999!@#');
+      await ensureActiveEmployer();
+    });
+
+    afterEach(async () => {
+      await ensureActiveStudent('BrandNewPassword999!@#');
+    });
+
     it('should rotate refresh token and issue new access token', async () => {
       const loginRes = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
@@ -840,6 +1025,10 @@ describe('AuthModule (e2e)', () => {
   });
 
   describe('POST /api/v1/auth/logout', () => {
+    beforeAll(async () => {
+      await ensureActiveStudent('BrandNewPassword999!@#');
+    });
+
     it('should logout current session and clear refresh cookie', async () => {
       const loginRes = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
@@ -865,6 +1054,10 @@ describe('AuthModule (e2e)', () => {
   });
 
   describe('POST /api/v1/auth/logout-all', () => {
+    beforeAll(async () => {
+      await ensureActiveStudent('BrandNewPassword999!@#');
+    });
+
     it('should revoke all active sessions for current user', async () => {
       // Create session 1
       const loginRes1 = await request(app.getHttpServer())
@@ -908,6 +1101,166 @@ describe('AuthModule (e2e)', () => {
         .expect(401);
 
       expect(res.body.code).toBe(AuthErrorCode.UNAUTHORIZED);
+    });
+  });
+
+  describe('POST /api/v1/auth/change-password', () => {
+    beforeAll(async () => {
+      await ensureActiveStudent('BrandNewPassword999!@#');
+    });
+
+    beforeEach(async () => {
+      await ensureActiveStudent('BrandNewPassword999!@#');
+    });
+
+    it('should reject change-password when unauthenticated', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/change-password')
+        .send({
+          currentPassword: 'AnyPassword123!',
+          newPassword: 'BrandNewPassword123!',
+        })
+        .expect(401);
+
+      expect(res.body.code).toBe(AuthErrorCode.UNAUTHORIZED);
+    });
+
+    it('should reject change-password when current password is incorrect', async () => {
+      const loginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      const token = loginRes.body.accessToken;
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/change-password')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          currentPassword: 'WrongCurrentPassword123!',
+          newPassword: 'BrandNewChangedPass456!@#',
+        })
+        .expect(400);
+
+      expect(res.body.code).toBe(AuthErrorCode.INVALID_CREDENTIALS);
+      expect(res.body.message).toContain('Current password is incorrect');
+    });
+
+    it('should reject change-password when new password is identical to current password', async () => {
+      const loginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      const token = loginRes.body.accessToken;
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/change-password')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          currentPassword: 'BrandNewPassword999!@#',
+          newPassword: 'BrandNewPassword999!@#',
+        })
+        .expect(400);
+
+      expect(res.body.code).toBe(AuthErrorCode.VALIDATION_ERROR);
+      expect(res.body.message).toContain('must be different');
+    });
+
+    it('should reject change-password when new password violates complexity policy', async () => {
+      const loginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      const token = loginRes.body.accessToken;
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/auth/change-password')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          currentPassword: 'BrandNewPassword999!@#',
+          newPassword: 'weak',
+        })
+        .expect(400);
+
+      expect(res.body.code).toBe(AuthErrorCode.WEAK_PASSWORD);
+    });
+
+    it('should successfully change password, revoke all refresh sessions, authenticate with new password, and reject old password', async () => {
+      // 1. Login to get token and create refresh session
+      const loginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(200);
+
+      const token = loginRes.body.accessToken;
+      const oldCookies = loginRes.headers['set-cookie'];
+
+      // 2. Change password
+      const newPassword = 'FullyChangedPassword789!@#';
+      const changeRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/change-password')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          currentPassword: 'BrandNewPassword999!@#',
+          newPassword,
+        })
+        .expect(200);
+
+      expect(changeRes.body.message).toContain('Password has been changed successfully');
+
+      // 3. Verify in DB that refresh sessions were revoked
+      const user = await prisma.user.findUnique({ where: { email: testStudentEmail } });
+      const activeSessions = await prisma.authSession.findMany({
+        where: { userId: user!.id, revokedAt: null },
+      });
+      expect(activeSessions.length).toBe(0);
+
+      // 4. Old refresh token should be rejected
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', oldCookies)
+        .expect(401);
+
+      // 5. Old password should fail login
+      const oldLoginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: 'BrandNewPassword999!@#',
+        })
+        .expect(401);
+      expect(oldLoginRes.body.code).toBe(AuthErrorCode.INVALID_CREDENTIALS);
+
+      // 6. New password should succeed login
+      const newLoginRes = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({
+          email: testStudentEmail,
+          password: newPassword,
+        })
+        .expect(200);
+      expect(newLoginRes.body.accessToken).toBeDefined();
+
+      // Restore password back to testStrongPassword for test idempotence
+      const newHashed = await PasswordHasher.hash(testStrongPassword);
+      await prisma.user.update({
+        where: { id: user!.id },
+        data: { passwordHash: newHashed },
+      });
     });
   });
 });

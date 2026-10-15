@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException, ForbiddenException, Inject } from '@
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
-import { UserStatus, AuthErrorCode } from '@campusjob/contracts';
+import { UserStatus, AuthErrorCode, AuthContext } from '@campusjob/contracts';
 import {
   USER_REPOSITORY_TOKEN,
   IUserRepository,
@@ -32,7 +32,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: JwtPayload) {
+  async validate(payload: JwtPayload): Promise<AuthContext> {
     const user = await this.userRepository.findById(payload.sub);
 
     if (!user) {

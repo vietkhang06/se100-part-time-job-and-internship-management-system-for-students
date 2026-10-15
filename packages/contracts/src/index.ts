@@ -1,3 +1,4 @@
+
 export enum UserRole {
   STUDENT = 'STUDENT',
   EMPLOYER = 'EMPLOYER',
@@ -79,6 +80,23 @@ export interface AuthUserDto {
   emailVerified: boolean;
 }
 
+/**
+ * AuthContext — Ngữ cảnh xác thực và định danh người dùng liên phân hệ (Contract C-01)
+ *
+ * Phản ánh chính xác đối tượng principal do JwtStrategy gắn vào request (req.user).
+ * Đại diện cho ngữ cảnh xác thực được truyền và tiêu thụ xuyên suốt các module.
+ */
+export interface AuthContext {
+  id: string;
+  email: string;
+  fullName: string;
+  role: UserRole;
+  status: UserStatus;
+  phone?: string | null;
+  emailVerified: boolean;
+  sessionId?: string;
+}
+
 export interface HealthResponseDto {
   status: 'ok' | 'error';
   timestamp: string;
@@ -152,6 +170,15 @@ export interface ResetPasswordResponseDto {
   message: string;
 }
 
+export interface ChangePasswordRequestDto {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface ChangePasswordResponseDto {
+  message: string;
+}
+
 export interface LoginRequestDto {
   email: string;
   password: string;
@@ -181,6 +208,53 @@ export interface JwtPayload {
   email: string;
   role: UserRole;
   sessionId?: string;
+}
+
+// ============================================================================
+// M05 · Notification (C-20 — DRAFT, chờ Lead/Owner M03-M04 chốt payload)
+// ============================================================================
+
+export enum NotificationEventType {
+  JOB_SUBMITTED_FOR_REVIEW = 'JOB_SUBMITTED_FOR_REVIEW',
+  JOB_APPROVED = 'JOB_APPROVED',
+  JOB_REJECTED = 'JOB_REJECTED',
+  JOB_HIDDEN = 'JOB_HIDDEN',
+  COMPANY_VERIFICATION_RESULT = 'COMPANY_VERIFICATION_RESULT',
+  APPLICATION_SUBMITTED = 'APPLICATION_SUBMITTED',
+  APPLICATION_STATUS_CHANGED = 'APPLICATION_STATUS_CHANGED',
+  INTERVIEW_INVITED = 'INTERVIEW_INVITED',
+  INTERVIEW_CONFIRMED = 'INTERVIEW_CONFIRMED',
+  INTERVIEW_RESCHEDULE_REQUESTED = 'INTERVIEW_RESCHEDULE_REQUESTED',
+  INTERVIEW_RESCHEDULE_RESOLVED = 'INTERVIEW_RESCHEDULE_RESOLVED',
+  REPORT_RECEIVED = 'REPORT_RECEIVED',
+  REPORT_RESOLVED = 'REPORT_RESOLVED',
+  SANCTION_APPLIED = 'SANCTION_APPLIED',
+}
+
+export enum NotificationEmailStatus {
+  NOT_REQUIRED = 'NOT_REQUIRED',
+  PENDING = 'PENDING',
+  SENT = 'SENT',
+  FAILED = 'FAILED',
+}
+
+export interface NotificationDto {
+  id: string;
+  eventType: string;
+  title: string;
+  body: string;
+  payload: Record<string, unknown> | null;
+  isRead: boolean;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface UnreadCountResponseDto {
+  unreadCount: number;
+}
+
+export interface MarkAllReadResponseDto {
+  updatedCount: number;
 }
 
 // ==========================================
@@ -366,7 +440,6 @@ export interface CvSnapshotDto {
   fileUrl?: string | null;
   capturedAt: string;
 }
-
 /**
  * Contract C-03: Port để M04 lấy CV Snapshot từ M02 khi sinh viên nộp hồ sơ ứng tuyển (UC38)
  */

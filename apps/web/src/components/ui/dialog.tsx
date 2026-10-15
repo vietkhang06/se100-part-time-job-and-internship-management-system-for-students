@@ -9,9 +9,18 @@ export interface DialogProps {
   description?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  className?: string;
 }
 
-export function Dialog({ isOpen, onClose, title, description, children, footer }: DialogProps) {
+export function Dialog({
+  isOpen,
+  onClose,
+  title,
+  description,
+  children,
+  footer,
+  className,
+}: DialogProps) {
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
@@ -37,7 +46,12 @@ export function Dialog({ isOpen, onClose, title, description, children, footer }
         role="dialog"
         aria-modal="true"
         aria-labelledby="dialog-title"
-        className="relative z-50 w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-xl text-card-foreground animate-in fade-in-0 zoom-in-95 duration-200"
+        className={twMerge(
+          clsx(
+            'relative z-50 w-full max-w-lg rounded-xl border border-border bg-card p-6 shadow-xl text-card-foreground animate-in fade-in-0 zoom-in-95 duration-200',
+            className,
+          ),
+        )}
       >
         <div className="flex flex-col space-y-1.5 pb-4">
           <h2 id="dialog-title" className="text-lg font-semibold leading-none tracking-tight">
