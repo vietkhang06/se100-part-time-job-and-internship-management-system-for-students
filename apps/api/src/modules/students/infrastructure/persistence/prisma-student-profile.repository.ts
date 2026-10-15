@@ -36,6 +36,14 @@ export class PrismaStudentProfileRepository
     );
   }
 
+  async findById(id: string): Promise<StudentProfileEntity | null> {
+    const raw = await this.prisma.studentProfile.findUnique({
+      where: { id },
+      include: { user: true },
+    });
+    return raw ? this.toDomain(raw) : null;
+  }
+
   async findByUserId(userId: string): Promise<StudentProfileEntity | null> {
     const raw = await this.prisma.studentProfile.findUnique({
       where: { userId },

@@ -367,3 +367,10 @@ export interface CvSnapshotDto {
   capturedAt: string;
 }
 
+/**
+ * Contract C-03: Port để M04 lấy CV Snapshot từ M02 khi sinh viên nộp hồ sơ ứng tuyển (UC38)
+ */
+export interface CvSnapshotSource {
+  getOwnedSnapshot(studentId: string, cvId: string): Promise<CvSnapshotDto>;
+}
+

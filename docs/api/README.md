@@ -13,4 +13,5 @@
 - [Ma trận mã lỗi Hồ sơ sinh viên (Student Profile Error Matrix)](./STUDENT_PROFILE_ERROR_MATRIX.md)
 - [Hợp đồng API Quản lý CV C-03/C-04/C-05 (CV & Resume API Contract)](./CV_API_CONTRACT.md)
 - [Ma trận mã lỗi Quản lý CV (CV Error Matrix)](./CV_ERROR_MATRIX.md)
+- [Hợp đồng Tích hợp CV → Đơn ứng tuyển C-03 (CV Application Integration Contract)](./CV_APPLICATION_INTEGRATION_CONTRACT.md)
 
