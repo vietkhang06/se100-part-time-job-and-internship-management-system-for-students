@@ -9,6 +9,8 @@ import { StudentsModule } from './modules/students/students.module';
 import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 
+import { StorageModule } from './shared/storage/storage.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -24,6 +26,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     AuthModule,
     StudentsModule,
     NotificationsModule,
+    StorageModule,
   ],
 })
 export class AppModule implements NestModule {

@@ -1,4 +1,4 @@
-import { NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { NotFoundException, BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { CvErrorCode, JobSeekingStatus } from '@campusjob/contracts';
 import { StudentProfileEntity } from '../../domain/entities/student-profile.entity';
 import { CvEntity } from '../../domain/entities/cv.entity';
@@ -234,6 +234,116 @@ describe('CV Management Use Cases (S2-M02-04 Vertical Slice)', () => {
       ).rejects.toThrow(ConflictException);
 
       expect(mockCvRepo.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Tiêu chí nghiệm thu 4: Tích hợp FileAsset & Storage Lifecycle (W2-DB-02 & W2-DO-01)', () => {
+    it('UC33 – Tạo CV mới với fileAssetId thuộc sở hữu hợp lệ sẽ kiểm tra quyền sở hữu', async () => {
+      mockProfileRepo.createOrFind.mockResolvedValue(studentAProfile);
+      mockCvRepo.countByStudentProfileId.mockResolvedValue(1);
+      mockCvRepo.create.mockResolvedValue(cvA2);
+
+      const mockFileAssetService = {
+        verifyOwnership: jest.fn().mockResolvedValue({ id: 'file-asset-uuid-1', ownerUserId: 'user-a-id' }),
+      } as any;
+
+      const useCase = new CreateCvUseCase(mockCvRepo, mockProfileRepo, mockFileAssetService);
+      const res = await useCase.execute('user-a-id', {
+        title: 'CV Mới Kèm File',
+        fileAssetId: 'file-asset-uuid-1',
+      });
+
+      expect(mockFileAssetService.verifyOwnership).toHaveBeenCalledWith('file-asset-uuid-1', 'user-a-id');
+      expect(mockCvRepo.create).toHaveBeenCalled();
+      expect(res.cv.id).toBe(cvA2.id);
+    });
+
+    it('UC34 – Cập nhật CV với fileAssetId của người khác sẽ bị từ chối với ForbiddenException', async () => {
+      mockProfileRepo.findByUserId.mockResolvedValue(studentAProfile);
+      mockCvRepo.findById.mockResolvedValue(cvA2);
+
+      const mockFileAssetService = {
+        verifyOwnership: jest.fn().mockRejectedValue(new ForbiddenException('Bạn không có quyền')),
+      } as any;
+
+      const useCase = new UpdateCvUseCase(mockCvRepo, mockProfileRepo, mockFileAssetService);
+
+      await expect(
+        useCase.execute('user-a-id', cvA2.id, {
+          title: 'CV Hack File',
+          fileAssetId: 'foreign-file-asset-id',
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('UC35 – Xóa CV có đính kèm fileAssetId kích hoạt dọn dẹp an toàn qua FileAssetService', async () => {
+      const cvWithFile = new CvEntity(
+        'cv-file-id',
+        studentAProfile.id,
+        studentAProfile.userId,
+        'CV Có File',
+        null,
+        false,
+        null,
+        [],
+        [],
+        [],
+        [],
+        [],
+        new Date(),
+        new Date(),
+        'file-asset-uuid-123',
+      );
+
+      mockProfileRepo.findByUserId.mockResolvedValue(studentAProfile);
+      mockCvRepo.findById.mockResolvedValue(cvWithFile);
+      mockCvRepo.isCvInUse.mockResolvedValue(false);
+
+      const mockFileAssetService = {
+        deleteFileAsset: jest.fn().mockResolvedValue({ deleted: true, status: 'DELETED' }),
+      } as any;
+
+      const useCase = new DeleteCvUseCase(mockCvRepo, mockProfileRepo, mockFileAssetService);
+      const result = await useCase.execute('user-a-id', 'cv-file-id');
+
+      expect(mockCvRepo.delete).toHaveBeenCalledWith('cv-file-id');
+      expect(mockFileAssetService.deleteFileAsset).toHaveBeenCalledWith('file-asset-uuid-123', 'user-a-id');
+      expect(result.deletedCvId).toBe('cv-file-id');
+    });
+
+    it('UC35 – Khi dọn dẹp file thất bại, use case ghi nhận cảnh báo mà vẫn hoàn tất việc xóa CV', async () => {
+      const cvWithFile = new CvEntity(
+        'cv-file-id-fail',
+        studentAProfile.id,
+        studentAProfile.userId,
+        'CV Có File Lỗi Storage',
+        null,
+        false,
+        null,
+        [],
+        [],
+        [],
+        [],
+        [],
+        new Date(),
+        new Date(),
+        'file-asset-uuid-456',
+      );
+
+      mockProfileRepo.findByUserId.mockResolvedValue(studentAProfile);
+      mockCvRepo.findById.mockResolvedValue(cvWithFile);
+      mockCvRepo.isCvInUse.mockResolvedValue(false);
+
+      const mockFileAssetService = {
+        deleteFileAsset: jest.fn().mockRejectedValue(new Error('Storage I/O Error')),
+      } as any;
+
+      const useCase = new DeleteCvUseCase(mockCvRepo, mockProfileRepo, mockFileAssetService);
+      const result = await useCase.execute('user-a-id', 'cv-file-id-fail');
+
+      expect(mockCvRepo.delete).toHaveBeenCalledWith('cv-file-id-fail');
+      expect(mockFileAssetService.deleteFileAsset).toHaveBeenCalledWith('file-asset-uuid-456', 'user-a-id');
+      expect(result.deletedCvId).toBe('cv-file-id-fail');
     });
   });
 });

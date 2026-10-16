@@ -9,6 +9,7 @@ import { CreateCvUseCase } from './application/use-cases/create-cv.use-case';
 import { UpdateCvUseCase } from './application/use-cases/update-cv.use-case';
 import { SetDefaultCvUseCase } from './application/use-cases/set-default-cv.use-case';
 import { DeleteCvUseCase } from './application/use-cases/delete-cv.use-case';
+import { UploadCvFileUseCase } from './application/use-cases/upload-cv-file.use-case';
 import { PrismaStudentProfileRepository } from './infrastructure/persistence/prisma-student-profile.repository';
 import { STUDENT_PROFILE_REPOSITORY_TOKEN } from './domain/repositories/student-profile.repository.interface';
 import { PrismaCvRepository } from './infrastructure/persistence/prisma-cv.repository';
@@ -32,6 +33,7 @@ import { CV_REPOSITORY_TOKEN } from './domain/repositories/cv.repository.interfa
     UpdateCvUseCase,
     SetDefaultCvUseCase,
     DeleteCvUseCase,
+    UploadCvFileUseCase,
     // Repository bindings
     {
       provide: STUDENT_PROFILE_REPOSITORY_TOKEN,
@@ -42,7 +44,7 @@ import { CV_REPOSITORY_TOKEN } from './domain/repositories/cv.repository.interfa
       useClass: PrismaCvRepository,
     },
   ],
-  exports: [GetStudentProfileUseCase, GetCvDetailUseCase, ListCvsUseCase],
+  exports: [GetStudentProfileUseCase, GetCvDetailUseCase, ListCvsUseCase, UploadCvFileUseCase],
 })
 export class StudentsModule {}
 
