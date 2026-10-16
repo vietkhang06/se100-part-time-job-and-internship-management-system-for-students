@@ -20,11 +20,17 @@ describe('W2 Real Concurrency & HTTP Upload Verification (e2e)', () => {
   let testStudentUser: any;
   let testStudentProfile: any;
 
+  const originalDatabaseUrl = process.env.DATABASE_URL;
+  const originalStorageDriver = process.env.STORAGE_DRIVER;
+  const originalStoragePath = process.env.LOCAL_STORAGE_PATH;
+
   beforeAll(async () => {
-    // Connect to isolated test database
-    process.env.DATABASE_URL = 'postgresql://test_user:test_password_w2_isolated@127.0.0.1:5439/campusjob_test?schema=public';
-    process.env.STORAGE_DRIVER = 'local';
-    process.env.LOCAL_STORAGE_PATH = './var/test-uploads';
+    // Preserve existing DATABASE_URL from environment (e.g. CI or .env)
+    process.env.DATABASE_URL =
+      process.env.DATABASE_URL ||
+      'postgresql://campusjob:campusjob_dev@localhost:5435/campusjob?schema=public';
+    process.env.STORAGE_DRIVER = process.env.STORAGE_DRIVER || 'local';
+    process.env.LOCAL_STORAGE_PATH = process.env.LOCAL_STORAGE_PATH || './var/test-uploads';
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -65,7 +71,7 @@ describe('W2 Real Concurrency & HTTP Upload Verification (e2e)', () => {
   afterAll(async () => {
     // Cleanup seeded records
     try {
-      if (testStudentUser) {
+      if (testStudentUser && testStudentProfile) {
         await prisma.cv.deleteMany({ where: { studentProfileId: testStudentProfile.id } });
         await prisma.fileAsset.deleteMany({ where: { ownerUserId: testStudentUser.id } });
         await prisma.studentProfile.deleteMany({ where: { userId: testStudentUser.id } });
@@ -75,6 +81,23 @@ describe('W2 Real Concurrency & HTTP Upload Verification (e2e)', () => {
 
     if (app) {
       await app.close();
+    }
+
+    // Restore environment variables to prevent leaking across test suites
+    if (originalDatabaseUrl !== undefined) {
+      process.env.DATABASE_URL = originalDatabaseUrl;
+    } else {
+      delete process.env.DATABASE_URL;
+    }
+    if (originalStorageDriver !== undefined) {
+      process.env.STORAGE_DRIVER = originalStorageDriver;
+    } else {
+      delete process.env.STORAGE_DRIVER;
+    }
+    if (originalStoragePath !== undefined) {
+      process.env.LOCAL_STORAGE_PATH = originalStoragePath;
+    } else {
+      delete process.env.LOCAL_STORAGE_PATH;
     }
   });
 
