@@ -276,3 +276,70 @@ model Cv {
   @@index([studentProfileId])
   @@index([studentProfileId, isDefault])
 }
+
+// ============================================================================
+// M05 · Moderation (C-16)
+// targetId/submitterId/assigneeId/reviewerId là String thường (không FK) để không sửa model của module khác.
+// ============================================================================
+enum ModerationTargetType {
+  JOB
+  REPORT
+  REVIEW
+}
+
+enum ModerationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  HIDDEN
+  RESTORED
+  SUBSTANTIATED
+  DISMISSED
+}
+
+enum ModerationDecisionType {
+  APPROVE
+  REJECT
+  HIDE
+  RESTORE
+  SUBSTANTIATE
+  DISMISS
+}
+
+model ModerationItem {
+  id          String               @id @default(uuid())
+  targetType  ModerationTargetType
+  targetId    String
+  round       Int                  @default(1)
+  status      ModerationStatus     @default(PENDING)
+  summary     String?
+  submitterId String?
+  assigneeId  String?
+  assignedAt  DateTime?
+  enqueuedAt  DateTime             @default(now())
+  decidedAt   DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  decisions ModerationDecision[]
+
+  @@unique([targetType, targetId, round])
+  @@index([status, targetType, enqueuedAt])
+  @@index([assigneeId])
+}
+
+model ModerationDecision {
+  id              String                 @id @default(uuid())
+  itemId          String
+  item            ModerationItem         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  decision        ModerationDecisionType
+  reason          String?
+  proposedAction  String?
+  reviewerId      String
+  targetSyncedAt  DateTime?
+  targetSyncError String?
+  createdAt       DateTime               @default(now())
+
+  @@index([itemId])
+  @@index([targetSyncedAt])
+}

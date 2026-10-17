@@ -440,3 +440,60 @@ export interface CvSnapshotDto {
   fileUrl?: string | null;
   capturedAt: string;
 }
+
+// ============================================================================
+// M05 · Moderation (C-16)
+// ============================================================================
+export enum ModerationTargetType {
+  JOB = 'JOB',
+  REPORT = 'REPORT',
+  REVIEW = 'REVIEW',
+}
+
+export enum ModerationStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  HIDDEN = 'HIDDEN',
+  RESTORED = 'RESTORED',
+  SUBSTANTIATED = 'SUBSTANTIATED',
+  DISMISSED = 'DISMISSED',
+}
+
+export enum ModerationDecisionType {
+  APPROVE = 'APPROVE',
+  REJECT = 'REJECT',
+  HIDE = 'HIDE',
+  RESTORE = 'RESTORE',
+  SUBSTANTIATE = 'SUBSTANTIATE',
+  DISMISS = 'DISMISS',
+}
+
+export interface ModerationDecisionDto {
+  id: string;
+  decision: ModerationDecisionType;
+  reason: string | null;
+  proposedAction: string | null;
+  reviewerId: string;
+  createdAt: string;
+  /** false = quyết định đã lưu nhưng module sở hữu đối tượng chưa áp dụng xong. */
+  targetSynced: boolean;
+}
+
+export interface ModerationItemDto {
+  id: string;
+  targetType: ModerationTargetType;
+  targetId: string;
+  round: number;
+  status: ModerationStatus;
+  summary: string | null;
+  submitterId: string | null;
+  assigneeId: string | null;
+  assignedAt: string | null;
+  enqueuedAt: string;
+  decidedAt: string | null;
+}
+
+export interface ModerationItemDetailDto extends ModerationItemDto {
+  decisions: ModerationDecisionDto[];
+}
