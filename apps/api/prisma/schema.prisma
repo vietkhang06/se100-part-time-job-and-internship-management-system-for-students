@@ -60,25 +60,25 @@ enum InterviewChangeDecision {
 }
 
 model User {
-  id                      String                   @id @default(uuid())
-  email                   String                   @unique
-  passwordHash            String
-  fullName                String
-  phone                   String?
-  role                    UserRole
-  status                  UserStatus               @default(PENDING_VERIFICATION)
-  emailVerifiedAt         DateTime?
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
+  id                           String                   @id @default(uuid())
+  email                        String                   @unique
+  passwordHash                 String
+  fullName                     String
+  phone                        String?
+  role                         UserRole
+  status                       UserStatus               @default(PENDING_VERIFICATION)
+  emailVerifiedAt              DateTime?
+  createdAt                    DateTime                 @default(now())
+  updatedAt                    DateTime                 @updatedAt
 
-  studentProfile          StudentProfile?
-  authSessions            AuthSession[]
-  emailVerificationTokens EmailVerificationToken[]
-  passwordResetTokens     PasswordResetToken[]
-  auditLogs               AuditLog[]               @relation("ActorAuditLogs")
-  fileAssets              FileAsset[]
-  companyMemberships      CompanyMember[]
-  reviewedCompanyVerifications CompanyVerification[] @relation("ReviewedCompanyVerifications")
+  studentProfile               StudentProfile?
+  authSessions                 AuthSession[]
+  emailVerificationTokens      EmailVerificationToken[]
+  passwordResetTokens          PasswordResetToken[]
+  auditLogs                    AuditLog[]                @relation("ActorAuditLogs")
+  fileAssets                   FileAsset[]
+  companyMemberships           CompanyMember[]
+  reviewedCompanyVerifications CompanyVerification[]     @relation("ReviewedCompanyVerifications")
 
   @@index([email])
   @@index([role])
@@ -248,7 +248,7 @@ model Interview {
 model InterviewChangeRequest {
   id          String                  @id @default(uuid())
   interviewId String                  @unique
-  interview   Interview               @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  interview   Interview                @relation(fields: [interviewId], references: [id], onDelete: Cascade)
   proposedAt  DateTime
   message     String?
   decision    InterviewChangeDecision @default(PENDING)
@@ -321,20 +321,20 @@ enum FileAssetStatus {
 }
 
 model FileAsset {
-  id             String          @id @default(uuid())
-  ownerUserId    String
-  ownerUser      User            @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
-  originalName   String?
-  mimeType       String
-  sizeBytes      Int
-  checksumSha256 String
-  storageKey     String          @unique
-  status         FileAssetStatus @default(PERMANENT)
-  uploadedAt     DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id                            String          @id @default(uuid())
+  ownerUserId                   String
+  ownerUser                     User            @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  originalName                  String?
+  mimeType                      String
+  sizeBytes                     Int
+  checksumSha256                String
+  storageKey                    String          @unique
+  status                        FileAssetStatus @default(PERMANENT)
+  uploadedAt                    DateTime        @default(now())
+  updatedAt                     DateTime        @updatedAt
 
-  cv             Cv?
-  companyVerificationDocuments CompanyVerificationDocument[]
+  cv                            Cv?
+  companyVerificationDocuments  CompanyVerificationDocument[]
 
   @@index([ownerUserId])
   @@index([storageKey])
@@ -377,21 +377,21 @@ model Company {
   name               String
   legalName          String?
   taxId              String                    @unique
-  website            String?
-  industry           String?
-  companySize        String?
-  description        String?
-  logoUrl            String?
-  email              String?
-  phone              String?
-  address            String?
-  verificationStatus CompanyVerificationStatus @default(UNVERIFIED)
-  createdAt          DateTime                  @default(now())
-  updatedAt          DateTime                  @updatedAt
+  website             String?
+  industry            String?
+  companySize         String?
+  description         String?
+  logoUrl             String?
+  email               String?
+  phone               String?
+  address              String?
+  verificationStatus String
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
 
-  members            CompanyMember[]
-  branches           CompanyBranch[]
-  verifications      CompanyVerification[]
+  members             CompanyMember[]
+  branches             CompanyBranch[]
+  verifications        CompanyVerification[]
 
   @@index([name])
   @@index([taxId])
@@ -426,8 +426,8 @@ model CompanyBranch {
   district      String?
   city          String
   country       String   @default("Vietnam")
-  phone         String?
-  email         String?
+  phone          String?
+  email          String?
   isHeadquarter Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -471,4 +471,71 @@ model CompanyVerificationDocument {
   @@unique([verificationId, fileAssetId])
   @@index([verificationId])
   @@index([fileAssetId])
+}
+
+// ============================================================================
+// M05 · Moderation (C-16)
+// targetId/submitterId/assigneeId/reviewerId là String thường (không FK) để không sửa model của module khác.
+// ============================================================================
+enum ModerationTargetType {
+  JOB
+  REPORT
+  REVIEW
+}
+
+enum ModerationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  HIDDEN
+  RESTORED
+  SUBSTANTIATED
+  DISMISSED
+}
+
+enum ModerationDecisionType {
+  APPROVE
+  REJECT
+  HIDE
+  RESTORE
+  SUBSTANTIATE
+  DISMISS
+}
+
+model ModerationItem {
+  id          String               @id @default(uuid())
+  targetType  ModerationTargetType
+  targetId    String
+  round       Int                  @default(1)
+  status      ModerationStatus     @default(PENDING)
+  summary     String?
+  submitterId String?
+  assigneeId  String?
+  assignedAt  DateTime?
+  enqueuedAt  DateTime             @default(now())
+  decidedAt   DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  decisions   ModerationDecision[]
+
+  @@unique([targetType, targetId, round])
+  @@index([status, targetType, enqueuedAt])
+  @@index([assigneeId])
+}
+
+model ModerationDecision {
+  id              String                 @id @default(uuid())
+  itemId          String
+  item            ModerationItem         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  decision        ModerationDecisionType
+  reason          String?
+  proposedAction  String?
+  reviewerId      String
+  targetSyncedAt  DateTime?
+  targetSyncError String?
+  createdAt       DateTime               @default(now())
+
+  @@index([itemId])
+  @@index([targetSyncedAt])
 }
