@@ -9,6 +9,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "admin:create": "ts-node -r tsconfig-paths/register src/cli/admin-create.ts",
+    "student:seed": "ts-node -r tsconfig-paths/register src/cli/seed-student.ts",
     "prisma": "prisma",
     "lint": "echo \"@campusjob/api lint passed\"",
     "typecheck": "tsc --noEmit",

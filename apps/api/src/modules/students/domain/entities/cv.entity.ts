@@ -5,6 +5,9 @@ import {
   CertificationItemDto,
 } from '@campusjob/contracts';
 
+/**
+ * Domain Entity đại diện cho CV của sinh viên (Module M02)
+ */
 export class CvEntity {
   constructor(
     public readonly id: string,
