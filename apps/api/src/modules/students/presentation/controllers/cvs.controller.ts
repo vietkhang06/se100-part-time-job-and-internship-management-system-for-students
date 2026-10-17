@@ -9,7 +9,46 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+
+export const CV_FILE_UPLOAD_LIMITS = {
+  fileSize: 10 * 1024 * 1024, // 10MB HTTP boundary limit
+  files: 1,
+};
+
+export const cvFileFilter = (
+  req: any,
+  file: { originalname?: string; mimetype?: string },
+  callback: (error: Error | null, acceptFile: boolean) => void,
+) => {
+  if (!file) {
+    return callback(new BadRequestException('Không tìm thấy tệp tải lên.'), false);
+  }
+  const ext = (file.originalname || '').toLowerCase();
+  const mime = (file.mimetype || '').toLowerCase();
+
+  const isAllowedExt = ext.endsWith('.pdf') || ext.endsWith('.docx') || ext.endsWith('.doc');
+  const isAllowedMime = [
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/msword',
+    'application/octet-stream',
+  ].includes(mime);
+
+  if (!isAllowedExt || !isAllowedMime) {
+    return callback(
+      new BadRequestException(
+        'Định dạng tệp không được hỗ trợ. Hệ thống chỉ chấp nhận tệp PDF hoặc Word (DOC/DOCX).',
+      ),
+      false,
+    );
+  }
+  return callback(null, true);
+};
 import {
   ApiTags,
   ApiOperation,
@@ -23,6 +62,7 @@ import {
   CvResponseDto,
   SetDefaultCvResponseDto,
   DeleteCvResponseDto,
+  FileAssetDto,
 } from '@campusjob/contracts';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../../shared/guards/roles.guard';
@@ -36,6 +76,7 @@ import { CreateCvUseCase } from '../../application/use-cases/create-cv.use-case'
 import { UpdateCvUseCase } from '../../application/use-cases/update-cv.use-case';
 import { SetDefaultCvUseCase } from '../../application/use-cases/set-default-cv.use-case';
 import { DeleteCvUseCase } from '../../application/use-cases/delete-cv.use-case';
+import { UploadCvFileUseCase } from '../../application/use-cases/upload-cv-file.use-case';
 
 /**
  * CvsController (M02 – CV Management UC31–UC35 / CV01–CV05)
@@ -58,7 +99,35 @@ export class CvsController {
     private readonly updateCvUseCase: UpdateCvUseCase,
     private readonly setDefaultCvUseCase: SetDefaultCvUseCase,
     private readonly deleteCvUseCase: DeleteCvUseCase,
+    private readonly uploadCvFileUseCase: UploadCvFileUseCase,
   ) {}
+
+  /**
+   * UC33b – Tải lên tệp tài liệu CV (PDF/DOCX) để lấy fileAssetId
+   * POST /api/v1/students/cvs/upload
+   */
+  @Post('upload')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: CV_FILE_UPLOAD_LIMITS,
+      fileFilter: cvFileFilter,
+    }),
+  )
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Tải lên tệp tài liệu CV (PDF/DOCX) để lấy fileAssetId' })
+  @ApiResponse({ status: 201, description: 'Tải lên thành công, trả về metadata FileAsset' })
+  @ApiResponse({ status: 400, description: 'Tệp không hợp lệ hoặc vượt quá 10MB' })
+  @ApiResponse({ status: 401, description: 'Chưa đăng nhập' })
+  @ApiResponse({ status: 403, description: 'Không phải vai trò STUDENT' })
+  async uploadCvFile(
+    @CurrentUser('id') userId: string,
+    @UploadedFile() file: any,
+  ): Promise<FileAssetDto> {
+    if (!file) {
+      throw new BadRequestException('Vui lòng chọn tệp tài liệu để tải lên.');
+    }
+    return this.uploadCvFileUseCase.execute(userId, file);
+  }
 
   /**
    * UC31 / CV01 – Xem danh sách CV

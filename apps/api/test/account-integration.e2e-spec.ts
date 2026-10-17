@@ -227,7 +227,6 @@ describe('S2-M01-06: Account Integration (E2E & Contract-Boundary)', () => {
             university: 'Đại học Quốc gia',
             major: 'Khoa học máy tính',
             graduationYear: 2026,
-            skills: ['TypeScript', 'Node.js'],
             bio: `Initial bio for ${key}`,
           },
           update: {

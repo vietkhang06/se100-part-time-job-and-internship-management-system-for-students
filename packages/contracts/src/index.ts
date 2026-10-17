@@ -1,4 +1,3 @@
-
 export enum UserRole {
   STUDENT = 'STUDENT',
   EMPLOYER = 'EMPLOYER',
@@ -351,6 +350,7 @@ export interface CvDto {
   summary?: string | null;
   isDefault: boolean;
   fileUrl?: string | null;
+  fileAssetId?: string | null;
   educations: EducationItemDto[];
   experiences: ExperienceItemDto[];
   skills: string[];
@@ -375,6 +375,7 @@ export interface CreateCvRequestDto {
   summary?: string;
   isDefault?: boolean;
   fileUrl?: string;
+  fileAssetId?: string | null;
   skills?: string[];
   educations?: EducationItemDto[];
   experiences?: ExperienceItemDto[];
@@ -387,6 +388,7 @@ export interface UpdateCvRequestDto {
   summary?: string;
   isDefault?: boolean;
   fileUrl?: string | null;
+  fileAssetId?: string | null;
   skills?: string[];
   educations?: EducationItemDto[];
   experiences?: ExperienceItemDto[];
@@ -440,6 +442,7 @@ export interface CvSnapshotDto {
   fileUrl?: string | null;
   capturedAt: string;
 }
+
 /**
  * Contract C-03: Port để M04 lấy CV Snapshot từ M02 khi sinh viên nộp hồ sơ ứng tuyển (UC38)
  */
@@ -447,3 +450,200 @@ export interface CvSnapshotSource {
   getOwnedSnapshot(studentId: string, cvId: string): Promise<CvSnapshotDto>;
 }
 
+// ==========================================
+// FILE ASSET CONTRACTS (W2-DB-02 / W2-DO-01)
+// ==========================================
+
+export enum FileAssetStatus {
+  PENDING_UPLOAD = 'PENDING_UPLOAD',
+  PERMANENT = 'PERMANENT',
+  PENDING_DELETION = 'PENDING_DELETION',
+}
+
+export interface FileAssetDto {
+  id: string;
+  ownerUserId: string;
+  originalName?: string | null;
+  mimeType: string;
+  sizeBytes: number;
+  checksumSha256: string;
+  storageKey: string;
+  status: FileAssetStatus;
+  uploadedAt: string;
+  updatedAt: string;
+}
+
+// ==========================================
+// SKILL CONTRACTS (W2-DB-01)
+// ==========================================
+
+export interface SkillDto {
+  id: string;
+  name: string;
+  normalizedName: string;
+  createdAt: string;
+}
+
+export interface StudentSkillDto {
+  id: string;
+  studentProfileId: string;
+  skillId: string;
+  skill: SkillDto;
+  createdAt: string;
+}
+
+// ==========================================
+// COMPANY & VERIFICATION CONTRACTS (W2-DB-03)
+// ==========================================
+
+export enum CompanyMemberRole {
+  OWNER = 'OWNER',
+  ADMIN = 'ADMIN',
+  HR_MANAGER = 'HR_MANAGER',
+  RECRUITER = 'RECRUITER',
+  MEMBER = 'MEMBER',
+}
+
+export enum CompanyMemberStatus {
+  ACTIVE = 'ACTIVE',
+  INVITED = 'INVITED',
+  SUSPENDED = 'SUSPENDED',
+}
+
+export enum CompanyVerificationStatus {
+  UNVERIFIED = 'UNVERIFIED',
+  PENDING_REVIEW = 'PENDING_REVIEW',
+  VERIFIED = 'VERIFIED',
+  REJECTED = 'REJECTED',
+}
+
+export enum DocumentType {
+  BUSINESS_LICENSE = 'BUSINESS_LICENSE',
+  TAX_REGISTRATION = 'TAX_REGISTRATION',
+  OPERATION_PERMIT = 'OPERATION_PERMIT',
+  OTHER = 'OTHER',
+}
+
+export interface CompanyDto {
+  id: string;
+  name: string;
+  legalName?: string | null;
+  taxId: string;
+  website?: string | null;
+  industry?: string | null;
+  companySize?: string | null;
+  description?: string | null;
+  logoUrl?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  verificationStatus: CompanyVerificationStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CompanyMemberDto {
+  id: string;
+  companyId: string;
+  userId: string;
+  role: CompanyMemberRole;
+  status: CompanyMemberStatus;
+  joinedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CompanyBranchDto {
+  id: string;
+  companyId: string;
+  branchName: string;
+  addressLine: string;
+  ward?: string | null;
+  district?: string | null;
+  city: string;
+  country: string;
+  phone?: string | null;
+  email?: string | null;
+  isHeadquarter: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CompanyVerificationDto {
+  id: string;
+  companyId: string;
+  reviewerId?: string | null;
+  status: CompanyVerificationStatus;
+  rejectionReason?: string | null;
+  submittedAt: string;
+  reviewedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CompanyVerificationDocumentDto {
+  id: string;
+  verificationId: string;
+  fileAssetId: string;
+  documentType: DocumentType;
+  createdAt: string;
+  fileAsset?: FileAssetDto | null;
+}
+
+// ============================================================================
+// M05 · Moderation (C-16)
+// ============================================================================
+
+export enum ModerationTargetType {
+  JOB = 'JOB',
+  REPORT = 'REPORT',
+  REVIEW = 'REVIEW',
+}
+
+export enum ModerationStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  HIDDEN = 'HIDDEN',
+  RESTORED = 'RESTORED',
+  SUBSTANTIATED = 'SUBSTANTIATED',
+  DISMISSED = 'DISMISSED',
+}
+
+export enum ModerationDecisionType {
+  APPROVE = 'APPROVE',
+  REJECT = 'REJECT',
+  HIDE = 'HIDE',
+  RESTORE = 'RESTORE',
+  SUBSTANTIATE = 'SUBSTANTIATE',
+  DISMISS = 'DISMISS',
+}
+
+export interface ModerationDecisionDto {
+  id: string;
+  decision: ModerationDecisionType;
+  reason: string | null;
+  proposedAction: string | null;
+  reviewerId: string;
+  createdAt: string;
+  /** false = quyết định đã lưu nhưng module sở hữu đối tượng chưa áp dụng xong. */
+  targetSynced: boolean;
+}
+
+export interface ModerationItemDto {
+  id: string;
+  targetType: ModerationTargetType;
+  targetId: string;
+  round: number;
+  status: ModerationStatus;
+  summary: string | null;
+  submitterId: string | null;
+  assigneeId: string | null;
+  assignedAt: string | null;
+  enqueuedAt: string;
+  decidedAt: string | null;
+}
+
+export interface ModerationItemDetailDto extends ModerationItemDto {
+  decisions: ModerationDecisionDto[];
+}

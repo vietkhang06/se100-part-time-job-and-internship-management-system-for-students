@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../../shared/database/prisma.service';
 import {
   ICvRepository,
@@ -28,6 +29,7 @@ export class PrismaCvRepository implements ICvRepository {
       (raw.certifications as any[]) ?? [],
       raw.createdAt,
       raw.updatedAt,
+      raw.fileAssetId ?? null,
     );
   }
 
@@ -57,104 +59,108 @@ export class PrismaCvRepository implements ICvRepository {
   async create(data: CreateCvData): Promise<CvEntity> {
     const isDefault = data.isDefault ?? false;
 
-    if (isDefault) {
-      return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Concurrency Gate: Atomically acquire mandatory row lock on FileAsset via $queryRaw, verify it is not pending deletion, and promote to PERMANENT
+      if (data.fileAssetId) {
+        await tx.$queryRaw`SELECT 1 FROM "FileAsset" WHERE "id" = ${data.fileAssetId} FOR UPDATE`;
+
+        const asset = await tx.fileAsset.findUnique({
+          where: { id: data.fileAssetId },
+        });
+
+        if (!asset || asset.status === 'PENDING_DELETION') {
+          throw new BadRequestException(
+            'Tệp tài liệu đang trong trạng thái chờ xóa hoặc không hợp lệ.',
+          );
+        }
+
+        await tx.fileAsset.update({
+          where: { id: data.fileAssetId },
+          data: { status: 'PERMANENT' },
+        });
+      }
+
+      if (isDefault) {
         await tx.cv.updateMany({
           where: { studentProfileId: data.studentProfileId },
           data: { isDefault: false },
         });
+      }
 
-        const created = await tx.cv.create({
-          data: {
-            studentProfileId: data.studentProfileId,
-            title: data.title,
-            summary: data.summary ?? null,
-            isDefault: true,
-            fileUrl: data.fileUrl ?? null,
-            skills: data.skills ?? [],
-            educations: (data.educations as any) ?? [],
-            experiences: (data.experiences as any) ?? [],
-            projects: (data.projects as any) ?? [],
-            certifications: (data.certifications as any) ?? [],
-          },
-          include: { studentProfile: true },
-        });
-
-        return this.toDomain(created);
+      const created = await tx.cv.create({
+        data: {
+          studentProfileId: data.studentProfileId,
+          title: data.title,
+          summary: data.summary ?? null,
+          isDefault,
+          fileUrl: data.fileUrl ?? null,
+          fileAssetId: data.fileAssetId ?? null,
+          skills: data.skills ?? [],
+          educations: (data.educations as any) ?? [],
+          experiences: (data.experiences as any) ?? [],
+          projects: (data.projects as any) ?? [],
+          certifications: (data.certifications as any) ?? [],
+        },
+        include: { studentProfile: true },
       });
-    }
 
-    const created = await this.prisma.cv.create({
-      data: {
-        studentProfileId: data.studentProfileId,
-        title: data.title,
-        summary: data.summary ?? null,
-        isDefault: false,
-        fileUrl: data.fileUrl ?? null,
-        skills: data.skills ?? [],
-        educations: (data.educations as any) ?? [],
-        experiences: (data.experiences as any) ?? [],
-        projects: (data.projects as any) ?? [],
-        certifications: (data.certifications as any) ?? [],
-      },
-      include: { studentProfile: true },
+      return this.toDomain(created);
     });
-
-    return this.toDomain(created);
   }
 
   async update(id: string, data: UpdateCvData): Promise<CvEntity> {
-    if (data.isDefault === true) {
-      return this.prisma.$transaction(async (tx) => {
-        const existing = await tx.cv.findUnique({
-          where: { id },
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Concurrency Gate: Atomically acquire mandatory row lock on FileAsset via $queryRaw, verify it is not pending deletion, and promote to PERMANENT
+      if (data.fileAssetId) {
+        await tx.$queryRaw`SELECT 1 FROM "FileAsset" WHERE "id" = ${data.fileAssetId} FOR UPDATE`;
+
+        const asset = await tx.fileAsset.findUnique({
+          where: { id: data.fileAssetId },
         });
 
-        if (existing) {
-          await tx.cv.updateMany({
-            where: { studentProfileId: existing.studentProfileId },
-            data: { isDefault: false },
-          });
+        if (!asset || asset.status === 'PENDING_DELETION') {
+          throw new BadRequestException(
+            'Tệp tài liệu đang trong trạng thái chờ xóa hoặc không hợp lệ.',
+          );
         }
 
-        const updatePayload: Record<string, any> = { isDefault: true };
-        if (data.title !== undefined) updatePayload.title = data.title;
-        if (data.summary !== undefined) updatePayload.summary = data.summary;
-        if (data.fileUrl !== undefined) updatePayload.fileUrl = data.fileUrl;
-        if (data.skills !== undefined) updatePayload.skills = data.skills;
-        if (data.educations !== undefined) updatePayload.educations = data.educations;
-        if (data.experiences !== undefined) updatePayload.experiences = data.experiences;
-        if (data.projects !== undefined) updatePayload.projects = data.projects;
-        if (data.certifications !== undefined) updatePayload.certifications = data.certifications;
-
-        const updated = await tx.cv.update({
-          where: { id },
-          data: updatePayload,
-          include: { studentProfile: true },
+        await tx.fileAsset.update({
+          where: { id: data.fileAssetId },
+          data: { status: 'PERMANENT' },
         });
+      }
 
-        return this.toDomain(updated);
+      const existing = await tx.cv.findUnique({
+        where: { id },
       });
-    }
 
-    const updatePayload: Record<string, any> = {};
-    if (data.title !== undefined) updatePayload.title = data.title;
-    if (data.summary !== undefined) updatePayload.summary = data.summary;
-    if (data.isDefault !== undefined) updatePayload.isDefault = data.isDefault;
-    if (data.fileUrl !== undefined) updatePayload.fileUrl = data.fileUrl;
-    if (data.skills !== undefined) updatePayload.skills = data.skills;
-    if (data.educations !== undefined) updatePayload.educations = data.educations;
-    if (data.experiences !== undefined) updatePayload.experiences = data.experiences;
-    if (data.projects !== undefined) updatePayload.projects = data.projects;
-    if (data.certifications !== undefined) updatePayload.certifications = data.certifications;
+      if (data.isDefault === true && existing) {
+        await tx.cv.updateMany({
+          where: { studentProfileId: existing.studentProfileId },
+          data: { isDefault: false },
+        });
+      }
 
-    const updated = await this.prisma.cv.update({
-      where: { id },
-      data: updatePayload,
-      include: { studentProfile: true },
+      const updatePayload: Record<string, any> = {};
+      if (data.title !== undefined) updatePayload.title = data.title;
+      if (data.summary !== undefined) updatePayload.summary = data.summary;
+      if (data.isDefault !== undefined) updatePayload.isDefault = data.isDefault;
+      if (data.fileUrl !== undefined) updatePayload.fileUrl = data.fileUrl;
+      if (data.fileAssetId !== undefined) updatePayload.fileAssetId = data.fileAssetId;
+      if (data.skills !== undefined) updatePayload.skills = data.skills;
+      if (data.educations !== undefined) updatePayload.educations = data.educations;
+      if (data.experiences !== undefined) updatePayload.experiences = data.experiences;
+      if (data.projects !== undefined) updatePayload.projects = data.projects;
+      if (data.certifications !== undefined) updatePayload.certifications = data.certifications;
+
+      const updated = await tx.cv.update({
+        where: { id },
+        data: updatePayload,
+        include: { studentProfile: true },
+      });
+
+      return this.toDomain(updated);
     });
-
-    return this.toDomain(updated);
   }
 
   async setDefault(studentProfileId: string, cvId: string): Promise<void> {

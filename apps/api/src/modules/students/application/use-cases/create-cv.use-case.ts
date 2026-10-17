@@ -2,6 +2,7 @@ import {
   Inject,
   Injectable,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { CvResponseDto, CvErrorCode } from '@campusjob/contracts';
 import {
@@ -12,6 +13,7 @@ import {
   IStudentProfileRepository,
   STUDENT_PROFILE_REPOSITORY_TOKEN,
 } from '../../domain/repositories/student-profile.repository.interface';
+import { FileAssetService } from '../../../../shared/storage/file-asset.service';
 import { CreateCvDto } from '../dto/create-cv.dto';
 
 @Injectable()
@@ -21,10 +23,17 @@ export class CreateCvUseCase {
     private readonly cvRepo: ICvRepository,
     @Inject(STUDENT_PROFILE_REPOSITORY_TOKEN)
     private readonly profileRepo: IStudentProfileRepository,
+    @Optional()
+    private readonly fileAssetService?: FileAssetService,
   ) {}
 
   async execute(userId: string, dto: CreateCvDto): Promise<CvResponseDto> {
     const profile = await this.profileRepo.createOrFind(userId);
+
+    // Xac thuc quyen so huu fileAsset neu client gui fileAssetId
+    if (dto.fileAssetId && this.fileAssetService) {
+      await this.fileAssetService.verifyOwnership(dto.fileAssetId, userId);
+    }
 
     const count = await this.cvRepo.countByStudentProfileId(profile.id);
     if (count >= 10) {
@@ -45,6 +54,7 @@ export class CreateCvUseCase {
       summary: dto.summary,
       isDefault,
       fileUrl: dto.fileUrl,
+      fileAssetId: dto.fileAssetId,
       skills: dto.skills ?? [],
       educations: dto.educations ?? [],
       experiences: dto.experiences ?? [],
@@ -62,6 +72,7 @@ export class CreateCvUseCase {
         summary: created.summary,
         isDefault: created.isDefault,
         fileUrl: created.fileUrl,
+        fileAssetId: created.fileAssetId ?? null,
         educations: created.educations,
         experiences: created.experiences,
         skills: created.skills,

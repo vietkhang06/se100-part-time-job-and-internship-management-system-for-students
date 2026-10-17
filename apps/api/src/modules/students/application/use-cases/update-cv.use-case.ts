@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { CvResponseDto, CvErrorCode } from '@campusjob/contracts';
 import {
@@ -13,6 +14,7 @@ import {
   IStudentProfileRepository,
   STUDENT_PROFILE_REPOSITORY_TOKEN,
 } from '../../domain/repositories/student-profile.repository.interface';
+import { FileAssetService } from '../../../../shared/storage/file-asset.service';
 import { UpdateCvDto } from '../dto/update-cv.dto';
 
 @Injectable()
@@ -22,6 +24,8 @@ export class UpdateCvUseCase {
     private readonly cvRepo: ICvRepository,
     @Inject(STUDENT_PROFILE_REPOSITORY_TOKEN)
     private readonly profileRepo: IStudentProfileRepository,
+    @Optional()
+    private readonly fileAssetService?: FileAssetService,
   ) {}
 
   async execute(
@@ -63,17 +67,33 @@ export class UpdateCvUseCase {
       }
     }
 
+    // Xác thực quyền sở hữu fileAsset nếu client gửi fileAssetId mới
+    if (dto.fileAssetId && dto.fileAssetId !== existingCv.fileAssetId && this.fileAssetService) {
+      await this.fileAssetService.verifyOwnership(dto.fileAssetId, userId);
+    }
+
     const updated = await this.cvRepo.update(cvId, {
       title: dto.title,
       summary: dto.summary,
       isDefault: dto.isDefault,
       fileUrl: dto.fileUrl,
+      fileAssetId: dto.fileAssetId,
       skills: dto.skills,
       educations: dto.educations,
       experiences: dto.experiences,
       projects: dto.projects,
       certifications: dto.certifications,
     });
+
+    // Nếu thay đổi fileAssetId và fileAsset cũ không còn dùng, dọn dẹp file cũ
+    if (
+      existingCv.fileAssetId &&
+      dto.fileAssetId !== undefined &&
+      dto.fileAssetId !== existingCv.fileAssetId &&
+      this.fileAssetService
+    ) {
+      await this.fileAssetService.deleteFileAsset(existingCv.fileAssetId, userId).catch(() => {});
+    }
 
     return {
       message: 'Cập nhật CV thành công.',
@@ -85,6 +105,7 @@ export class UpdateCvUseCase {
         summary: updated.summary,
         isDefault: updated.isDefault,
         fileUrl: updated.fileUrl,
+        fileAssetId: updated.fileAssetId ?? null,
         educations: updated.educations,
         experiences: updated.experiences,
         skills: updated.skills,

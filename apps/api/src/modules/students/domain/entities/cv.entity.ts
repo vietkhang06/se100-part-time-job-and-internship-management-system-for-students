@@ -24,5 +24,6 @@ export class CvEntity {
     public readonly certifications: CertificationItemDto[] = [],
     public readonly createdAt: Date = new Date(),
     public readonly updatedAt: Date = new Date(),
+    public readonly fileAssetId: string | null = null,
   ) {}
 }

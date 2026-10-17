@@ -3,6 +3,8 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  Optional,
+  Logger,
 } from '@nestjs/common';
 import { DeleteCvResponseDto, CvErrorCode } from '@campusjob/contracts';
 import {
@@ -13,14 +15,19 @@ import {
   IStudentProfileRepository,
   STUDENT_PROFILE_REPOSITORY_TOKEN,
 } from '../../domain/repositories/student-profile.repository.interface';
+import { FileAssetService } from '../../../../shared/storage/file-asset.service';
 
 @Injectable()
 export class DeleteCvUseCase {
+  private readonly logger = new Logger(DeleteCvUseCase.name);
+
   constructor(
     @Inject(CV_REPOSITORY_TOKEN)
     private readonly cvRepo: ICvRepository,
     @Inject(STUDENT_PROFILE_REPOSITORY_TOKEN)
     private readonly profileRepo: IStudentProfileRepository,
+    @Optional()
+    private readonly fileAssetService?: FileAssetService,
   ) {}
 
   async execute(userId: string, cvId: string): Promise<DeleteCvResponseDto> {
@@ -68,6 +75,17 @@ export class DeleteCvUseCase {
     }
 
     await this.cvRepo.delete(cvId);
+
+    // Xóa an toàn FileAsset tương ứng nếu CV có liên kết
+    if (cv.fileAssetId && this.fileAssetService) {
+      try {
+        await this.fileAssetService.deleteFileAsset(cv.fileAssetId, userId);
+      } catch (err: any) {
+        this.logger.warn(
+          `Could not delete FileAsset [${cv.fileAssetId}] safely: ${err.message}`,
+        );
+      }
+    }
 
     return {
       message: 'Xóa CV thành công.',

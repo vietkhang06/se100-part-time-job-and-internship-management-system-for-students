@@ -52,6 +52,7 @@ export class GetCvDetailUseCase {
         summary: cv.summary,
         isDefault: cv.isDefault,
         fileUrl: cv.fileUrl,
+        fileAssetId: cv.fileAssetId ?? null,
         educations: cv.educations,
         experiences: cv.experiences,
         skills: cv.skills,

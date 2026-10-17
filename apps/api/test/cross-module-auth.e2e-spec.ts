@@ -203,7 +203,6 @@ describe('S2-M01-05: Cross-Module Authorization (E2E & Contract Tests)', () => {
             university: 'Đại học Bách Khoa',
             major: 'Khoa học máy tính',
             graduationYear: 2026,
-            skills: ['TypeScript'],
           },
           update: {},
         });
