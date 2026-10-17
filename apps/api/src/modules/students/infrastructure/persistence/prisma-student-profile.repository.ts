@@ -6,6 +6,7 @@ import {
 } from '../../domain/repositories/student-profile.repository.interface';
 import { StudentProfileEntity } from '../../domain/entities/student-profile.entity';
 import { JobSeekingStatus } from '@campusjob/contracts';
+import { normalizeSkillList } from '../../domain/services/skill-normalizer';
 
 @Injectable()
 export class PrismaStudentProfileRepository
@@ -15,6 +16,12 @@ export class PrismaStudentProfileRepository
 
   private toDomain(raw: any): StudentProfileEntity {
     const user = raw.user;
+    const skills: string[] = raw.studentSkills
+      ? raw.studentSkills
+          .map((ss: any) => ss.skill?.name ?? '')
+          .filter((name: string) => name.length > 0)
+      : (raw.skills ?? []);
+
     return new StudentProfileEntity(
       raw.id,
       raw.userId,
@@ -28,7 +35,7 @@ export class PrismaStudentProfileRepository
       (raw.jobSeekingStatus as JobSeekingStatus) ??
         JobSeekingStatus.ACTIVELY_LOOKING,
       raw.bio ?? null,
-      raw.skills ?? [],
+      skills,
       false, // isCampusVerified
       null, // campusEmail
       raw.createdAt,
@@ -39,7 +46,10 @@ export class PrismaStudentProfileRepository
   async findByUserId(userId: string): Promise<StudentProfileEntity | null> {
     const raw = await this.prisma.studentProfile.findUnique({
       where: { userId },
-      include: { user: true },
+      include: {
+        user: true,
+        studentSkills: { include: { skill: true } },
+      },
     });
     return raw ? this.toDomain(raw) : null;
   }
@@ -51,9 +61,11 @@ export class PrismaStudentProfileRepository
       create: {
         userId,
         jobSeekingStatus: JobSeekingStatus.ACTIVELY_LOOKING,
-        skills: [],
       },
-      include: { user: true },
+      include: {
+        user: true,
+        studentSkills: { include: { skill: true } },
+      },
     });
     return this.toDomain(raw);
   }
@@ -70,7 +82,71 @@ export class PrismaStudentProfileRepository
     if (data.jobSeekingStatus !== undefined)
       updatePayload.jobSeekingStatus = data.jobSeekingStatus;
     if (data.bio !== undefined) updatePayload.bio = data.bio;
-    if (data.skills !== undefined) updatePayload.skills = data.skills;
+
+    if (data.skills !== undefined) {
+      const normalizedSkills = normalizeSkillList(data.skills);
+
+      return this.prisma.$transaction(async (tx) => {
+        // Upsert basic fields
+        const profile = await tx.studentProfile.upsert({
+          where: { userId },
+          update: updatePayload,
+          create: {
+            userId,
+            ...updatePayload,
+          },
+        });
+
+        // Reconcile normalized canonical skills
+        const skillIds: string[] = [];
+        for (const item of normalizedSkills) {
+          const record = await (tx as any).skill.upsert({
+            where: { normalizedName: item.normalizedName },
+            update: {},
+            create: {
+              name: item.displayName,
+              normalizedName: item.normalizedName,
+            },
+          });
+          skillIds.push(record.id);
+        }
+
+        // Delete removed associations
+        await (tx as any).studentSkill.deleteMany({
+          where: {
+            studentProfileId: profile.id,
+            skillId: { notIn: skillIds },
+          },
+        });
+
+        // Upsert current associations
+        for (const skillId of skillIds) {
+          await (tx as any).studentSkill.upsert({
+            where: {
+              studentProfileId_skillId: {
+                studentProfileId: profile.id,
+                skillId,
+              },
+            },
+            update: {},
+            create: {
+              studentProfileId: profile.id,
+              skillId,
+            },
+          });
+        }
+
+        const fresh = await tx.studentProfile.findUnique({
+          where: { id: profile.id },
+          include: {
+            user: true,
+            studentSkills: { include: { skill: true } },
+          },
+        });
+
+        return this.toDomain(fresh);
+      });
+    }
 
     const raw = await this.prisma.studentProfile.upsert({
       where: { userId },
@@ -79,7 +155,10 @@ export class PrismaStudentProfileRepository
         userId,
         ...updatePayload,
       },
-      include: { user: true },
+      include: {
+        user: true,
+        studentSkills: { include: { skill: true } },
+      },
     });
     return this.toDomain(raw);
   }

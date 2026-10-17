@@ -1,6 +1,7 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import * as path from 'path';
+
 import { DatabaseModule } from './shared/database/database.module';
 import { HealthModule } from './modules/health/health.module';
 import { UsersModule } from './modules/users/users.module';
@@ -9,6 +10,7 @@ import { StudentsModule } from './modules/students/students.module';
 import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
+import { StorageModule } from './shared/storage/storage.module';
 
 @Module({
   imports: [
@@ -25,6 +27,7 @@ import { ModerationModule } from './modules/moderation/moderation.module';
     AuthModule,
     StudentsModule,
     NotificationsModule,
+    StorageModule,
     ModerationModule,
   ],
 })

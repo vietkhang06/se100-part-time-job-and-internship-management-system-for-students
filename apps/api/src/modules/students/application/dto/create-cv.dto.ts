@@ -10,6 +10,7 @@ import {
   IsUrl,
   IsNotEmpty,
   ValidateNested,
+  IsUUID,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { CreateCvRequestDto } from '@campusjob/contracts';
@@ -60,6 +61,14 @@ export class CreateCvDto implements CreateCvRequestDto {
   @IsUrl({}, { message: 'Đường dẫn tệp CV phải là URL hợp lệ.' })
   @MaxLength(500, { message: 'Đường dẫn tệp CV không được vượt quá 500 ký tự.' })
   fileUrl?: string;
+
+  @ApiPropertyOptional({
+    example: '1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed',
+    description: 'Định danh FileAsset liên kết',
+  })
+  @IsOptional()
+  @IsUUID('4', { message: 'Định danh FileAsset phải là UUID hợp lệ.' })
+  fileAssetId?: string;
 
   @ApiPropertyOptional({
     example: ['TypeScript', 'NestJS', 'PostgreSQL', 'Docker'],

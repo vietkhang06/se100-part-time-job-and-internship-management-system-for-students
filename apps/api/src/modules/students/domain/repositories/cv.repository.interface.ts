@@ -8,6 +8,7 @@ export interface CreateCvData {
   summary?: string | null;
   isDefault?: boolean;
   fileUrl?: string | null;
+  fileAssetId?: string | null;
   skills?: string[];
   educations?: any[];
   experiences?: any[];
@@ -20,6 +21,7 @@ export interface UpdateCvData {
   summary?: string | null;
   isDefault?: boolean;
   fileUrl?: string | null;
+  fileAssetId?: string | null;
   skills?: string[];
   educations?: any[];
   experiences?: any[];

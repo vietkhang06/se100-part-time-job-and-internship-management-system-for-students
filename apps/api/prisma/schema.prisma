@@ -60,22 +60,25 @@ enum InterviewChangeDecision {
 }
 
 model User {
-  id                      String                   @id @default(uuid())
-  email                   String                   @unique
-  passwordHash            String
-  fullName                String
-  phone                   String?
-  role                    UserRole
-  status                  UserStatus               @default(PENDING_VERIFICATION)
-  emailVerifiedAt         DateTime?
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
+  id                           String                   @id @default(uuid())
+  email                        String                   @unique
+  passwordHash                 String
+  fullName                     String
+  phone                        String?
+  role                         UserRole
+  status                       UserStatus               @default(PENDING_VERIFICATION)
+  emailVerifiedAt              DateTime?
+  createdAt                    DateTime                 @default(now())
+  updatedAt                    DateTime                 @updatedAt
 
-  studentProfile          StudentProfile?
-  authSessions            AuthSession[]
-  emailVerificationTokens EmailVerificationToken[]
-  passwordResetTokens     PasswordResetToken[]
-  auditLogs               AuditLog[]               @relation("ActorAuditLogs")
+  studentProfile               StudentProfile?
+  authSessions                 AuthSession[]
+  emailVerificationTokens      EmailVerificationToken[]
+  passwordResetTokens          PasswordResetToken[]
+  auditLogs                    AuditLog[]                @relation("ActorAuditLogs")
+  fileAssets                   FileAsset[]
+  companyMemberships           CompanyMember[]
+  reviewedCompanyVerifications CompanyVerification[]     @relation("ReviewedCompanyVerifications")
 
   @@index([email])
   @@index([role])
@@ -91,10 +94,10 @@ model StudentProfile {
   graduationYear   Int?
   jobSeekingStatus JobSeekingStatus @default(ACTIVELY_LOOKING)
   bio              String?
-  skills           String[]         @default([])
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
+  studentSkills    StudentSkill[]
   cvs              Cv[]
 
   @@index([userId])
@@ -245,7 +248,7 @@ model Interview {
 model InterviewChangeRequest {
   id          String                  @id @default(uuid())
   interviewId String                  @unique
-  interview   Interview               @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  interview   Interview                @relation(fields: [interviewId], references: [id], onDelete: Cascade)
   proposedAt  DateTime
   message     String?
   decision    InterviewChangeDecision @default(PENDING)
@@ -265,6 +268,8 @@ model Cv {
   summary          String?
   isDefault        Boolean        @default(false)
   fileUrl          String?
+  fileAssetId      String?        @unique
+  fileAsset        FileAsset?     @relation(fields: [fileAssetId], references: [id], onDelete: SetNull)
   skills           String[]       @default([])
   educations       Json           @default("[]")
   experiences      Json           @default("[]")
@@ -275,6 +280,197 @@ model Cv {
 
   @@index([studentProfileId])
   @@index([studentProfileId, isDefault])
+}
+
+// ============================================================================
+// Normalized Skills (W2-DB-01)
+// ============================================================================
+model Skill {
+  id             String         @id @default(uuid())
+  name           String
+  normalizedName String         @unique
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  studentSkills  StudentSkill[]
+
+  @@index([normalizedName])
+}
+
+model StudentSkill {
+  id               String         @id @default(uuid())
+  studentProfileId String
+  skillId          String
+  createdAt        DateTime       @default(now())
+
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  skill            Skill          @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([studentProfileId, skillId])
+  @@index([studentProfileId])
+  @@index([skillId])
+}
+
+// ============================================================================
+// File Assets & Metadata (W2-DB-02 / W2-DO-01)
+// ============================================================================
+enum FileAssetStatus {
+  PENDING_UPLOAD
+  PERMANENT
+  PENDING_DELETION
+}
+
+model FileAsset {
+  id                            String          @id @default(uuid())
+  ownerUserId                   String
+  ownerUser                     User            @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  originalName                  String?
+  mimeType                      String
+  sizeBytes                     Int
+  checksumSha256                String
+  storageKey                    String          @unique
+  status                        FileAssetStatus @default(PERMANENT)
+  uploadedAt                    DateTime        @default(now())
+  updatedAt                     DateTime        @updatedAt
+
+  cv                            Cv?
+  companyVerificationDocuments  CompanyVerificationDocument[]
+
+  @@index([ownerUserId])
+  @@index([storageKey])
+  @@index([status])
+}
+
+// ============================================================================
+// Companies & Verification (W2-DB-03)
+// ============================================================================
+enum CompanyMemberRole {
+  OWNER
+  ADMIN
+  HR_MANAGER
+  RECRUITER
+  MEMBER
+}
+
+enum CompanyMemberStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+}
+
+enum CompanyVerificationStatus {
+  UNVERIFIED
+  PENDING_REVIEW
+  VERIFIED
+  REJECTED
+}
+
+enum DocumentType {
+  BUSINESS_LICENSE
+  TAX_REGISTRATION
+  OPERATION_PERMIT
+  OTHER
+}
+
+model Company {
+  id                 String                    @id @default(uuid())
+  name               String
+  legalName          String?
+  taxId              String                    @unique
+  website             String?
+  industry            String?
+  companySize         String?
+  description         String?
+  logoUrl             String?
+  email               String?
+  phone               String?
+  address              String?
+  verificationStatus String
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+
+  members             CompanyMember[]
+  branches             CompanyBranch[]
+  verifications        CompanyVerification[]
+
+  @@index([name])
+  @@index([taxId])
+  @@index([verificationStatus])
+}
+
+model CompanyMember {
+  id        String              @id @default(uuid())
+  companyId String
+  userId    String
+  role      CompanyMemberRole   @default(MEMBER)
+  status    CompanyMemberStatus @default(ACTIVE)
+  joinedAt  DateTime            @default(now())
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  company   Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, userId])
+  @@index([companyId])
+  @@index([userId])
+  @@index([role])
+}
+
+model CompanyBranch {
+  id            String   @id @default(uuid())
+  companyId     String
+  branchName    String
+  addressLine   String
+  ward          String?
+  district      String?
+  city          String
+  country       String   @default("Vietnam")
+  phone          String?
+  email          String?
+  isHeadquarter Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([city])
+}
+
+model CompanyVerification {
+  id              String                    @id @default(uuid())
+  companyId       String
+  reviewerId      String?
+  status          CompanyVerificationStatus @default(PENDING_REVIEW)
+  rejectionReason String?
+  submittedAt     DateTime                  @default(now())
+  reviewedAt      DateTime?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  company         Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  reviewer        User?                     @relation("ReviewedCompanyVerifications", fields: [reviewerId], references: [id], onDelete: SetNull)
+  documents       CompanyVerificationDocument[]
+
+  @@index([companyId])
+  @@index([reviewerId])
+  @@index([status])
+}
+
+model CompanyVerificationDocument {
+  id             String              @id @default(uuid())
+  verificationId String
+  fileAssetId    String
+  documentType   DocumentType        @default(BUSINESS_LICENSE)
+  createdAt      DateTime            @default(now())
+
+  verification   CompanyVerification @relation(fields: [verificationId], references: [id], onDelete: Cascade)
+  fileAsset      FileAsset           @relation(fields: [fileAssetId], references: [id], onDelete: Restrict)
+
+  @@unique([verificationId, fileAssetId])
+  @@index([verificationId])
+  @@index([fileAssetId])
 }
 
 // ============================================================================
@@ -321,7 +517,7 @@ model ModerationItem {
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
 
-  decisions ModerationDecision[]
+  decisions   ModerationDecision[]
 
   @@unique([targetType, targetId, round])
   @@index([status, targetType, enqueuedAt])
