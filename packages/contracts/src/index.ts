@@ -647,3 +647,57 @@ export interface ModerationItemDto {
 export interface ModerationItemDetailDto extends ModerationItemDto {
   decisions: ModerationDecisionDto[];
 }
+
+// ============================================================================
+// M05 · Violation Report (C-17)
+// ============================================================================
+export enum ViolationTargetType {
+  COMPANY = 'COMPANY',
+  STUDENT = 'STUDENT',
+  JOB = 'JOB',
+  REVIEW = 'REVIEW',
+}
+
+export enum ViolationReason {
+  FRAUD = 'FRAUD',
+  FAKE_INFORMATION = 'FAKE_INFORMATION',
+  HARASSMENT = 'HARASSMENT',
+  SPAM = 'SPAM',
+  INAPPROPRIATE_CONTENT = 'INAPPROPRIATE_CONTENT',
+  OTHER = 'OTHER',
+}
+
+export enum ViolationReportStatus {
+  SUBMITTED = 'SUBMITTED',
+  UNDER_REVIEW = 'UNDER_REVIEW',
+  SUBSTANTIATED = 'SUBSTANTIATED',
+  DISMISSED = 'DISMISSED',
+  /** Quản trị viên đã phán quyết cuối (UC59, S2-M05-04). */
+  RESOLVED = 'RESOLVED',
+}
+
+export interface ViolationEvidenceDto {
+  id: string;
+  kind: 'URL' | 'FILE';
+  url: string | null;
+  note: string | null;
+}
+
+export interface ViolationReportDto {
+  id: string;
+  targetType: ViolationTargetType;
+  targetId: string;
+  targetLabel: string | null;
+  reason: ViolationReason;
+  description: string;
+  status: ViolationReportStatus;
+  evidenceCount: number;
+  evidence: ViolationEvidenceDto[];
+  createdAt: string;
+  moderatedAt: string | null;
+  resolvedAt: string | null;
+}
+
+export interface ViolationReportDetailDto extends ViolationReportDto {
+  reporterId: string;
+}

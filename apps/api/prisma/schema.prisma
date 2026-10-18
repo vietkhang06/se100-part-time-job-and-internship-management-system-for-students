@@ -539,3 +539,72 @@ model ModerationDecision {
   @@index([itemId])
   @@index([targetSyncedAt])
 }
+
+// M05 · Violation Report (C-17)
+// openKey = "<reporterId>:<targetType>:<targetId>" khi báo cáo còn mở, NULL khi đã đóng
+// → UNIQUE tạo ra ràng buộc "không báo cáo trùng khi báo cáo cũ chưa xử lý xong".
+// ============================================================================
+enum ViolationTargetType {
+  COMPANY
+  STUDENT
+  JOB
+  REVIEW
+}
+
+enum ViolationReason {
+  FRAUD
+  FAKE_INFORMATION
+  HARASSMENT
+  SPAM
+  INAPPROPRIATE_CONTENT
+  OTHER
+}
+
+enum ViolationReportStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  SUBSTANTIATED
+  DISMISSED
+  RESOLVED
+}
+
+enum ViolationEvidenceKind {
+  URL
+  FILE
+}
+
+model ViolationReport {
+  id          String                @id @default(uuid())
+  reporterId  String
+  targetType  ViolationTargetType
+  targetId    String
+  targetLabel String?
+  reason      ViolationReason
+  description String
+  status      ViolationReportStatus @default(SUBMITTED)
+  openKey     String?               @unique
+  moderatedAt DateTime?
+  resolvedAt  DateTime?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  evidence ViolationEvidence[]
+
+  @@index([reporterId, createdAt])
+  @@index([targetType, targetId])
+  @@index([status])
+}
+
+model ViolationEvidence {
+  id         String                @id @default(uuid())
+  reportId   String
+  report     ViolationReport       @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  kind       ViolationEvidenceKind
+  url        String?
+  storageKey String?
+  fileName   String?
+  note       String?
+  createdAt  DateTime              @default(now())
+
+  @@index([reportId])
+}
