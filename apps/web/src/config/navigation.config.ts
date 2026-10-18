@@ -10,6 +10,7 @@ export const CANDIDATE_NAV_ITEMS: NavItem[] = [
   { title: 'Quản lý CV', href: '/candidate/cvs' },
   { title: 'Lịch sử ứng tuyển', href: '/candidate/applications' },
   { title: 'Lịch phỏng vấn', href: '/candidate/interviews' },
+  { title: 'Báo cáo đã gửi', href: '/candidate/reports' },
 ];
 
 export const EMPLOYER_NAV_ITEMS: NavItem[] = [
@@ -19,6 +20,7 @@ export const EMPLOYER_NAV_ITEMS: NavItem[] = [
   { title: 'Tin tuyển dụng', href: '/employer/jobs' },
   { title: 'Hồ sơ ứng tuyển', href: '/employer/applications' },
   { title: 'Lịch phỏng vấn', href: '/employer/interviews' },
+  { title: 'Báo cáo đã gửi', href: '/employer/reports' },
 ];
 
 export const MODERATOR_NAV_ITEMS: NavItem[] = [

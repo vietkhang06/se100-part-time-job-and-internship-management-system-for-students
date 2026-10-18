@@ -11,6 +11,7 @@ import { RequestIdMiddleware } from './shared/middleware/request-id.middleware';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ModerationModule } from './modules/moderation/moderation.module';
 import { StorageModule } from './shared/storage/storage.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { StorageModule } from './shared/storage/storage.module';
     NotificationsModule,
     StorageModule,
     ModerationModule,
+    ReportsModule,
   ],
 })
 export class AppModule implements NestModule {
