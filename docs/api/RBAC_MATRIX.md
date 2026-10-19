@@ -41,6 +41,11 @@ Theo tài liệu kiến trúc `docs/ROLES_AND_STATES.md` và mã nguồn enum `U
 | `GET` | `/api/v1/companies/:id` | Bearer Token (`JwtAuthGuard`, `RolesGuard`) | `STUDENT`, `EMPLOYER`, `MODERATOR`, `ADMIN` | 401 `UNAUTHORIZED` | 403 `FORBIDDEN` | FR-07, S2-M03-01 |
 | `PATCH` | `/api/v1/companies/:id` | Bearer Token (`JwtAuthGuard`, `RolesGuard`) | `EMPLOYER` (Tenant checked: same company + management permission) | 401 `UNAUTHORIZED` | 403 `FORBIDDEN` | FR-07, S2-M03-01 |
 | `PATCH` | `/api/v1/companies/:id/verification-status` | Bearer Token (`JwtAuthGuard`, `RolesGuard`) | `MODERATOR`, `ADMIN` | 401 `UNAUTHORIZED` | 403 `FORBIDDEN` | FR-16, S2-M03-01 |
+| `POST` | `/api/v1/companies/branches` | Bearer Token (`JwtAuthGuard`, `RolesGuard`) | `EMPLOYER` (Management permission: `OWNER`, `ADMIN`, `HR_MANAGER`) | 401 `UNAUTHORIZED` | 403 `FORBIDDEN` | FR-07, S2-M03-02 |
+| `GET` | `/api/v1/companies/branches` | Bearer Token (`JwtAuthGuard`, `RolesGuard`) | `EMPLOYER` | 401 `UNAUTHORIZED` | 403 `FORBIDDEN` | FR-07, S2-M03-02 |
+| `GET` | `/api/v1/companies/branches/:id` | Bearer Token (`JwtAuthGuard`, `RolesGuard`) | `EMPLOYER` (Tenant checked: same company) | 401 `UNAUTHORIZED` | 403 `FORBIDDEN` | FR-07, S2-M03-02 |
+| `PATCH` | `/api/v1/companies/branches/:id` | Bearer Token (`JwtAuthGuard`, `RolesGuard`) | `EMPLOYER` (Tenant checked + management permission) | 401 `UNAUTHORIZED` | 403 `FORBIDDEN` | FR-07, S2-M03-02 |
+| `DELETE` | `/api/v1/companies/branches/:id` | Bearer Token (`JwtAuthGuard`, `RolesGuard`) | `EMPLOYER` (Tenant checked + management permission; rejected with 409 if in use by jobs) | 401 `UNAUTHORIZED` | 403 `FORBIDDEN` | FR-07, S2-M03-02 |
 
 ### 2.2 Quy hoạch Phân quyền cho các Endpoint thuộc Scope Baseline (Planned FR Endpoints)
 

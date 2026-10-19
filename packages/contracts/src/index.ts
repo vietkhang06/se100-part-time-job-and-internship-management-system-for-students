@@ -627,6 +627,46 @@ export interface CompanyBranchDto {
   updatedAt: string;
 }
 
+export interface CreateCompanyBranchRequestDto {
+  branchName: string;
+  addressLine: string;
+  ward?: string | null;
+  district?: string | null;
+  city: string;
+  country?: string;
+  phone?: string | null;
+  email?: string | null;
+  isHeadquarter?: boolean;
+}
+
+export interface UpdateCompanyBranchRequestDto {
+  branchName?: string;
+  addressLine?: string;
+  ward?: string | null;
+  district?: string | null;
+  city?: string;
+  country?: string;
+  phone?: string | null;
+  email?: string | null;
+  isHeadquarter?: boolean;
+}
+
+export interface CompanyBranchResponseDto {
+  message?: string;
+  branch: CompanyBranchDto;
+}
+
+export interface CompanyBranchListResponseDto {
+  message?: string;
+  data: CompanyBranchDto[];
+  total: number;
+}
+
+export interface DeleteCompanyBranchResponseDto {
+  message: string;
+  deletedBranchId: string;
+}
+
 export interface CompanyVerificationDto {
   id: string;
   companyId: string;
