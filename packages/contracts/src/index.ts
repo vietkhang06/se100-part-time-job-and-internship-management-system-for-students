@@ -48,11 +48,23 @@ export enum CvErrorCode {
   FORBIDDEN = 'FORBIDDEN',
 }
 
+export enum CompanyErrorCode {
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  COMPANY_NOT_FOUND = 'COMPANY_NOT_FOUND',
+  EMPLOYER_HAS_NO_COMPANY = 'EMPLOYER_HAS_NO_COMPANY',
+  TAX_ID_ALREADY_EXISTS = 'TAX_ID_ALREADY_EXISTS',
+  UNAUTHORIZED = 'UNAUTHORIZED',
+  FORBIDDEN = 'FORBIDDEN',
+  INVALID_VERIFICATION_STATE = 'INVALID_VERIFICATION_STATE',
+  BRANCH_NOT_FOUND = 'BRANCH_NOT_FOUND',
+  BRANCH_IN_USE_CANNOT_DELETE = 'BRANCH_IN_USE_CANNOT_DELETE',
+}
+
 export interface ApiErrorResponse {
   statusCode: number;
   message: string | string[];
   error: string;
-  code?: AuthErrorCode | StudentProfileErrorCode | CvErrorCode | (string & {});
+  code?: AuthErrorCode | StudentProfileErrorCode | CvErrorCode | CompanyErrorCode | (string & {});
   timestamp: string;
   path: string;
   correlationId?: string;
@@ -68,6 +80,10 @@ export interface StudentProfileErrorResponse extends ApiErrorResponse {
 
 export interface CvErrorResponse extends ApiErrorResponse {
   code?: CvErrorCode;
+}
+
+export interface CompanyErrorResponse extends ApiErrorResponse {
+  code?: CompanyErrorCode;
 }
 
 export interface AuthUserDto {
@@ -540,6 +556,48 @@ export interface CompanyDto {
   verificationStatus: CompanyVerificationStatus;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CreateCompanyRequestDto {
+  name: string;
+  legalName?: string | null;
+  taxId: string;
+  website?: string | null;
+  industry?: string | null;
+  companySize?: string | null;
+  description?: string | null;
+  logoUrl?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+}
+
+export interface UpdateCompanyProfileRequestDto {
+  name?: string;
+  legalName?: string | null;
+  website?: string | null;
+  industry?: string | null;
+  companySize?: string | null;
+  description?: string | null;
+  logoUrl?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+}
+
+export interface CompanyProfileResponseDto {
+  message?: string;
+  company: CompanyDto;
+}
+
+export interface CompanyResponseDto {
+  message?: string;
+  company: CompanyDto;
+}
+
+export interface UpdateCompanyVerificationStatusRequestDto {
+  status: CompanyVerificationStatus;
+  rejectionReason?: string | null;
 }
 
 export interface CompanyMemberDto {

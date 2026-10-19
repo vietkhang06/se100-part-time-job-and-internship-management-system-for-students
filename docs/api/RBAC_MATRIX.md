@@ -35,6 +35,12 @@ Theo tài liệu kiến trúc `docs/ROLES_AND_STATES.md` và mã nguồn enum `U
 | `POST` | `/api/v1/auth/forgot-password` | Public | Khách mang email | 400 `VALIDATION_ERROR` nếu thiếu email | N/A | FR-04, Contract C-01 |
 | `POST` | `/api/v1/auth/reset-password` | Public | Khách mang token đặt lại mật khẩu | 400 `VALIDATION_ERROR` nếu thiếu token | N/A | FR-04, Contract C-01 |
 | `GET` | `/api/v1/users/:id` | Công khai / Tra cứu | Chưa gán giới hạn vai trò (Chờ FR-05 / FR-19) | N/A (Trả về 200 / 404) | N/A | Khởi tạo ban đầu (Pending decision) |
+| `GET` | `/api/v1/companies/profile` | Bearer Token (`JwtAuthGuard`, `RolesGuard`) | `EMPLOYER` | 401 `UNAUTHORIZED` | 403 `FORBIDDEN` | FR-07, S2-M03-01 |
+| `PATCH` | `/api/v1/companies/profile` | Bearer Token (`JwtAuthGuard`, `RolesGuard`) | `EMPLOYER` (Management permission: `OWNER`, `ADMIN`, `HR_MANAGER`) | 401 `UNAUTHORIZED` | 403 `FORBIDDEN` | FR-07, S2-M03-01 |
+| `POST` | `/api/v1/companies` | Bearer Token (`JwtAuthGuard`, `RolesGuard`) | `EMPLOYER` | 401 `UNAUTHORIZED` | 403 `FORBIDDEN` | FR-07, S2-M03-01 |
+| `GET` | `/api/v1/companies/:id` | Bearer Token (`JwtAuthGuard`, `RolesGuard`) | `STUDENT`, `EMPLOYER`, `MODERATOR`, `ADMIN` | 401 `UNAUTHORIZED` | 403 `FORBIDDEN` | FR-07, S2-M03-01 |
+| `PATCH` | `/api/v1/companies/:id` | Bearer Token (`JwtAuthGuard`, `RolesGuard`) | `EMPLOYER` (Tenant checked: same company + management permission) | 401 `UNAUTHORIZED` | 403 `FORBIDDEN` | FR-07, S2-M03-01 |
+| `PATCH` | `/api/v1/companies/:id/verification-status` | Bearer Token (`JwtAuthGuard`, `RolesGuard`) | `MODERATOR`, `ADMIN` | 401 `UNAUTHORIZED` | 403 `FORBIDDEN` | FR-16, S2-M03-01 |
 
 ### 2.2 Quy hoạch Phân quyền cho các Endpoint thuộc Scope Baseline (Planned FR Endpoints)
 
