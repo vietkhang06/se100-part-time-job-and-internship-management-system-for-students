@@ -12,6 +12,7 @@ export const CANDIDATE_NAV_ITEMS: NavItem[] = [
   { title: 'Lịch phỏng vấn', href: '/candidate/interviews' },
   { title: 'Gửi báo cáo vi phạm', href: '/candidate/reports' },
   { title: 'Chế tài tài khoản', href: '/candidate/sanctions' },
+  { title: 'Đánh giá của tôi', href: '/candidate/reviews' },
 ];
 
 export const EMPLOYER_NAV_ITEMS: NavItem[] = [
@@ -22,6 +23,7 @@ export const EMPLOYER_NAV_ITEMS: NavItem[] = [
   { title: 'Hồ sơ ứng tuyển', href: '/employer/applications' },
   { title: 'Lịch phỏng vấn', href: '/employer/interviews' },
   { title: 'Gửi báo cáo vi phạm', href: '/employer/reports' },
+  { title: 'Đánh giá doanh nghiệp', href: '/employer/reviews' },
 ];
 
 export const MODERATOR_NAV_ITEMS: NavItem[] = [

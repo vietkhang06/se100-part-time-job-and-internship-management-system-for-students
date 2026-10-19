@@ -664,4 +664,38 @@ model SanctionEvent {
   createdAt  DateTime @default(now())
 
   @@index([sanctionId])
+// M05 · Review (C-18)
+// applicationId/studentId/companyId là String thường (không FK) để không sửa model của M03/M04.
+// applicationId UNIQUE: mỗi hồ sơ ứng tuyển chỉ có một đánh giá. ReviewReply.reviewId UNIQUE:
+// mỗi đánh giá chỉ có một phản hồi.
+// ============================================================================
+enum ReviewVisibility {
+  VISIBLE
+  HIDDEN
+}
+
+model Review {
+  id            String           @id @default(uuid())
+  applicationId String           @unique
+  studentId     String
+  companyId     String
+  rating        Int
+  comment       String?
+  visibility    ReviewVisibility @default(VISIBLE)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  reply ReviewReply?
+
+  @@index([companyId, visibility, createdAt])
+  @@index([studentId, createdAt])
+}
+
+model ReviewReply {
+  id         String   @id @default(uuid())
+  reviewId   String   @unique
+  review     Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  employerId String
+  content    String
+  createdAt  DateTime @default(now())
 }

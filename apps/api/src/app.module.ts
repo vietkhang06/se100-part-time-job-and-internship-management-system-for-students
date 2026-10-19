@@ -13,6 +13,7 @@ import { ModerationModule } from './modules/moderation/moderation.module';
 import { StorageModule } from './shared/storage/storage.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SanctionsModule } from './modules/sanctions/sanctions.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { SanctionsModule } from './modules/sanctions/sanctions.module';
     ModerationModule,
     ReportsModule,
     SanctionsModule,
+    ReviewsModule,
   ],
 })
 export class AppModule implements NestModule {

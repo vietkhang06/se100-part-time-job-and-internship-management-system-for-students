@@ -758,3 +758,48 @@ export interface ApplicationLockStatusDto {
   locked: boolean;
   until: string | null;
 }
+// M05 · Review (C-18 — DRAFT)
+// ============================================================================
+export enum ReviewVisibility {
+  VISIBLE = 'VISIBLE',
+  HIDDEN = 'HIDDEN',
+}
+
+export interface ReviewReplyDto {
+  content: string;
+  createdAt: string;
+}
+
+/** Góc nhìn của sinh viên đã viết đánh giá. */
+export interface ReviewDto {
+  id: string;
+  applicationId: string;
+  companyId: string;
+  rating: number;
+  comment: string | null;
+  visibility: ReviewVisibility;
+  createdAt: string;
+  reply: ReviewReplyDto | null;
+}
+
+/** Dữ liệu công khai: người viết ẩn danh, chỉ đánh giá đang hiển thị. */
+export interface PublicReviewDto {
+  id: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  reply: ReviewReplyDto | null;
+}
+
+export interface ReviewSummaryDto {
+  averageRating: number | null;
+  totalReviews: number;
+  distribution: Record<'1' | '2' | '3' | '4' | '5', number>;
+}
+
+export interface CompanyReviewListDto {
+  data: PublicReviewDto[];
+  meta: PaginationMeta;
+  summary: ReviewSummaryDto;
+}
+
