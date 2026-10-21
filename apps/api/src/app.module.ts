@@ -12,6 +12,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { ModerationModule } from './modules/moderation/moderation.module';
 import { StorageModule } from './shared/storage/storage.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { SanctionsModule } from './modules/sanctions/sanctions.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 
 @Module({
@@ -32,6 +33,7 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
     StorageModule,
     ModerationModule,
     ReportsModule,
+    SanctionsModule,
     ReviewsModule,
   ],
 })

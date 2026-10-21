@@ -703,6 +703,61 @@ export interface ViolationReportDetailDto extends ViolationReportDto {
 }
 
 // ============================================================================
+// M05 · Sanction (C-19)
+// ============================================================================
+export enum SanctionType {
+  /** Cảnh cáo sinh viên. */
+  WARNING = 'WARNING',
+  /** Khóa quyền ứng tuyển của sinh viên (UC60), có thời hạn. */
+  APPLICATION_LOCK = 'APPLICATION_LOCK',
+  /** Đình chỉ doanh nghiệp (UC56), đến khi được gỡ. */
+  COMPANY_SUSPENSION = 'COMPANY_SUSPENSION',
+}
+
+export enum SanctionTargetType {
+  STUDENT = 'STUDENT',
+  COMPANY = 'COMPANY',
+}
+
+export enum SanctionStatus {
+  ACTIVE = 'ACTIVE',
+  LIFTED = 'LIFTED',
+  /** Tính từ thời hạn (endsAt) khi đọc; không lưu trong DB. */
+  EXPIRED = 'EXPIRED',
+}
+
+export interface SanctionEventDto {
+  id: string;
+  action: 'APPLIED' | 'LIFTED';
+  actorId: string;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface SanctionDto {
+  id: string;
+  reportId: string;
+  targetType: SanctionTargetType;
+  targetId: string;
+  type: SanctionType;
+  status: SanctionStatus;
+  reason: string;
+  startsAt: string;
+  endsAt: string | null;
+  imposedBy: string;
+  liftedAt: string | null;
+  liftReason: string | null;
+  createdAt: string;
+}
+
+export interface SanctionDetailDto extends SanctionDto {
+  events: SanctionEventDto[];
+}
+
+export interface ApplicationLockStatusDto {
+  locked: boolean;
+  until: string | null;
+}
 // M05 · Review (C-18 — DRAFT)
 // ============================================================================
 export enum ReviewVisibility {

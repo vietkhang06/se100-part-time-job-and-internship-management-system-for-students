@@ -610,6 +610,60 @@ model ViolationEvidence {
 }
 
 // ============================================================================
+// M05 · Sanction (C-19)
+// targetId/imposedBy/liftedBy là String thường (không FK) để không sửa model của module khác.
+// reportId UNIQUE: mỗi báo cáo chỉ có tối đa một chế tài (chống áp trùng khi hai Admin cùng bấm).
+// Trạng thái EXPIRED không lưu; được tính từ endsAt khi đọc.
+// ============================================================================
+enum SanctionType {
+  WARNING
+  APPLICATION_LOCK
+  COMPANY_SUSPENSION
+}
+
+enum SanctionTargetType {
+  STUDENT
+  COMPANY
+}
+
+enum SanctionStatus {
+  ACTIVE
+  LIFTED
+}
+
+model Sanction {
+  id         String             @id @default(uuid())
+  reportId   String             @unique
+  targetType SanctionTargetType
+  targetId   String
+  type       SanctionType
+  status     SanctionStatus     @default(ACTIVE)
+  reason     String
+  startsAt   DateTime           @default(now())
+  endsAt     DateTime?
+  imposedBy  String
+  liftedBy   String?
+  liftedAt   DateTime?
+  liftReason String?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  events SanctionEvent[]
+
+  @@index([targetType, targetId, status])
+  @@index([status, createdAt])
+}
+
+model SanctionEvent {
+  id         String   @id @default(uuid())
+  sanctionId String
+  sanction   Sanction @relation(fields: [sanctionId], references: [id], onDelete: Cascade)
+  action     String
+  actorId    String
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@index([sanctionId])
 // M05 · Review (C-18)
 // applicationId/studentId/companyId là String thường (không FK) để không sửa model của M03/M04.
 // applicationId UNIQUE: mỗi hồ sơ ứng tuyển chỉ có một đánh giá. ReviewReply.reviewId UNIQUE:

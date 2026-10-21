@@ -11,6 +11,7 @@ export const CANDIDATE_NAV_ITEMS: NavItem[] = [
   { title: 'Lịch sử ứng tuyển', href: '/candidate/applications' },
   { title: 'Lịch phỏng vấn', href: '/candidate/interviews' },
   { title: 'Gửi báo cáo vi phạm', href: '/candidate/reports' },
+  { title: 'Chế tài tài khoản', href: '/candidate/sanctions' },
   { title: 'Đánh giá của tôi', href: '/candidate/reviews' },
 ];
 
@@ -35,6 +36,7 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
   { title: 'Quản lý doanh nghiệp', href: '/admin/companies' },
   { title: 'Báo cáo & Audit', href: '/admin/reports' },
   { title: 'Thống kê & Phân tích', href: '/admin/analytics' },
+  { title: 'Xử lý vi phạm', href: '/admin/sanctions' },
 ];
 
 export const PUBLIC_NAV_ITEMS: NavItem[] = [
