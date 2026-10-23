@@ -1,5 +1,7 @@
 # Chiến lược kiểm thử CampusJob
 
+- Sprint 3 M04: [ma trận và hướng dẫn regression PostgreSQL](M04_SPRINT3.md), [kết quả thực thi](M04_SPRINT3_RESULTS.md). Kiểm thử persistence độc lập không thay thế E2E xuyên M02/M03/M04/M05.
+
 - Unit tests: Kiểm thử domain logic, DTO mapping.
 - Integration & E2E tests: Kiểm thử trên database PostgreSQL thực tế trong container độc lập.
 - Static analysis: Typecheck và ESLint bắt buộc chạy trên toàn bộ monorepo trước khi merge.
