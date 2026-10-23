@@ -1,0 +1,12 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": ".",
+  "testRegex": "m04-persistence\\.integration-spec\\.ts$",
+  "transform": { "^.+\\.(t|j)s$": "ts-jest" },
+  "testEnvironment": "node",
+  "testTimeout": 30000,
+  "setupFiles": ["<rootDir>/m04-test-database.cjs"],
+  "moduleNameMapper": {
+    "^@campusjob/contracts$": "<rootDir>/../../../packages/contracts/src/index.ts"
+  }
+}
