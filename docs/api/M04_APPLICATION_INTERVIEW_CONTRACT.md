@@ -1,6 +1,6 @@
 # M04 Application & Interview — contract and implementation boundary
 
-Status: **implemented as an isolated M04 slice; integration pending**. Schema, separate Application and Interview migrations, workflow, repository, controller and fixture tests exist. `M04Module` is deliberately not imported into `AppModule` because the repository has no M02 CV snapshot source or M03 Job ownership/eligibility source. The migrations have not been applied to a live database.
+Status: **implemented as an isolated M04 slice; integration pending**. Schema, separate Application and Interview migrations, workflow, repository, controller and fixture tests exist. As of the 23-10-26 checkout, M02 publishes a CV snapshot adapter and approved C-03, but M03 still has no Job ownership/eligibility source. M04Module is not imported into AppModule. Live migration/test results are recorded in docs/testing/M04_SPRINT3_RESULTS.md; fixture tests are not full integration.
 
 ## Sources and precedence
 
@@ -61,9 +61,9 @@ The workbook's glossary GL-18 describes the score as the proportion of job-requi
 
 ## Dependencies and unresolved decisions
 
-1. **M02 CV:** `CvSnapshotDto` and the C-03 document exist, but there is no CV persistence or snapshot-producing service in the current repository. M04 must consume an M02 contract, not copy M02 CRUD or read a candidate's private CV without authorization.
-2. **M03 Job/Employer:** there is no Job or Company model/service. `JobAccessSource` requires the real M03 adapter to validate job eligibility and employer ownership. Skill requirements and accepted capacity still need a stable contract. M04 does not introduce a competing Job table.
-3. **M05 Notification:** no event interface/payload or M05 module exists. C-10/C-12/C-15 recipient, event identity and duplicate-handling semantics are not fixed. M04 must not claim notifications are delivered.
+1. **M02 CV:** Cv persistence, GetCvSnapshotUseCase, CvSnapshotSourceAdapter and approved C-03 now exist. Before binding, reconcile identity: M04Controller passes authenticated user ID, while M02 snapshot resolves StudentProfile.id and returns that profile ID. Do not equate these namespaces or copy CV CRUD into M04.
+2. **M03 Job/Employer:** Company/Branch schema exists, but there is no Job model/API or real JobAccessSource adapter. M03 must publish its eligibility/ownership API under C-07; the workbook explicitly forbids direct M03 database access by M04. Skill requirements and accepted capacity still need a stable contract.
+3. **M05 Notification:** NotificationsModule and a publisher now exist; docs/api/NOTIFICATION_API_CONTRACT.md (C-20) remains DRAFT and explicitly asks how C-20 maps to C-10. C-12/C-15 recipient, event identity and duplicate-handling semantics are not approved. M04 has no notification binding and must not claim delivery.
 4. **Quota:** the workbook includes "quota check" in M04 scope but does not give a number or define which application statuses count. No numeric quota is enforced until that workbook rule is defined. The SRS mentions five applications but explicitly leaves the count policy open, so it does not settle the workbook gap. The one-student/one-job rule is enforced through a unique `(studentId, jobId)` constraint in the Application migration.
 5. **Contract IDs:** the workbook associates C-05 with M04 CV submission, while `docs/api/CV_API_CONTRACT.md` defines C-05 for M01→M02 account ownership. Confirm the ID mapping before updating shared contracts.
 6. **Interview response deadline and cancellation:** PV03 mentions a response that can expire or be cancelled but provides no deadline or cancellation rule. These must not be invented.

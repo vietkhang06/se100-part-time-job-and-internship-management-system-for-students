@@ -19,6 +19,7 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "test:e2e": "pnpm --filter @campusjob/api test:e2e",
+    "test:m04:postgres": "pnpm --filter @campusjob/api exec jest --config test/jest-m04-postgres.json --runInBand",
     "db:validate": "dotenv -e .env -- pnpm --filter @campusjob/api prisma validate",
     "db:generate": "dotenv -e .env -- pnpm --filter @campusjob/api prisma generate",
     "db:migrate": "dotenv -e .env -- pnpm --filter @campusjob/api prisma migrate dev",
