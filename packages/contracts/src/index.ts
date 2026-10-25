@@ -582,6 +582,8 @@ export interface CompanyBranchDto {
   country: string;
   phone?: string | null;
   email?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   isHeadquarter: boolean;
   createdAt: string;
   updatedAt: string;
@@ -597,6 +599,7 @@ export interface CompanyVerificationDto {
   reviewedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  documents?: CompanyVerificationDocumentDto[];
 }
 
 export interface CompanyVerificationDocumentDto {
@@ -606,6 +609,150 @@ export interface CompanyVerificationDocumentDto {
   documentType: DocumentType;
   createdAt: string;
   fileAsset?: FileAssetDto | null;
+}
+
+
+export interface VerificationDocumentAttachmentInput {
+  fileAssetId: string;
+  documentType?: DocumentType;
+}
+
+export interface CreateCompanyRequestDto {
+  name: string;
+  legalName?: string | null;
+  representativeName?: string | null;
+  taxId: string;
+  website?: string | null;
+  industry?: string | null;
+  companySize?: string | null;
+  description?: string | null;
+  logoUrl?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  documents?: VerificationDocumentAttachmentInput[];
+}
+
+export interface UpdateCompanyProfileRequestDto {
+  name?: string;
+  legalName?: string | null;
+  representativeName?: string | null;
+  website?: string | null;
+  industry?: string | null;
+  companySize?: string | null;
+  description?: string | null;
+  logoUrl?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  documents?: VerificationDocumentAttachmentInput[];
+}
+
+export interface CompanyProfileResponseDto {
+  message?: string;
+  company: CompanyDto;
+}
+
+export interface CompanyResponseDto {
+  message?: string;
+  company: CompanyDto;
+}
+
+export interface UpdateCompanyVerificationStatusRequestDto {
+  status: CompanyVerificationStatus;
+  rejectionReason?: string | null;
+}
+
+export interface CreateCompanyBranchRequestDto {
+  branchName: string;
+  addressLine: string;
+  ward?: string | null;
+  district?: string | null;
+  city: string;
+  country?: string;
+  phone?: string | null;
+  email?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  isHeadquarter?: boolean;
+}
+
+export interface UpdateCompanyBranchRequestDto {
+  branchName?: string;
+  addressLine?: string;
+  ward?: string | null;
+  district?: string | null;
+  city?: string;
+  country?: string;
+  phone?: string | null;
+  email?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  isHeadquarter?: boolean;
+}
+
+export interface CompanyBranchResponseDto {
+  message?: string;
+  branch: CompanyBranchDto;
+}
+
+export interface CompanyBranchListResponseDto {
+  message?: string;
+  data: CompanyBranchDto[];
+  total: number;
+}
+
+export interface DeleteCompanyBranchResponseDto {
+  message: string;
+  deletedBranchId: string;
+}
+
+// ============================================================================
+// M03 · JOB POSTING CONTRACTS (C-07 / FR-08)
+// ============================================================================
+
+export enum JobType {
+  PART_TIME = 'PART_TIME',
+  INTERNSHIP = 'INTERNSHIP',
+  FULL_TIME = 'FULL_TIME',
+}
+
+export enum JobStatus {
+  PENDING_APPROVAL = 'PENDING_APPROVAL', // Chờ duyệt
+  OPEN = 'OPEN',                         // Đang tuyển
+  PAUSED = 'PAUSED',                     // Tạm dừng
+  CLOSED = 'CLOSED',                     // Đã đóng
+}
+
+export interface JobPostingDto {
+  id: string;
+  companyId: string;
+  branchId: string;
+  title: string;
+  description: string;
+  industry: string;
+  type: JobType;
+  skills: string[];
+  quantity: number;
+  salary?: string | null;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  isSalaryNegotiable: boolean;
+  schedule?: string | null;
+  benefits?: string | null;
+  deadline: string;
+  status: JobStatus;
+  viewCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SavedJobDto {
+  id: string;
+  studentId: string;
+  jobId: string;
+  createdAt: string;
+  job?: JobPostingDto | null;
 }
 
 // ============================================================================
