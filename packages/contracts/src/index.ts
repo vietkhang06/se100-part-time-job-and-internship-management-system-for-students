@@ -64,6 +64,7 @@ export enum JobErrorCode {
   JOB_COMPANY_NOT_ACTIVE = 'JOB_COMPANY_NOT_ACTIVE',
   JOB_REJECTION_REASON_REQUIRED = 'JOB_REJECTION_REASON_REQUIRED',
   JOB_BRANCH_NOT_OWNED = 'JOB_BRANCH_NOT_OWNED',
+  JOB_HIDDEN_BY_MODERATION = 'JOB_HIDDEN_BY_MODERATION',
   MODERATION_SERVICE_UNAVAILABLE = 'MODERATION_SERVICE_UNAVAILABLE',
   UNAUTHORIZED = 'UNAUTHORIZED',
   FORBIDDEN = 'FORBIDDEN',
@@ -758,6 +759,9 @@ export interface JobPostingDto {
   deadline: string;
   status: JobStatus;
   viewCount: number;
+  rejectionReason?: string | null;
+  rejectedAt?: string | null;
+  hiddenByModeration?: boolean;
   createdAt: string;
   updatedAt: string;
 }

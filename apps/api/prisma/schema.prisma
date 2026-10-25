@@ -744,6 +744,9 @@ model JobPosting {
   deadline           DateTime
   status             JobStatus     @default(PENDING_APPROVAL)
   viewCount          Int           @default(0)
+  rejectionReason    String?
+  rejectedAt         DateTime?
+  hiddenByModeration Boolean       @default(false)
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 

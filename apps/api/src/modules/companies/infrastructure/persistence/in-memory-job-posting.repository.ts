@@ -35,6 +35,9 @@ export class InMemoryJobPostingRepository
       benefits: data.benefits,
       deadline: data.deadline,
       status: data.status ?? JobStatus.PENDING_APPROVAL,
+      rejectionReason: data.rejectionReason ?? null,
+      rejectedAt: data.rejectedAt ?? null,
+      hiddenByModeration: data.hiddenByModeration ?? false,
       viewCount: 0,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -98,6 +101,16 @@ export class InMemoryJobPostingRepository
       benefits: data.benefits !== undefined ? data.benefits : existing.benefits,
       deadline: data.deadline !== undefined ? data.deadline : existing.deadline,
       status: data.status !== undefined ? data.status : existing.status,
+      rejectionReason:
+        data.rejectionReason !== undefined
+          ? data.rejectionReason
+          : existing.rejectionReason,
+      rejectedAt:
+        data.rejectedAt !== undefined ? data.rejectedAt : existing.rejectedAt,
+      hiddenByModeration:
+        data.hiddenByModeration !== undefined
+          ? data.hiddenByModeration
+          : existing.hiddenByModeration,
       updatedAt: new Date(),
     });
 

@@ -36,6 +36,9 @@ export class PrismaJobPostingRepository
       deadline: raw.deadline,
       status: raw.status as JobStatus,
       viewCount: raw.viewCount,
+      rejectionReason: raw.rejectionReason ?? null,
+      rejectedAt: raw.rejectedAt ?? null,
+      hiddenByModeration: raw.hiddenByModeration ?? false,
       createdAt: raw.createdAt,
       updatedAt: raw.updatedAt,
     });
@@ -61,6 +64,9 @@ export class PrismaJobPostingRepository
         deadline: data.deadline,
         status: (data.status ?? JobStatus.PENDING_APPROVAL) as any,
         viewCount: 0,
+        rejectionReason: data.rejectionReason ?? null,
+        rejectedAt: data.rejectedAt ?? null,
+        hiddenByModeration: data.hiddenByModeration ?? false,
       },
     });
     return this.toDomain(row);
@@ -123,6 +129,9 @@ export class PrismaJobPostingRepository
     if (data.benefits !== undefined) updateData.benefits = data.benefits;
     if (data.deadline !== undefined) updateData.deadline = data.deadline;
     if (data.status !== undefined) updateData.status = data.status;
+    if (data.rejectionReason !== undefined) updateData.rejectionReason = data.rejectionReason;
+    if (data.rejectedAt !== undefined) updateData.rejectedAt = data.rejectedAt;
+    if (data.hiddenByModeration !== undefined) updateData.hiddenByModeration = data.hiddenByModeration;
 
     const row = await this.prisma.jobPosting.update({
       where: { id },

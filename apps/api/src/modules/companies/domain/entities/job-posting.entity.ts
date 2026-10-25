@@ -19,6 +19,9 @@ export interface JobPostingProps {
   deadline: Date;
   status?: JobStatus;
   viewCount?: number;
+  rejectionReason?: string | null;
+  rejectedAt?: Date | null;
+  hiddenByModeration?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -42,6 +45,9 @@ export class JobPostingEntity {
   readonly deadline: Date;
   readonly status: JobStatus;
   readonly viewCount: number;
+  readonly rejectionReason: string | null;
+  readonly rejectedAt: Date | null;
+  readonly hiddenByModeration: boolean;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 
@@ -64,6 +70,9 @@ export class JobPostingEntity {
     this.deadline = props.deadline;
     this.status = props.status ?? JobStatus.PENDING_APPROVAL;
     this.viewCount = props.viewCount ?? 0;
+    this.rejectionReason = props.rejectionReason ?? null;
+    this.rejectedAt = props.rejectedAt ?? null;
+    this.hiddenByModeration = props.hiddenByModeration ?? false;
     this.createdAt = props.createdAt ?? new Date();
     this.updatedAt = props.updatedAt ?? new Date();
   }
@@ -145,6 +154,9 @@ export class JobPostingEntity {
       deadline: this.deadline.toISOString(),
       status: this.status,
       viewCount: this.viewCount,
+      rejectionReason: this.rejectionReason,
+      rejectedAt: this.rejectedAt ? this.rejectedAt.toISOString() : null,
+      hiddenByModeration: this.hiddenByModeration,
       createdAt: this.createdAt.toISOString(),
       updatedAt: this.updatedAt.toISOString(),
     };

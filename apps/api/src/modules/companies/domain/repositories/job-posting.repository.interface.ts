@@ -20,6 +20,9 @@ export interface CreateJobPostingData {
   benefits?: string | null;
   deadline: Date;
   status?: JobStatus;
+  rejectionReason?: string | null;
+  rejectedAt?: Date | null;
+  hiddenByModeration?: boolean;
 }
 
 export interface UpdateJobPostingData {
@@ -38,6 +41,9 @@ export interface UpdateJobPostingData {
   benefits?: string | null;
   deadline?: Date;
   status?: JobStatus;
+  rejectionReason?: string | null;
+  rejectedAt?: Date | null;
+  hiddenByModeration?: boolean;
 }
 
 export interface IJobPostingRepository {

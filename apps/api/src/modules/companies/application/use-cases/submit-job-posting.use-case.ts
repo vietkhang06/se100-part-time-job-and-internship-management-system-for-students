@@ -109,14 +109,24 @@ export class SubmitJobPostingUseCase {
     }
 
     // Gửi sang cổng kiểm duyệt C-16
-    const enqueueResult = await this.moderationQueue.enqueueJob(job, userId);
+    // Xóa lý do từ chối cũ khi nộp lại (resubmit clears rejection fields)
+    let activeJob = job;
+    if (job.rejectionReason) {
+      activeJob = await this.jobRepo.update(jobId, {
+        rejectionReason: null,
+        rejectedAt: null,
+      });
+    }
+
+    // Gửi sang cổng kiểm duyệt C-16
+    const enqueueResult = await this.moderationQueue.enqueueJob(activeJob, userId);
 
     return {
       message:
         enqueueResult.outcome === 'ALREADY_PENDING'
           ? 'Tin tuyển dụng đã có trong hàng chờ kiểm duyệt.'
           : 'Gửi tin tuyển dụng sang kiểm duyệt thành công.',
-      job: job.toDto(),
+      job: activeJob.toDto(),
       moderation: enqueueResult,
     };
   }
