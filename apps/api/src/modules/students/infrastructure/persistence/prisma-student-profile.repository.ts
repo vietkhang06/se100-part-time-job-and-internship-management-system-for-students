@@ -20,7 +20,7 @@ export class PrismaStudentProfileRepository
       ? raw.studentSkills
           .map((ss: any) => ss.skill?.name ?? '')
           .filter((name: string) => name.length > 0)
-      : (raw.skills ?? []);
+      : [];
 
     return new StudentProfileEntity(
       raw.id,
@@ -46,7 +46,10 @@ export class PrismaStudentProfileRepository
   async findById(id: string): Promise<StudentProfileEntity | null> {
     const raw = await this.prisma.studentProfile.findUnique({
       where: { id },
-      include: { user: true },
+      include: {
+        user: true,
+        studentSkills: { include: { skill: true } },
+      },
     });
     return raw ? this.toDomain(raw) : null;
   }
@@ -108,7 +111,7 @@ export class PrismaStudentProfileRepository
         // Reconcile normalized canonical skills
         const skillIds: string[] = [];
         for (const item of normalizedSkills) {
-          const record = await (tx as any).skill.upsert({
+          const record = await tx.skill.upsert({
             where: { normalizedName: item.normalizedName },
             update: {},
             create: {
@@ -120,7 +123,7 @@ export class PrismaStudentProfileRepository
         }
 
         // Delete removed associations
-        await (tx as any).studentSkill.deleteMany({
+        await tx.studentSkill.deleteMany({
           where: {
             studentProfileId: profile.id,
             skillId: { notIn: skillIds },
@@ -129,7 +132,7 @@ export class PrismaStudentProfileRepository
 
         // Upsert current associations
         for (const skillId of skillIds) {
-          await (tx as any).studentSkill.upsert({
+          await tx.studentSkill.upsert({
             where: {
               studentProfileId_skillId: {
                 studentProfileId: profile.id,

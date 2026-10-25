@@ -665,6 +665,7 @@ model SanctionEvent {
 
   @@index([sanctionId])
 }
+
 // M05 · Review (C-18)
 // applicationId/studentId/companyId là String thường (không FK) để không sửa model của M03/M04.
 // applicationId UNIQUE: mỗi hồ sơ ứng tuyển chỉ có một đánh giá. ReviewReply.reviewId UNIQUE:

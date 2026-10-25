@@ -151,6 +151,7 @@ describe('S2-M02-06: M02 Integration Tests (UC11–UC12, UC31–UC35, UC37–UC3
       const profiles = await prisma.studentProfile.findMany({ where: { userId: { in: userIds } } });
       const profileIds = profiles.map((p) => p.id);
       await prisma.cv.deleteMany({ where: { studentProfileId: { in: profileIds } } });
+      await prisma.studentSkill.deleteMany({ where: { studentProfileId: { in: profileIds } } });
       await prisma.studentProfile.deleteMany({ where: { userId: { in: userIds } } });
       await prisma.authSession.deleteMany({ where: { userId: { in: userIds } } });
       await prisma.user.deleteMany({ where: { id: { in: userIds } } });
@@ -179,10 +180,32 @@ describe('S2-M02-06: M02 Integration Tests (UC11–UC12, UC31–UC35, UC37–UC3
             major: 'Khoa học Máy tính',
             graduationYear: 2026,
             jobSeekingStatus: JobSeekingStatus.ACTIVELY_LOOKING,
-            skills: ['TypeScript', 'NestJS'],
           },
         });
         acc.profileId = profile.id;
+
+        const skillNames = ['TypeScript', 'NestJS'];
+        for (const skillName of skillNames) {
+          const normalizedName = skillName.trim().toLowerCase();
+          const skill = await prisma.skill.upsert({
+            where: { normalizedName },
+            update: {},
+            create: { name: skillName.trim(), normalizedName },
+          });
+          await prisma.studentSkill.upsert({
+            where: {
+              studentProfileId_skillId: {
+                studentProfileId: profile.id,
+                skillId: skill.id,
+              },
+            },
+            update: {},
+            create: {
+              studentProfileId: profile.id,
+              skillId: skill.id,
+            },
+          });
+        }
       }
     }
 
@@ -220,6 +243,7 @@ describe('S2-M02-06: M02 Integration Tests (UC11–UC12, UC31–UC35, UC37–UC3
       const profiles = await prisma.studentProfile.findMany({ where: { userId: { in: userIds } } });
       const profileIds = profiles.map((p) => p.id);
       await prisma.cv.deleteMany({ where: { studentProfileId: { in: profileIds } } });
+      await prisma.studentSkill.deleteMany({ where: { studentProfileId: { in: profileIds } } });
       await prisma.studentProfile.deleteMany({ where: { userId: { in: userIds } } });
       await prisma.authSession.deleteMany({ where: { userId: { in: userIds } } });
       await prisma.user.deleteMany({ where: { id: { in: userIds } } });

@@ -56,13 +56,12 @@ describe('PrismaStudentProfileRepository (W2-DB-01 Skill Normalization & Persist
       expect(profile!.skills).toEqual(['TypeScript', 'NestJS']);
     });
 
-    it('should fallback to legacy skills array if studentSkills is undefined', async () => {
+    it('should return empty skills array if studentSkills is undefined or empty', async () => {
       const rawDbRecord = {
         id: 'profile-2',
         userId: 'user-2',
         jobSeekingStatus: JobSeekingStatus.ACTIVELY_LOOKING,
         user: { fullName: 'B', email: 'b@example.com' },
-        skills: ['LegacySkill1', 'LegacySkill2'],
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -72,7 +71,34 @@ describe('PrismaStudentProfileRepository (W2-DB-01 Skill Normalization & Persist
       const profile = await repository.findByUserId('user-2');
 
       expect(profile).not.toBeNull();
-      expect(profile!.skills).toEqual(['LegacySkill1', 'LegacySkill2']);
+      expect(profile!.skills).toEqual([]);
+    });
+
+    it('should load profile with normalized skills by id (findById)', async () => {
+      const rawDbRecord = {
+        id: 'profile-3',
+        userId: 'user-3',
+        user: { fullName: 'C', email: 'c@example.com' },
+        studentSkills: [
+          { skill: { id: 's1', name: 'Docker', normalizedName: 'docker' } },
+        ],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      mockPrisma.studentProfile.findUnique.mockResolvedValue(rawDbRecord);
+
+      const profile = await repository.findById('profile-3');
+
+      expect(profile).not.toBeNull();
+      expect(profile!.skills).toEqual(['Docker']);
+      expect(mockPrisma.studentProfile.findUnique).toHaveBeenCalledWith({
+        where: { id: 'profile-3' },
+        include: {
+          user: true,
+          studentSkills: { include: { skill: true } },
+        },
+      });
     });
   });
 

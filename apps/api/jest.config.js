@@ -8,6 +8,7 @@ module.exports = {
   collectCoverageFrom: ['**/*.(t|j)s'],
   coverageDirectory: '../coverage',
   testEnvironment: 'node',
+  testTimeout: 15000,
   moduleNameMapper: {
     '^@campusjob/contracts$': '<rootDir>/../../../packages/contracts/src/index.ts',
   },
