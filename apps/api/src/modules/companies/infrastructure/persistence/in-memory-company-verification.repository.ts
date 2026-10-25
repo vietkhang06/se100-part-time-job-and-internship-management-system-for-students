@@ -11,6 +11,7 @@ export class InMemoryCompanyVerificationRepository
   implements ICompanyVerificationRepository
 {
   public verifications: Map<string, VerificationRecord> = new Map();
+  private seq = 0;
 
   async createVerification(data: {
     companyId: string;
@@ -18,7 +19,8 @@ export class InMemoryCompanyVerificationRepository
     documents?: { fileAssetId: string; documentType?: DocumentType }[];
   }): Promise<VerificationRecord> {
     const id = `verif-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    const now = new Date();
+    this.seq++;
+    const now = new Date(Date.now() + this.seq);
     const record: VerificationRecord = {
       id,
       companyId: data.companyId,
