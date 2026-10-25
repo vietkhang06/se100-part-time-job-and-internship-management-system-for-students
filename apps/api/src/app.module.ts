@@ -1,4 +1,5 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import * as path from 'path';
 
@@ -15,6 +16,13 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { SanctionsModule } from './modules/sanctions/sanctions.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { CompaniesModule } from './modules/companies/companies.module';
+import {
+  M04Module,
+  M04_CV_SOURCE,
+  M04_JOB_SOURCE,
+} from './modules/applications/m04.module';
+import { CvSnapshotSourceAdapter } from './modules/students/infrastructure/adapters/cv-snapshot-source.adapter';
+import { JobAccessSourceAdapter } from './modules/companies/infrastructure/adapters/job-access-source.adapter';
 
 @Module({
   imports: [
@@ -37,6 +45,20 @@ import { CompaniesModule } from './modules/companies/companies.module';
     SanctionsModule,
     ReviewsModule,
     CompaniesModule,
+    M04Module.register(
+      {
+        provide: M04_CV_SOURCE,
+        useFactory: (moduleRef: ModuleRef) =>
+          moduleRef.get(CvSnapshotSourceAdapter, { strict: false }),
+        inject: [ModuleRef],
+      },
+      {
+        provide: M04_JOB_SOURCE,
+        useFactory: (moduleRef: ModuleRef) =>
+          moduleRef.get(JobAccessSourceAdapter, { strict: false }),
+        inject: [ModuleRef],
+      },
+    ),
   ],
 })
 export class AppModule implements NestModule {
