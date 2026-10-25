@@ -137,6 +137,28 @@ describe('S2-M03-04: Job Lifecycle Transitions & Expiration Rules', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it('should automatically close job (CLOSED) and reject pause if job deadline is in the past (F6 Expiry Rule)', async () => {
+      const expiredOpenJob = await jobRepo.create({
+        companyId,
+        branchId,
+        title: 'Expired Open Job',
+        description: 'Description',
+        industry: 'Tech',
+        type: JobType.FULL_TIME,
+        skills: ['QA'],
+        quantity: 1,
+        deadline: new Date(Date.now() - 3600000), // Expired 1 hour ago
+        status: JobStatus.OPEN,
+      });
+
+      await expect(
+        pauseJobUseCase.execute(ownerUserId, expiredOpenJob.id),
+      ).rejects.toThrow(BadRequestException);
+
+      const reloaded = await jobRepo.findById(expiredOpenJob.id);
+      expect(reloaded?.status).toBe(JobStatus.CLOSED);
+    });
+
     it('should deny pause if requested by another company owner', async () => {
       const job = await jobRepo.create({
         companyId,
@@ -194,7 +216,7 @@ describe('S2-M03-04: Job Lifecycle Transitions & Expiration Rules', () => {
       expect(res.job.status).toBe(JobStatus.OPEN);
     });
 
-    it('should block resume if job deadline is in the past (Expired Job Rule)', async () => {
+    it('should block resume and auto-close job to CLOSED if job deadline is in the past (F6 Expiry Rule)', async () => {
       const expiredJob = await jobRepo.create({
         companyId,
         branchId,
@@ -211,6 +233,31 @@ describe('S2-M03-04: Job Lifecycle Transitions & Expiration Rules', () => {
       await expect(
         resumeJobUseCase.execute(ownerUserId, expiredJob.id),
       ).rejects.toThrow(BadRequestException);
+
+      const reloaded = await jobRepo.findById(expiredJob.id);
+      expect(reloaded?.status).toBe(JobStatus.CLOSED);
+    });
+
+    it('documents the HIDE bypass limitation: without schema support for moderator-hidden flag, PAUSED jobs can be resumed if active (F5 BLOCKER documented)', async () => {
+      // Khi một tin bị moderator HIDE, status trở thành PAUSED.
+      // Do schema không có cột `hiddenByModerator` hay `isModeratorHidden`,
+      // use-case resume hiện tại chỉ thấy status = PAUSED và cho phép resume nếu công ty active và hạn nộp còn.
+      const moderatorHiddenJob = await jobRepo.create({
+        companyId,
+        branchId,
+        title: 'Hidden Job by Mod',
+        description: 'Description',
+        industry: 'Tech',
+        type: JobType.FULL_TIME,
+        skills: ['Java'],
+        quantity: 1,
+        deadline: new Date(Date.now() + 7 * 86400000),
+        status: JobStatus.PAUSED, // Set by moderator HIDE
+      });
+
+      const res = await resumeJobUseCase.execute(ownerUserId, moderatorHiddenJob.id);
+      expect(res.job.status).toBe(JobStatus.OPEN);
+      // Đây là BLOCKER về mặt Schema đã được ghi nhận trong báo cáo F5.
     });
 
     it('should block resume if company is not active/verified (Active Company Gate)', async () => {

@@ -72,6 +72,17 @@ export class PauseJobPostingUseCase {
       return { job: job.toDto() }; // Idempotent
     }
 
+    // F6: Khi phát hiện deadline < now trên tin chưa CLOSED, tự động chuyển sang CLOSED
+    if (job.isExpired()) {
+      await this.jobRepo.update(jobId, { status: JobStatus.CLOSED });
+      throw new BadRequestException({
+        statusCode: 400,
+        message: 'Tin tuyển dụng đã quá hạn nộp hồ sơ và đã được chuyển sang trạng thái ĐÃ ĐÓNG (CLOSED).',
+        error: 'Bad Request',
+        code: JobErrorCode.JOB_INVALID_STATE_TRANSITION,
+      });
+    }
+
     if (job.status !== JobStatus.OPEN) {
       throw new BadRequestException({
         statusCode: 400,

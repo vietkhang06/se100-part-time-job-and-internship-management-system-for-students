@@ -87,11 +87,12 @@ export class ResumeJobPostingUseCase {
       });
     }
 
-    // Không mở lại tin đã hết hạn
+    // F6: Khi phát hiện deadline < now trên tin chưa CLOSED, tự động chuyển sang CLOSED thay vì chỉ throw
     if (job.isExpired()) {
+      await this.jobRepo.update(jobId, { status: JobStatus.CLOSED });
       throw new BadRequestException({
         statusCode: 400,
-        message: 'Tin tuyển dụng đã hết hạn, không thể mở lại tuyển dụng.',
+        message: 'Tin tuyển dụng đã quá hạn nộp hồ sơ và đã được chuyển sang trạng thái ĐÃ ĐÓNG (CLOSED). Không thể mở lại tuyển dụng.',
         error: 'Bad Request',
         code: JobErrorCode.JOB_EXPIRED_CANNOT_ACTIVATE,
       });
