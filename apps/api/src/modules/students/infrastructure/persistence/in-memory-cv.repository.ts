@@ -101,6 +101,7 @@ export class InMemoryCvRepository implements ICvRepository {
           existing.certifications,
           existing.createdAt,
           existing.updatedAt,
+          existing.fileAssetId ?? null,
         ),
       );
     }
@@ -134,6 +135,9 @@ export class InMemoryCvRepository implements ICvRepository {
       data.experiences ?? [],
       data.projects ?? [],
       data.certifications ?? [],
+      new Date(),
+      new Date(),
+      data.fileAssetId ?? null,
     );
     this.store.set(cv.id, cv);
     return cv;
@@ -157,6 +161,7 @@ export class InMemoryCvRepository implements ICvRepository {
       data.certifications ?? existing.certifications,
       existing.createdAt,
       new Date(),
+      data.fileAssetId !== undefined ? data.fileAssetId : (existing.fileAssetId ?? null),
     );
     this.store.set(id, updated);
     return updated;
@@ -182,6 +187,7 @@ export class InMemoryCvRepository implements ICvRepository {
             cv.certifications,
             cv.createdAt,
             cv.updatedAt,
+            cv.fileAssetId ?? null,
           ),
         );
       }
