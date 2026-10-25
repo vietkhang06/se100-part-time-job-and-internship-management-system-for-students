@@ -272,7 +272,7 @@ describe('S2-M03-05 & S5-M03-01: Job Moderation Contract & Adapter Integration',
       expect(updated?.status).toBe(JobStatus.OPEN);
     });
 
-    it('should block APPROVE if job is expired', async () => {
+    it('should block APPROVE and transition expired job to CLOSED (F6: must not set OPEN)', async () => {
       await jobRepo.update(testJob.id, {
         deadline: new Date(Date.now() - 3600000), // Past deadline
       });
@@ -294,7 +294,7 @@ describe('S2-M03-05 & S5-M03-01: Job Moderation Contract & Adapter Integration',
       );
 
       const updated = await jobRepo.findById(testJob.id);
-      expect(updated?.status).toBe(JobStatus.PENDING_APPROVAL); // Stays non-public
+      expect(updated?.status).toBe(JobStatus.CLOSED); // F6: Tin hết hạn được đóng (CLOSED), không được set OPEN
     });
 
     it('should block APPROVE if company is not active/verified', async () => {
@@ -397,6 +397,27 @@ describe('S2-M03-05 & S5-M03-01: Job Moderation Contract & Adapter Integration',
       expect(updated?.status).toBe(JobStatus.PENDING_APPROVAL);
       expect(updated?.status).not.toBe(JobStatus.OPEN);
       expect(updated?.status).not.toBe(JobStatus.CLOSED);
+    });
+
+    it('should be idempotent on duplicate REJECT callbacks without creating duplicate records or state changes', async () => {
+      const rejectContext: ModerationDecisionContext = {
+        itemId: 'mod-1',
+        decisionId: 'dec-2',
+        targetType: ModerationTargetType.JOB,
+        targetId: testJob.id,
+        decision: ModerationDecisionType.REJECT,
+        newStatus: ModerationStatus.REJECTED,
+        reason: 'Nội dung không hợp lệ.',
+        proposedAction: null,
+        reviewerId: 'mod-user-1',
+      };
+
+      await moderationHandler.applyDecision(rejectContext);
+      // Second call (idempotent duplicate callback)
+      await expect(moderationHandler.applyDecision(rejectContext)).resolves.not.toThrow();
+
+      const updated = await jobRepo.findById(testJob.id);
+      expect(updated?.status).toBe(JobStatus.PENDING_APPROVAL);
     });
 
     it('should transition job to PAUSED on HIDE decision with valid reason', async () => {

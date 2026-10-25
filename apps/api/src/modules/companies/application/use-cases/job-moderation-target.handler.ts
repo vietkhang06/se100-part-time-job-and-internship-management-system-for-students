@@ -56,11 +56,13 @@ export class JobModerationTargetHandler implements IModerationTargetHandler {
           return;
         }
 
-        // Kiểm tra hạn nộp
+        // F6: Kiểm tra hạn nộp. Nếu deadline < now trên tin chưa CLOSED, chuyển sang CLOSED thay vì chỉ throw
         if (job.isExpired()) {
+          await this.jobRepo.update(job.id, { status: JobStatus.CLOSED });
+          this.logger.warn(`Job ${job.id} expired at approve time, transitioned to CLOSED instead of OPEN`);
           throw new BadRequestException({
             statusCode: 400,
-            message: 'Tin tuyển dụng đã quá hạn nộp, không thể duyệt mở.',
+            message: 'Tin tuyển dụng đã quá hạn nộp hồ sơ và đã được chuyển sang trạng thái ĐÃ ĐÓNG (CLOSED). Không thể duyệt mở.',
             code: 'JOB_EXPIRED_CANNOT_ACTIVATE',
           });
         }
