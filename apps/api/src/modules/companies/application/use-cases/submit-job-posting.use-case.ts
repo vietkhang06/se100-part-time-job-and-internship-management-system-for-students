@@ -99,9 +99,10 @@ export class SubmitJobPostingUseCase {
     }
 
     if (job.isExpired()) {
+      await this.jobRepo.update(jobId, { status: JobStatus.CLOSED });
       throw new BadRequestException({
         statusCode: 400,
-        message: 'Tin tuyển dụng đã quá hạn nộp, vui lòng cập nhật lại hạn nộp trước khi gửi duyệt.',
+        message: 'Tin tuyển dụng đã quá hạn nộp hồ sơ và đã được chuyển sang trạng thái ĐÃ ĐÓNG (CLOSED).',
         error: 'Bad Request',
         code: JobErrorCode.JOB_EXPIRED_CANNOT_ACTIVATE,
       });
