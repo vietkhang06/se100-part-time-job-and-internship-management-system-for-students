@@ -50,8 +50,8 @@ export class JobModerationTargetHandler implements IModerationTargetHandler {
 
     switch (context.decision) {
       case ModerationDecisionType.APPROVE: {
-        // Idempotency: nếu tin đã ở trạng thái OPEN, kết thúc thành công
-        if (job.status === JobStatus.OPEN) {
+        // Idempotency: nếu tin đã ở trạng thái OPEN và không bị ẩn, kết thúc thành công
+        if (job.status === JobStatus.OPEN && !job.hiddenByModeration) {
           this.logger.log(`Job ${job.id} is already OPEN, skipping duplicate approve`);
           return;
         }
@@ -77,7 +77,12 @@ export class JobModerationTargetHandler implements IModerationTargetHandler {
           });
         }
 
-        await this.jobRepo.update(job.id, { status: JobStatus.OPEN });
+        await this.jobRepo.update(job.id, {
+          status: JobStatus.OPEN,
+          hiddenByModeration: false,
+          rejectionReason: null,
+          rejectedAt: null,
+        });
         this.logger.log(`Job ${job.id} approved and moved to OPEN`);
         break;
       }
@@ -92,8 +97,13 @@ export class JobModerationTargetHandler implements IModerationTargetHandler {
           });
         }
 
-        // Giữ tin không công khai (không chuyển sang OPEN, không tự tiện gán sang CLOSED)
-        // Duy trì trạng thái PENDING_APPROVAL / non-public và ghi log lý do
+        // Bền vững: lưu rejectionReason và rejectedAt, duy trì PENDING_APPROVAL / non-public
+        await this.jobRepo.update(job.id, {
+          status: JobStatus.PENDING_APPROVAL,
+          rejectionReason: context.reason.trim(),
+          rejectedAt: new Date(),
+        });
+
         this.logger.warn(
           `Job ${job.id} rejected by moderator ${context.reviewerId}. Reason: ${context.reason}`,
         );
@@ -109,10 +119,12 @@ export class JobModerationTargetHandler implements IModerationTargetHandler {
           });
         }
 
-        if (job.status === JobStatus.OPEN) {
-          await this.jobRepo.update(job.id, { status: JobStatus.PAUSED });
-          this.logger.log(`Job ${job.id} hidden by moderator, transitioned to PAUSED`);
-        }
+        // Moderator HIDE sets PAUSED + hiddenByModeration=true
+        await this.jobRepo.update(job.id, {
+          status: JobStatus.PAUSED,
+          hiddenByModeration: true,
+        });
+        this.logger.log(`Job ${job.id} hidden by moderator, transitioned to PAUSED with hiddenByModeration=true`);
         break;
       }
 

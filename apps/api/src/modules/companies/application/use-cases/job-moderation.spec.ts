@@ -397,6 +397,8 @@ describe('S2-M03-05 & S5-M03-01: Job Moderation Contract & Adapter Integration',
       expect(updated?.status).toBe(JobStatus.PENDING_APPROVAL);
       expect(updated?.status).not.toBe(JobStatus.OPEN);
       expect(updated?.status).not.toBe(JobStatus.CLOSED);
+      expect(updated?.rejectionReason).toBe('Nội dung tin tuyển dụng chứa thông tin liên lạc không hợp lệ.');
+      expect(updated?.rejectedAt).toBeDefined();
     });
 
     it('should be idempotent on duplicate REJECT callbacks without creating duplicate records or state changes', async () => {
@@ -440,6 +442,79 @@ describe('S2-M03-05 & S5-M03-01: Job Moderation Contract & Adapter Integration',
 
       const updated = await jobRepo.findById(testJob.id);
       expect(updated?.status).toBe(JobStatus.PAUSED);
+      expect(updated?.hiddenByModeration).toBe(true);
+    });
+
+    it('should allow employer to resubmit a rejected job, clearing rejection fields and enqueuing exactly one item', async () => {
+      const rejectContext: ModerationDecisionContext = {
+        itemId: 'mod-1',
+        decisionId: 'dec-2',
+        targetType: ModerationTargetType.JOB,
+        targetId: testJob.id,
+        decision: ModerationDecisionType.REJECT,
+        newStatus: ModerationStatus.REJECTED,
+        reason: 'Sửa lại tiêu đề tin.',
+        proposedAction: null,
+        reviewerId: 'mod-user-1',
+      };
+      await moderationHandler.applyDecision(rejectContext);
+
+      const rejectedJob = await jobRepo.findById(testJob.id);
+      expect(rejectedJob?.rejectionReason).toBe('Sửa lại tiêu đề tin.');
+
+      const res = await submitJobUseCase.execute(ownerUserId, testJob.id);
+      expect(res.job.rejectionReason).toBeNull();
+      expect(res.job.rejectedAt).toBeNull();
+      expect(res.moderation.outcome).toBe('CREATED');
+
+      const reloaded = await jobRepo.findById(testJob.id);
+      expect(reloaded?.rejectionReason).toBeNull();
+      expect(reloaded?.rejectedAt).toBeNull();
+    });
+
+    it('should un-hide job when moderator APPROVE decision is received, resetting hiddenByModeration', async () => {
+      await jobRepo.update(testJob.id, { status: JobStatus.OPEN });
+      const hideContext: ModerationDecisionContext = {
+        itemId: 'mod-1',
+        decisionId: 'dec-3',
+        targetType: ModerationTargetType.JOB,
+        targetId: testJob.id,
+        decision: ModerationDecisionType.HIDE,
+        newStatus: ModerationStatus.HIDDEN,
+        reason: 'Nghi vấn vi phạm chính sách.',
+        proposedAction: null,
+        reviewerId: 'mod-user-1',
+      };
+      await moderationHandler.applyDecision(hideContext);
+
+      const hiddenJob = await jobRepo.findById(testJob.id);
+      expect(hiddenJob?.status).toBe(JobStatus.PAUSED);
+      expect(hiddenJob?.hiddenByModeration).toBe(true);
+
+      const approveContext: ModerationDecisionContext = {
+        itemId: 'mod-1',
+        decisionId: 'dec-4',
+        targetType: ModerationTargetType.JOB,
+        targetId: testJob.id,
+        decision: ModerationDecisionType.APPROVE,
+        newStatus: ModerationStatus.APPROVED,
+        reason: null,
+        proposedAction: null,
+        reviewerId: 'mod-user-1',
+      };
+      await moderationHandler.applyDecision(approveContext);
+
+      const unhiddenJob = await jobRepo.findById(testJob.id);
+      expect(unhiddenJob?.status).toBe(JobStatus.OPEN);
+      expect(unhiddenJob?.hiddenByModeration).toBe(false);
+    });
+
+    it('should integrate end-to-end via ModerationTargetHandlerRegistry', async () => {
+      const { ModerationTargetHandlerRegistry } = await import('../../../moderation/application/ports/moderation-target-handler.port');
+      const registry = new ModerationTargetHandlerRegistry();
+      registry.register(ModerationTargetType.JOB, moderationHandler);
+      const handler = registry.get(ModerationTargetType.JOB);
+      expect(handler).toBe(moderationHandler);
     });
   });
 });
