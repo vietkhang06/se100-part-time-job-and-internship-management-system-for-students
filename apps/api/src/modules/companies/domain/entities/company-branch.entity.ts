@@ -1,4 +1,4 @@
-import { CompanyBranchDto } from '@campusjob/contracts';
+import { CompanyBranchDto, PublicCompanyBranchDto } from '@campusjob/contracts';
 
 export interface CompanyBranchProps {
   id: string;
@@ -158,6 +158,20 @@ export class CompanyBranchEntity {
       isHeadquarter: this._isHeadquarter,
       createdAt: this._createdAt.toISOString(),
       updatedAt: this._updatedAt.toISOString(),
+    };
+  }
+  toPublicDto(): PublicCompanyBranchDto {
+    return {
+      id: this._id,
+      companyId: this._companyId,
+      branchName: this._branchName,
+      addressLine: this._addressLine,
+      ward: this._ward,
+      district: this._district,
+      city: this._city,
+      country: this._country,
+      phone: this._phone,
+      isHeadquarter: this._isHeadquarter,
     };
   }
 }

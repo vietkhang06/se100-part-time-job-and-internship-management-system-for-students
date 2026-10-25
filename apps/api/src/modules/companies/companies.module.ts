@@ -4,10 +4,13 @@ import { DatabaseModule } from '../../shared/database/database.module';
 import { StorageModule } from '../../shared/storage/storage.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { ModerationTargetHandlerRegistry } from '../moderation/application/ports/moderation-target-handler.port';
+import { ReviewSourcesRegistry } from '../reviews/application/ports/review-sources.port';
 
 import { CompaniesController } from './presentation/controllers/companies.controller';
 import { CompanyBranchesController } from './presentation/controllers/company-branches.controller';
 import { JobsController } from './presentation/controllers/jobs.controller';
+import { PublicJobsController } from './presentation/controllers/public-jobs.controller';
+import { PublicCompaniesController } from './presentation/controllers/public-companies.controller';
 
 import { GetCompanyProfileUseCase } from './application/use-cases/get-company-profile.use-case';
 import { UpdateCompanyProfileUseCase } from './application/use-cases/update-company-profile.use-case';
@@ -15,6 +18,8 @@ import { CreateCompanyUseCase } from './application/use-cases/create-company.use
 import { VerifyCompanyUseCase } from './application/use-cases/verify-company.use-case';
 import { ResubmitCompanyVerificationUseCase } from './application/use-cases/resubmit-company-verification.use-case';
 import { GetCompanyVerificationHistoryUseCase } from './application/use-cases/get-company-verification-history.use-case';
+import { SearchPublicCompaniesUseCase } from './application/use-cases/search-public-companies.use-case';
+import { GetPublicCompanyDetailUseCase } from './application/use-cases/get-public-company-detail.use-case';
 
 import { CreateBranchUseCase } from './application/use-cases/create-branch.use-case';
 import { ListBranchesUseCase } from './application/use-cases/list-branches.use-case';
@@ -31,6 +36,8 @@ import { ResumeJobPostingUseCase } from './application/use-cases/resume-job-post
 import { CloseJobPostingUseCase } from './application/use-cases/close-job-posting.use-case';
 import { SubmitJobPostingUseCase } from './application/use-cases/submit-job-posting.use-case';
 import { JobModerationTargetHandler } from './application/use-cases/job-moderation-target.handler';
+import { SearchPublicJobsUseCase } from './application/use-cases/search-public-jobs.use-case';
+import { GetPublicJobDetailUseCase } from './application/use-cases/get-public-job-detail.use-case';
 
 import { COMPANY_REPOSITORY_TOKEN } from './domain/repositories/company.repository.interface';
 import { COMPANY_MEMBER_REPOSITORY_TOKEN } from './domain/repositories/company-member.repository.interface';
@@ -46,10 +53,19 @@ import { PrismaCompanyBranchRepository } from './infrastructure/persistence/pris
 import { PrismaCompanyVerificationRepository } from './infrastructure/persistence/prisma-company-verification.repository';
 import { PrismaJobPostingRepository } from './infrastructure/persistence/prisma-job-posting.repository';
 import { ModerationQueueAdapter } from './infrastructure/adapters/moderation-queue.adapter';
+import { JobAccessSourceAdapter } from './infrastructure/adapters/job-access-source.adapter';
+import { CompanyDirectoryAdapter } from './infrastructure/adapters/company-directory.adapter';
+import { M04_JOB_SOURCE } from '../applications/m04.module';
 
 @Module({
   imports: [DatabaseModule, StorageModule, ModerationModule],
-  controllers: [CompaniesController, CompanyBranchesController, JobsController],
+  controllers: [
+    CompaniesController,
+    CompanyBranchesController,
+    JobsController,
+    PublicJobsController,
+    PublicCompaniesController,
+  ],
   providers: [
     GetCompanyProfileUseCase,
     UpdateCompanyProfileUseCase,
@@ -57,6 +73,8 @@ import { ModerationQueueAdapter } from './infrastructure/adapters/moderation-que
     VerifyCompanyUseCase,
     ResubmitCompanyVerificationUseCase,
     GetCompanyVerificationHistoryUseCase,
+    SearchPublicCompaniesUseCase,
+    GetPublicCompanyDetailUseCase,
     CreateBranchUseCase,
     ListBranchesUseCase,
     GetBranchDetailUseCase,
@@ -71,6 +89,10 @@ import { ModerationQueueAdapter } from './infrastructure/adapters/moderation-que
     CloseJobPostingUseCase,
     SubmitJobPostingUseCase,
     JobModerationTargetHandler,
+    SearchPublicJobsUseCase,
+    GetPublicJobDetailUseCase,
+    JobAccessSourceAdapter,
+    CompanyDirectoryAdapter,
     {
       provide: COMPANY_REPOSITORY_TOKEN,
       useClass: PrismaCompanyRepository,
@@ -99,6 +121,10 @@ import { ModerationQueueAdapter } from './infrastructure/adapters/moderation-que
       provide: JOB_MODERATION_QUEUE_PORT_TOKEN,
       useClass: ModerationQueueAdapter,
     },
+    {
+      provide: M04_JOB_SOURCE,
+      useExisting: JobAccessSourceAdapter,
+    },
   ],
   exports: [
     GetCompanyProfileUseCase,
@@ -107,6 +133,8 @@ import { ModerationQueueAdapter } from './infrastructure/adapters/moderation-que
     VerifyCompanyUseCase,
     ResubmitCompanyVerificationUseCase,
     GetCompanyVerificationHistoryUseCase,
+    SearchPublicCompaniesUseCase,
+    GetPublicCompanyDetailUseCase,
     CreateBranchUseCase,
     ListBranchesUseCase,
     GetBranchDetailUseCase,
@@ -121,6 +149,11 @@ import { ModerationQueueAdapter } from './infrastructure/adapters/moderation-que
     CloseJobPostingUseCase,
     SubmitJobPostingUseCase,
     JobModerationTargetHandler,
+    SearchPublicJobsUseCase,
+    GetPublicJobDetailUseCase,
+    JobAccessSourceAdapter,
+    CompanyDirectoryAdapter,
+    M04_JOB_SOURCE,
     COMPANY_REPOSITORY_TOKEN,
     COMPANY_MEMBER_REPOSITORY_TOKEN,
     COMPANY_BRANCH_REPOSITORY_TOKEN,
@@ -136,11 +169,20 @@ export class CompaniesModule implements OnModuleInit {
     private readonly handlerRegistry?: ModerationTargetHandlerRegistry,
     @Optional()
     private readonly jobHandler?: JobModerationTargetHandler,
+    @Optional()
+    private readonly reviewSourcesRegistry?: ReviewSourcesRegistry,
+    @Optional()
+    private readonly companyDirectoryAdapter?: CompanyDirectoryAdapter,
   ) {}
 
   onModuleInit() {
     if (this.handlerRegistry && this.jobHandler) {
       this.handlerRegistry.register(ModerationTargetType.JOB, this.jobHandler);
+    }
+    if (this.reviewSourcesRegistry && this.companyDirectoryAdapter) {
+      this.reviewSourcesRegistry.registerCompanyDirectory(
+        this.companyDirectoryAdapter,
+      );
     }
   }
 }
