@@ -220,6 +220,14 @@ describe('S4-M03-04: Employer Job Management API & FR-08 Validation', () => {
         }),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it('should reject update if deadline is in the past', async () => {
+      await expect(
+        updateJobUseCase.execute(ownerUserId, createdJobId, {
+          deadline: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 
   describe('List & Detail Job (S4-M03-04)', () => {
