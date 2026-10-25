@@ -365,6 +365,7 @@ export interface CvListItemDto {
   title: string;
   isDefault: boolean;
   fileUrl?: string | null;
+  fileAssetId?: string | null;
   skills: string[];
   createdAt: string;
   updatedAt: string;
@@ -440,6 +441,7 @@ export interface CvSnapshotDto {
   projects: ProjectItemDto[];
   certifications: CertificationItemDto[];
   fileUrl?: string | null;
+  fileAssetId?: string | null;
   capturedAt: string;
 }
 

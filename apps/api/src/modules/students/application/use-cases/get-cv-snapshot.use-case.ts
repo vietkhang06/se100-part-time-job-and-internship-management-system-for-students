@@ -82,6 +82,7 @@ export class GetCvSnapshotUseCase implements CvSnapshotSource {
       projects: cv.projects || [],
       certifications: cv.certifications || [],
       fileUrl: cv.fileUrl ?? null,
+      fileAssetId: cv.fileAssetId ?? null,
       capturedAt: new Date().toISOString(),
     };
 

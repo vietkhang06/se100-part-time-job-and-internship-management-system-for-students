@@ -12,7 +12,10 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  StreamableFile,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 
 export const CV_FILE_UPLOAD_LIMITS = {
@@ -77,6 +80,7 @@ import { UpdateCvUseCase } from '../../application/use-cases/update-cv.use-case'
 import { SetDefaultCvUseCase } from '../../application/use-cases/set-default-cv.use-case';
 import { DeleteCvUseCase } from '../../application/use-cases/delete-cv.use-case';
 import { UploadCvFileUseCase } from '../../application/use-cases/upload-cv-file.use-case';
+import { DownloadCvFileUseCase } from '../../application/use-cases/download-cv-file.use-case';
 
 /**
  * CvsController (M02 – CV Management UC31–UC35 / CV01–CV05)
@@ -100,6 +104,7 @@ export class CvsController {
     private readonly setDefaultCvUseCase: SetDefaultCvUseCase,
     private readonly deleteCvUseCase: DeleteCvUseCase,
     private readonly uploadCvFileUseCase: UploadCvFileUseCase,
+    private readonly downloadCvFileUseCase: DownloadCvFileUseCase,
   ) {}
 
   /**
@@ -141,6 +146,34 @@ export class CvsController {
   @ApiResponse({ status: 403, description: 'Không phải vai trò STUDENT' })
   async listCvs(@CurrentUser('id') userId: string): Promise<CvListResponseDto> {
     return this.listCvsUseCase.execute(userId);
+  }
+
+  /**
+   * UC32b / UC64–UC66 – Tải xuống tệp tài liệu CV (PDF/DOCX)
+   * GET /api/v1/students/cvs/:id/download
+   */
+  @Get(':id/download')
+  @Roles(UserRole.STUDENT, UserRole.EMPLOYER, UserRole.ADMIN, UserRole.MODERATOR)
+  @ApiOperation({ summary: 'Tải xuống tệp tài liệu CV (PDF/DOCX) thuộc sở hữu hoặc liên quan ứng tuyển' })
+  @ApiResponse({ status: 200, description: 'Trả về luồng nhị phân của tệp tài liệu' })
+  @ApiResponse({ status: 401, description: 'Chưa đăng nhập' })
+  @ApiResponse({ status: 403, description: 'Không có quyền sở hữu hoặc không có hồ sơ ứng tuyển liên quan' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy CV hoặc CV không có tệp đính kèm' })
+  async downloadCvFile(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('role') userRole: UserRole,
+    @Param('id') cvId: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const fileResult = await this.downloadCvFileUseCase.execute(userId, cvId, userRole);
+
+    res.set({
+      'Content-Type': fileResult.mimeType,
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(fileResult.fileName)}"`,
+      'Content-Length': fileResult.sizeBytes.toString(),
+    });
+
+    return new StreamableFile(fileResult.buffer);
   }
 
   /**
