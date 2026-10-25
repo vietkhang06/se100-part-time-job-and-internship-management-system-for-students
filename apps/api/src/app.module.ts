@@ -48,14 +48,28 @@ import { JobAccessSourceAdapter } from './modules/companies/infrastructure/adapt
     M04Module.register(
       {
         provide: M04_CV_SOURCE,
-        useFactory: (moduleRef: ModuleRef) =>
-          moduleRef.get(CvSnapshotSourceAdapter, { strict: false }),
+        useFactory: (moduleRef: ModuleRef) => {
+          return new Proxy({} as CvSnapshotSourceAdapter, {
+            get(_target, prop) {
+              const instance = moduleRef.get(CvSnapshotSourceAdapter, { strict: false });
+              const val = (instance as any)[prop];
+              return typeof val === 'function' ? val.bind(instance) : val;
+            },
+          });
+        },
         inject: [ModuleRef],
       },
       {
         provide: M04_JOB_SOURCE,
-        useFactory: (moduleRef: ModuleRef) =>
-          moduleRef.get(JobAccessSourceAdapter, { strict: false }),
+        useFactory: (moduleRef: ModuleRef) => {
+          return new Proxy({} as JobAccessSourceAdapter, {
+            get(_target, prop) {
+              const instance = moduleRef.get(JobAccessSourceAdapter, { strict: false });
+              const val = (instance as any)[prop];
+              return typeof val === 'function' ? val.bind(instance) : val;
+            },
+          });
+        },
         inject: [ModuleRef],
       },
     ),
