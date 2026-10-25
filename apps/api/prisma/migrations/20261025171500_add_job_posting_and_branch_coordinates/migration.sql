@@ -1,5 +1,5 @@
 -- MIGRATION PENDING M04/M05 CONFIRMATION — DO NOT MERGE
--- Migration for S3-M03-05 & S4-M03-03: JobPosting schema, FR-08 fields, status enums, branch coordinates
+-- Migration for S3-M03-05 & S4-M03-03: JobPosting schema, FR-08 fields, status enums, branch coordinates, composite branch FK
 
 -- CreateEnum
 CREATE TYPE "JobType" AS ENUM ('PART_TIME', 'INTERNSHIP', 'FULL_TIME');
@@ -71,11 +71,14 @@ CREATE INDEX "SavedJob_jobId_idx" ON "SavedJob"("jobId");
 -- CreateIndex
 CREATE UNIQUE INDEX "SavedJob_studentId_jobId_key" ON "SavedJob"("studentId", "jobId");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "CompanyBranch_id_companyId_key" ON "CompanyBranch"("id", "companyId");
+
 -- AddForeignKey
 ALTER TABLE "JobPosting" ADD CONSTRAINT "JobPosting_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "JobPosting" ADD CONSTRAINT "JobPosting_branchId_fkey" FOREIGN KEY ("branchId") REFERENCES "CompanyBranch"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "JobPosting" ADD CONSTRAINT "JobPosting_branchId_companyId_fkey" FOREIGN KEY ("branchId", "companyId") REFERENCES "CompanyBranch"("id", "companyId") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "SavedJob" ADD CONSTRAINT "SavedJob_jobId_fkey" FOREIGN KEY ("jobId") REFERENCES "JobPosting"("id") ON DELETE CASCADE ON UPDATE CASCADE;

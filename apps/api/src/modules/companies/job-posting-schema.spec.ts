@@ -89,7 +89,7 @@ describe('S3-M03-05: JobPosting Schema, Contracts & Integrity', () => {
   describe('Branch & Company Relation Integrity', () => {
     it('should enforce onDelete: Restrict on CompanyBranch relation to prevent deleting branch in use', () => {
       expect(schemaContent).toMatch(
-        /branch\s+CompanyBranch\s+@relation\(fields:\s*\[branchId\],\s*references:\s*\[id\],\s*onDelete:\s*Restrict\)/,
+        /branch\s+CompanyBranch\s+@relation\(fields:\s*\[branchId,\s*companyId\],\s*references:\s*\[id,\s*companyId\],\s*onDelete:\s*Restrict\)/,
       );
     });
 
@@ -101,6 +101,32 @@ describe('S3-M03-05: JobPosting Schema, Contracts & Integrity', () => {
 
     it('should enforce SavedJob unique constraint on [studentId, jobId]', () => {
       expect(schemaContent).toMatch(/@@unique\(\[studentId,\s*jobId\]\)/);
+    });
+
+    it('should enforce composite unique constraint on CompanyBranch(id, companyId) and composite FK on JobPosting', () => {
+      // 1. CompanyBranch must define @@unique([id, companyId])
+      const branchMatch = schemaContent.match(/model\s+CompanyBranch\s+\{([\s\S]*?)\}/);
+      expect(branchMatch).not.toBeNull();
+      expect(branchMatch![1]).toContain('@@unique([id, companyId])');
+
+      // 2. JobPosting must reference CompanyBranch via (branchId, companyId) -> (id, companyId)
+      const jobPostingMatch = schemaContent.match(/model\s+JobPosting\s+\{([\s\S]*?)\}/);
+      expect(jobPostingMatch).not.toBeNull();
+      expect(jobPostingMatch![1]).toMatch(
+        /@relation\(fields:\s*\[branchId,\s*companyId\],\s*references:\s*\[id,\s*companyId\],\s*onDelete:\s*Restrict\)/,
+      );
+    });
+
+    it('should prove at DB/schema level that a JobPosting cannot reference a branch belonging to another company (F1)', () => {
+      // Because the foreign key constraint requires both branchId AND companyId to match a single record
+      // in CompanyBranch(id, companyId), a JobPosting with companyId "X" and branchId "Y" (where branch Y
+      // belongs to company "Z") will fail the DB foreign key constraint:
+      // (branchId, companyId) -> ("Y", "X") does not exist in CompanyBranch where CompanyBranch("Y", "Z").
+      const jobPostingMatch = schemaContent.match(/model\s+JobPosting\s+\{([\s\S]*?)\}/);
+      expect(jobPostingMatch).not.toBeNull();
+      expect(jobPostingMatch![1]).toMatch(
+        /@relation\(fields:\s*\[branchId,\s*companyId\],\s*references:\s*\[id,\s*companyId\],/,
+      );
     });
   });
 });

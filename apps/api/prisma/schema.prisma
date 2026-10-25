@@ -439,6 +439,7 @@ model CompanyBranch {
   company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   jobPostings   JobPosting[]
 
+  @@unique([id, companyId])
   @@index([companyId])
   @@index([city])
 }
@@ -747,7 +748,7 @@ model JobPosting {
   updatedAt          DateTime      @updatedAt
 
   company            Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  branch             CompanyBranch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  branch            CompanyBranch @relation(fields: [branchId, companyId], references: [id, companyId], onDelete: Restrict)
   savedJobs          SavedJob[]
 
   @@index([companyId])
