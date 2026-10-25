@@ -1,11 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { JobStatus, JobType } from '@campusjob/contracts';
+import { CompanyVerificationStatus, JobStatus, JobType } from '@campusjob/contracts';
 import { PrismaService } from '../../../../shared/database/prisma.service';
 import { JobPostingEntity } from '../../domain/entities/job-posting.entity';
 import {
   CreateJobPostingData,
   IJobPostingRepository,
+  PublicJobWithDetails,
+  SearchPublicJobsOptions,
   UpdateJobPostingData,
 } from '../../domain/repositories/job-posting.repository.interface';
 import { IJobBranchUsageChecker } from '../../domain/ports/job-branch-usage-checker.port';
@@ -159,5 +161,143 @@ export class PrismaJobPostingRepository
     if (count === 0) {
       throw new Error(`Chi nhánh ${branchId} không thuộc doanh nghiệp ${companyId}`);
     }
+  }
+
+  /**
+   * S5-M03-03: Tìm kiếm tin tuyển dụng công khai với Shared Visibility Predicate
+   */
+  async searchPublic(
+    options: SearchPublicJobsOptions,
+  ): Promise<{ jobs: PublicJobWithDetails[]; total: number }> {
+    const now = new Date();
+    const page = Math.max(1, options.page ?? 1);
+    const limit = Math.min(Math.max(1, options.limit ?? 10), 50);
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.JobPostingWhereInput = {
+      status: JobStatus.OPEN as any,
+      deadline: { gt: now },
+      hiddenByModeration: false,
+      company: {
+        verificationStatus: CompanyVerificationStatus.VERIFIED as any,
+      },
+    };
+
+    if (options.keyword) {
+      where.OR = [
+        { title: { contains: options.keyword, mode: 'insensitive' } },
+        { description: { contains: options.keyword, mode: 'insensitive' } },
+      ];
+    }
+
+    if (options.industry) {
+      where.industry = { equals: options.industry, mode: 'insensitive' };
+    }
+
+    if (options.type) {
+      where.type = options.type as any;
+    }
+
+    if (options.city) {
+      where.branch = {
+        city: { contains: options.city, mode: 'insensitive' },
+      };
+    }
+
+    if (options.schedule) {
+      where.schedule = { contains: options.schedule, mode: 'insensitive' };
+    }
+
+    const andConditions: Prisma.JobPostingWhereInput[] = [];
+
+    if (options.salaryMin !== undefined) {
+      andConditions.push({
+        OR: [
+          { isSalaryNegotiable: true },
+          { salaryMax: { gte: new Prisma.Decimal(options.salaryMin) } },
+          { salaryMin: { gte: new Prisma.Decimal(options.salaryMin) } },
+        ],
+      });
+    }
+
+    if (options.salaryMax !== undefined) {
+      andConditions.push({
+        OR: [
+          { isSalaryNegotiable: true },
+          { salaryMin: { lte: new Prisma.Decimal(options.salaryMax) } },
+        ],
+      });
+    }
+
+    if (andConditions.length > 0) {
+      where.AND = andConditions;
+    }
+
+    const [rows, total] = await Promise.all([
+      this.prisma.jobPosting.findMany({
+        where,
+        include: {
+          company: true,
+          branch: true,
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take: limit,
+      }),
+      this.prisma.jobPosting.count({ where }),
+    ]);
+
+    return {
+      jobs: rows.map((r) => ({
+        job: this.toDomain(r),
+        companyName: r.company?.name ?? 'Unknown Company',
+        companyLogoUrl: r.company?.logoUrl ?? null,
+        branchCity: r.branch?.city ?? '',
+        branchName: r.branch?.branchName ?? '',
+      })),
+      total,
+    };
+  }
+
+  /**
+   * S5-M03-03: Chi tiết tin tuyển dụng công khai (404 nếu không đủ điều kiện công khai)
+   */
+  async findPublicById(id: string): Promise<PublicJobWithDetails | null> {
+    const row = await this.prisma.jobPosting.findUnique({
+      where: { id },
+      include: {
+        company: true,
+        branch: true,
+      },
+    });
+
+    if (!row) return null;
+
+    const now = new Date();
+    if (row.deadline.getTime() <= now.getTime()) {
+      if (row.status !== JobStatus.CLOSED) {
+        await this.prisma.jobPosting.update({
+          where: { id },
+          data: { status: JobStatus.CLOSED as any },
+        });
+      }
+      return null;
+    }
+
+    if (
+      row.status !== JobStatus.OPEN ||
+      row.hiddenByModeration ||
+      row.company?.verificationStatus !== CompanyVerificationStatus.VERIFIED
+    ) {
+      return null;
+    }
+
+    return {
+      job: this.toDomain(row),
+      companyName: row.company?.name ?? 'Unknown Company',
+      companyLogoUrl: row.company?.logoUrl ?? null,
+      branchCity: row.branch?.city ?? '',
+      branchName: row.branch?.branchName ?? '',
+    };
   }
 }

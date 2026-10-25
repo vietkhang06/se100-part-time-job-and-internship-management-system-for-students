@@ -1,4 +1,4 @@
-import { JobStatus, JobType, JobPostingDto } from '@campusjob/contracts';
+import { JobStatus, JobType, JobPostingDto, PublicJobPostingDto } from '@campusjob/contracts';
 
 export interface JobPostingProps {
   id: string;
@@ -159,6 +159,34 @@ export class JobPostingEntity {
       hiddenByModeration: this.hiddenByModeration,
       createdAt: this.createdAt.toISOString(),
       updatedAt: this.updatedAt.toISOString(),
+    };
+  }
+  toPublicDto(extras?: { companyName?: string; companyLogoUrl?: string | null; branchCity?: string; branchName?: string }): PublicJobPostingDto {
+    return {
+      id: this.id,
+      companyId: this.companyId,
+      branchId: this.branchId,
+      title: this.title,
+      description: this.description,
+      industry: this.industry,
+      type: this.type,
+      skills: this.skills,
+      quantity: this.quantity,
+      salary: this.salary,
+      salaryMin: this.salaryMin,
+      salaryMax: this.salaryMax,
+      isSalaryNegotiable: this.isSalaryNegotiable,
+      schedule: this.schedule,
+      benefits: this.benefits,
+      deadline: this.deadline.toISOString(),
+      status: this.status,
+      viewCount: this.viewCount,
+      createdAt: this.createdAt.toISOString(),
+      updatedAt: this.updatedAt.toISOString(),
+      companyName: extras?.companyName,
+      companyLogoUrl: extras?.companyLogoUrl,
+      branchCity: extras?.branchCity,
+      branchName: extras?.branchName,
     };
   }
 }

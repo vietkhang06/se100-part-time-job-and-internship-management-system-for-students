@@ -46,6 +46,26 @@ export interface UpdateJobPostingData {
   hiddenByModeration?: boolean;
 }
 
+export interface SearchPublicJobsOptions {
+  keyword?: string;
+  industry?: string;
+  city?: string;
+  type?: JobType;
+  salaryMin?: number;
+  salaryMax?: number;
+  schedule?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface PublicJobWithDetails {
+  job: JobPostingEntity;
+  companyName: string;
+  companyLogoUrl?: string | null;
+  branchCity: string;
+  branchName: string;
+}
+
 export interface IJobPostingRepository {
   create(data: CreateJobPostingData): Promise<JobPostingEntity>;
   findById(id: string): Promise<JobPostingEntity | null>;
@@ -55,4 +75,8 @@ export interface IJobPostingRepository {
   ): Promise<{ jobs: JobPostingEntity[]; total: number }>;
   update(id: string, data: UpdateJobPostingData): Promise<JobPostingEntity>;
   countByBranchId(branchId: string): Promise<number>;
+  searchPublic(
+    options: SearchPublicJobsOptions,
+  ): Promise<{ jobs: PublicJobWithDetails[]; total: number }>;
+  findPublicById(id: string): Promise<PublicJobWithDetails | null>;
 }

@@ -55,7 +55,7 @@ import {
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.EMPLOYER)
-@Controller(['jobs', 'employer/jobs'])
+@Controller('employer/jobs')
 export class JobsController {
   constructor(
     private readonly createJobUseCase: CreateJobPostingUseCase,
