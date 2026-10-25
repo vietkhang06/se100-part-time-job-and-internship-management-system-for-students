@@ -38,6 +38,23 @@ export enum StudentProfileErrorCode {
   FORBIDDEN = 'FORBIDDEN',
 }
 
+
+export enum CompanyErrorCode {
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  COMPANY_NOT_FOUND = 'COMPANY_NOT_FOUND',
+  EMPLOYER_HAS_NO_COMPANY = 'EMPLOYER_HAS_NO_COMPANY',
+  TAX_ID_ALREADY_EXISTS = 'TAX_ID_ALREADY_EXISTS',
+  UNAUTHORIZED = 'UNAUTHORIZED',
+  FORBIDDEN = 'FORBIDDEN',
+  INVALID_VERIFICATION_STATE = 'INVALID_VERIFICATION_STATE',
+  DOCUMENTS_REQUIRED = 'DOCUMENTS_REQUIRED',
+  REJECTION_REASON_REQUIRED = 'REJECTION_REASON_REQUIRED',
+  BRANCH_NOT_FOUND = 'BRANCH_NOT_FOUND',
+  BRANCH_IN_USE_CANNOT_DELETE = 'BRANCH_IN_USE_CANNOT_DELETE',
+  INVALID_COORDINATES = 'INVALID_COORDINATES',
+  CROSS_COMPANY_BRANCH_FORBIDDEN = 'CROSS_COMPANY_BRANCH_FORBIDDEN',
+}
+
 export enum CvErrorCode {
   VALIDATION_ERROR = 'VALIDATION_ERROR',
   CV_NOT_FOUND = 'CV_NOT_FOUND',
@@ -52,7 +69,7 @@ export interface ApiErrorResponse {
   statusCode: number;
   message: string | string[];
   error: string;
-  code?: AuthErrorCode | StudentProfileErrorCode | CvErrorCode | (string & {});
+  code?: AuthErrorCode | StudentProfileErrorCode | CvErrorCode | CompanyErrorCode | (string & {});
   timestamp: string;
   path: string;
   correlationId?: string;
@@ -528,6 +545,7 @@ export interface CompanyDto {
   id: string;
   name: string;
   legalName?: string | null;
+  representativeName?: string | null;
   taxId: string;
   website?: string | null;
   industry?: string | null;

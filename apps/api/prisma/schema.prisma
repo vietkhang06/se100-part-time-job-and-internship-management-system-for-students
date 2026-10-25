@@ -392,6 +392,8 @@ model Company {
   members             CompanyMember[]
   branches             CompanyBranch[]
   verifications        CompanyVerification[]
+  jobPostings          JobPosting[]
+  representativeName   String?
 
   @@index([name])
   @@index([taxId])
@@ -428,11 +430,14 @@ model CompanyBranch {
   country       String   @default("Vietnam")
   phone          String?
   email          String?
+  latitude      Float?
+  longitude     Float?
   isHeadquarter Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobPostings   JobPosting[]
 
   @@index([companyId])
   @@index([city])
@@ -700,4 +705,65 @@ model ReviewReply {
   employerId String
   content    String
   createdAt  DateTime @default(now())
+}
+
+// ============================================================================
+// M03 · JobPosting & SavedJob (C-07)
+// MIGRATION PENDING M04/M05 CONFIRMATION — DO NOT MERGE
+// ============================================================================
+enum JobType {
+  PART_TIME
+  INTERNSHIP
+  FULL_TIME
+}
+
+enum JobStatus {
+  PENDING_APPROVAL
+  OPEN
+  PAUSED
+  CLOSED
+}
+
+model JobPosting {
+  id                 String        @id @default(uuid())
+  companyId          String
+  branchId           String
+  title              String
+  description        String
+  industry           String
+  type               JobType
+  skills             String[]      @default([])
+  quantity           Int
+  salary             String?
+  salaryMin          Decimal?      @db.Decimal(12, 2)
+  salaryMax          Decimal?      @db.Decimal(12, 2)
+  isSalaryNegotiable Boolean       @default(false)
+  schedule           String?
+  benefits           String?
+  deadline           DateTime
+  status             JobStatus     @default(PENDING_APPROVAL)
+  viewCount          Int           @default(0)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  company            Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch             CompanyBranch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  savedJobs          SavedJob[]
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([status])
+  @@index([deadline])
+}
+
+model SavedJob {
+  id        String     @id @default(uuid())
+  studentId String
+  jobId     String
+  job       JobPosting @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+
+  @@unique([studentId, jobId])
+  @@index([studentId])
+  @@index([jobId])
 }
