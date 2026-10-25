@@ -123,7 +123,11 @@ describe('CloseReportWithoutSanctionUseCase', () => {
       expect.objectContaining({ action: 'REPORT_CLOSED_WITHOUT_SANCTION', entityId: 'r1' }),
     );
     expect(notifications.publish).toHaveBeenCalledWith(
-      expect.objectContaining({ eventType: NotificationEventType.REPORT_RESOLVED, recipientId: 'rep1' }),
+      expect.objectContaining({
+        eventType: NotificationEventType.REPORT_RESOLVED,
+        recipientId: 'rep1',
+        payload: expect.objectContaining({ reportId: 'r1', outcome: 'CLOSED_WITHOUT_SANCTION' }),
+      }),
     );
   });
 

@@ -207,12 +207,20 @@ export class ApplySanctionUseCase {
       this.notifications.publish({
         eventType: NotificationEventType.SANCTION_APPLIED,
         recipientId: recipientUserId,
-        payload: { sanctionType: describeSanction(type, endsAt), reason },
+        // Liên kết thông báo với đúng đối tượng (chế tài, báo cáo) để giao diện điều hướng được.
+        payload: {
+          sanctionType: describeSanction(type, endsAt),
+          sanctionTypeCode: type,
+          sanctionId,
+          reportId,
+          reason,
+        },
         dedupeKey: `${NotificationEventType.SANCTION_APPLIED}:${sanctionId}`,
       }),
       this.notifications.publish({
         eventType: NotificationEventType.REPORT_RESOLVED,
         recipientId: reporterId,
+        payload: { reportId, sanctionId, outcome: 'SANCTIONED' },
         dedupeKey: `${NotificationEventType.REPORT_RESOLVED}:${reportId}`,
       }),
     ]);
