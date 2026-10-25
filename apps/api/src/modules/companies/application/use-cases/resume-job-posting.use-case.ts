@@ -78,6 +78,15 @@ export class ResumeJobPostingUseCase {
       return { job: job.toDto() }; // Idempotent
     }
 
+    if (job.hiddenByModeration) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        message: 'Tin tuyển dụng đã bị kiểm duyệt viên ẩn (HIDE). Nhà tuyển dụng không thể tự ý mở lại khi chưa có quyết định gỡ ẩn.',
+        error: 'Forbidden',
+        code: JobErrorCode.JOB_HIDDEN_BY_MODERATION,
+      });
+    }
+
     if (job.status !== JobStatus.PAUSED) {
       throw new BadRequestException({
         statusCode: 400,

@@ -238,10 +238,7 @@ describe('S2-M03-04: Job Lifecycle Transitions & Expiration Rules', () => {
       expect(reloaded?.status).toBe(JobStatus.CLOSED);
     });
 
-    it('documents the HIDE bypass limitation: without schema support for moderator-hidden flag, PAUSED jobs can be resumed if active (F5 BLOCKER documented)', async () => {
-      // Khi một tin bị moderator HIDE, status trở thành PAUSED.
-      // Do schema không có cột `hiddenByModerator` hay `isModeratorHidden`,
-      // use-case resume hiện tại chỉ thấy status = PAUSED và cho phép resume nếu công ty active và hạn nộp còn.
+    it('should reject resume with ForbiddenException if job was hidden by moderation (hiddenByModeration flag prevents bypass)', async () => {
       const moderatorHiddenJob = await jobRepo.create({
         companyId,
         branchId,
@@ -252,12 +249,20 @@ describe('S2-M03-04: Job Lifecycle Transitions & Expiration Rules', () => {
         skills: ['Java'],
         quantity: 1,
         deadline: new Date(Date.now() + 7 * 86400000),
-        status: JobStatus.PAUSED, // Set by moderator HIDE
+        status: JobStatus.PAUSED,
       });
 
-      const res = await resumeJobUseCase.execute(ownerUserId, moderatorHiddenJob.id);
-      expect(res.job.status).toBe(JobStatus.OPEN);
-      // Đây là BLOCKER về mặt Schema đã được ghi nhận trong báo cáo F5.
+      await jobRepo.update(moderatorHiddenJob.id, {
+        hiddenByModeration: true,
+      });
+
+      await expect(
+        resumeJobUseCase.execute(ownerUserId, moderatorHiddenJob.id),
+      ).rejects.toThrow(ForbiddenException);
+
+      const reloaded = await jobRepo.findById(moderatorHiddenJob.id);
+      expect(reloaded?.status).toBe(JobStatus.PAUSED);
+      expect(reloaded?.hiddenByModeration).toBe(true);
     });
 
     it('should block resume if company is not active/verified (Active Company Gate)', async () => {
