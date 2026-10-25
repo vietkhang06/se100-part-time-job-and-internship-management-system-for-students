@@ -385,7 +385,7 @@ model Company {
   email               String?
   phone               String?
   address              String?
-  verificationStatus String
+  verificationStatus   CompanyVerificationStatus @default(UNVERIFIED)
   createdAt           DateTime                  @default(now())
   updatedAt           DateTime                  @updatedAt
 

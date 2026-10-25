@@ -232,7 +232,7 @@ export class CompaniesController {
    * S4-M03-02: Quyết định xác thực doanh nghiệp (CHỈ ADMIN ra quyết định)
    * PATCH /api/v1/companies/:id/verification-status
    */
-  @Patch(':id/verification-status')
+  @Patch([':id/verification', ':id/verification-status'])
   @HttpCode(HttpStatus.OK)
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Chỉ Admin duyệt hoặc từ chối xác thực doanh nghiệp' })

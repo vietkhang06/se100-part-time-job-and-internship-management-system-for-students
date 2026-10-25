@@ -72,7 +72,8 @@ export class PrismaCompanyRepository implements ICompanyRepository {
         email: data.email ?? null,
         phone: data.phone ?? null,
         address: data.address ?? null,
-        verificationStatus: data.verificationStatus,
+        verificationStatus:
+          data.verificationStatus as CompanyVerificationStatus,
       },
     });
     return this.toDomain(created);
