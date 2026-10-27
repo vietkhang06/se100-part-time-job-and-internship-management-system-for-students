@@ -803,3 +803,41 @@ export interface CompanyReviewListDto {
   summary: ReviewSummaryDto;
 }
 
+// ============================================================================
+// M05 · Admin Overview (UC54)
+// ============================================================================
+export enum OverviewGroupKey {
+  USERS = 'USERS',
+  COMPANIES = 'COMPANIES',
+  JOBS = 'JOBS',
+  APPLICATIONS = 'APPLICATIONS',
+  REPORTS = 'REPORTS',
+}
+
+export enum OverviewGroupStatus {
+  AVAILABLE = 'AVAILABLE',
+  /** Chưa có nguồn dữ liệu (module nguồn chưa sẵn sàng) hoặc truy vấn lỗi: không hiển thị số giả. */
+  UNAVAILABLE = 'UNAVAILABLE',
+}
+
+export interface OverviewBreakdownItemDto {
+  key: string;
+  label: string;
+  count: number;
+}
+
+export interface OverviewGroupDto {
+  key: OverviewGroupKey;
+  label: string;
+  status: OverviewGroupStatus;
+  /** null khi UNAVAILABLE. */
+  total: number | null;
+  breakdownLabel: string | null;
+  breakdown: OverviewBreakdownItemDto[];
+  unavailableReason: string | null;
+}
+
+export interface AdminOverviewDto {
+  generatedAt: string;
+  groups: OverviewGroupDto[];
+}
