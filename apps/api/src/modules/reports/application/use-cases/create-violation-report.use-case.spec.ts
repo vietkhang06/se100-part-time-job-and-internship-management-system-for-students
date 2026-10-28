@@ -74,7 +74,11 @@ describe('CreateViolationReportUseCase', () => {
       }),
     );
     expect(notifications.publish).toHaveBeenCalledWith(
-      expect.objectContaining({ eventType: NotificationEventType.REPORT_RECEIVED, recipientId: 'stu1' }),
+      expect.objectContaining({
+        eventType: NotificationEventType.REPORT_RECEIVED,
+        recipientId: 'stu1',
+        payload: { reportId: 'r1' },
+      }),
     );
     expect(queue.enqueue).toHaveBeenCalledWith(
       expect.objectContaining({ targetType: ModerationTargetType.REPORT, targetId: 'r1' }),

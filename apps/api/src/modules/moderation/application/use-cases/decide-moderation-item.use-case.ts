@@ -185,7 +185,12 @@ export class DecideModerationItemUseCase {
       await this.notifications.publish({
         eventType,
         recipientId: item.submitterId,
-        payload: { jobTitle: item.summary ?? undefined, jobId: item.targetId, reason: decision.reason ?? undefined },
+        payload: {
+          jobTitle: item.summary ?? undefined,
+          jobId: item.targetId,
+          moderationItemId: item.id,
+          reason: decision.reason ?? undefined,
+        },
         dedupeKey: `${eventType}:${item.targetId}:${decision.id}`,
       });
     } catch (err: any) {

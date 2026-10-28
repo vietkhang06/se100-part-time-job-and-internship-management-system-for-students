@@ -122,6 +122,7 @@ export class CreateViolationReportUseCase {
       await this.notifications.publish({
         eventType: NotificationEventType.REPORT_RECEIVED,
         recipientId: reporterId,
+        payload: { reportId },
         dedupeKey: `${NotificationEventType.REPORT_RECEIVED}:${reportId}`,
       });
     } catch (err: any) {

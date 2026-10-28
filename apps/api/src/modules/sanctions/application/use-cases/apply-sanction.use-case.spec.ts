@@ -77,6 +77,19 @@ describe('ApplySanctionUseCase', () => {
     expect(notifications.publish.mock.calls[1][0].recipientId).toBe('rep1');
   });
 
+  it('links each notification to the right objects (report and sanction ids)', async () => {
+    await useCase.execute(admin, input(), now);
+
+    const toTarget = notifications.publish.mock.calls[0][0];
+    const toReporter = notifications.publish.mock.calls[1][0];
+    expect(toTarget.payload).toEqual(
+      expect.objectContaining({ reportId: 'r1', sanctionId: expect.any(String), sanctionTypeCode: S.WARNING }),
+    );
+    expect(toReporter.payload).toEqual(
+      expect.objectContaining({ reportId: 'r1', sanctionId: toTarget.payload.sanctionId, outcome: 'SANCTIONED' }),
+    );
+  });
+
   it('applies a time-limited application lock', async () => {
     await useCase.execute(admin, input({ type: S.APPLICATION_LOCK, durationDays: 7 }), now);
     expect(repo.create).toHaveBeenCalledWith(
