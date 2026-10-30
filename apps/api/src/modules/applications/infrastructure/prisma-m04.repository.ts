@@ -14,6 +14,24 @@ export class PrismaM04Repository implements M04Repository {
   }): Promise<ApplicationRecord> {
     try {
       const row = await this.prisma.$transaction(async (tx) => {
+        if (typeof (tx as any).$executeRaw === 'function') {
+          try {
+            await (tx as any).$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.studentId}))`;
+          } catch {
+            // Safe fallback if raw advisory lock is unsupported by driver/mock
+          }
+        }
+
+        const activeCount = await tx.application.count({
+          where: {
+            studentId: input.studentId,
+            status: { in: ['SUBMITTED', 'REVIEWING', 'INTERVIEW_SCHEDULED'] },
+          },
+        });
+        if (activeCount >= 5) {
+          throw new M04WorkflowError('QUOTA_EXCEEDED');
+        }
+
         const application = await tx.application.create({ data: {
           studentId: input.studentId, jobId: input.jobId, cvId: input.cvId,
           cvSnapshot: input.cvSnapshot as unknown as Prisma.InputJsonValue,
