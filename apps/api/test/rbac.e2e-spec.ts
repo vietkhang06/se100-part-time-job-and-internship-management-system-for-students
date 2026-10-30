@@ -402,6 +402,75 @@ describe('RBAC Authorization (e2e)', () => {
     });
   });
 
+  describe('Production user lookup authorization', () => {
+    async function userId(key: keyof typeof users): Promise<string> {
+      const user = await prisma.user.findUnique({ where: { email: users[key].email }, select: { id: true } });
+      if (!user) throw new Error(`Missing seeded user ${key}`);
+      return user.id;
+    }
+
+    it('rejects anonymous and invalid JWT requests', async () => {
+      const id = await userId('student');
+      await request(app.getHttpServer()).get(`/api/v1/users/${id}`).expect(401);
+      const invalid = await request(app.getHttpServer())
+        .get(`/api/v1/users/${id}`)
+        .set('Authorization', 'Bearer invalid-token')
+        .expect(401);
+      expect(invalid.body.code).toBe(AuthErrorCode.UNAUTHORIZED);
+    });
+
+    it('allows a user to view their own public profile', async () => {
+      const id = await userId('student');
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/users/${id}`)
+        .set('Authorization', `Bearer ${users.student.token}`)
+        .expect(200);
+      expect(response.body).toEqual({
+        id,
+        email: users.student.email,
+        fullName: 'RBAC STUDENT',
+        role: UserRole.STUDENT,
+        status: UserStatus.ACTIVE,
+        emailVerified: true,
+      });
+    });
+
+    it.each(['student', 'employer', 'moderator'] as const)(
+      'denies %s from viewing another account without trusting client role fields',
+      async (key) => {
+        const targetId = await userId('employer');
+        const response = await request(app.getHttpServer())
+          .get(`/api/v1/users/${targetId}`)
+          .set('Authorization', `Bearer ${users[key].token}`)
+          .set('x-role', 'ADMIN')
+          .set('x-user-role', 'ADMIN')
+          .query({ role: 'ADMIN' })
+          .expect(403);
+        expect(response.body.code).toBe(AuthErrorCode.FORBIDDEN);
+      },
+    );
+
+    it('allows ADMIN to view another account and returns only the public DTO', async () => {
+      const targetId = await userId('student');
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/users/${targetId}`)
+        .set('Authorization', `Bearer ${users.admin.token}`)
+        .expect(200);
+      expect(Object.keys(response.body).sort()).toEqual(
+        ['email', 'emailVerified', 'fullName', 'id', 'role', 'status'].sort(),
+      );
+    });
+
+    it('returns 404 for an authorized request to a missing account', async () => {
+      const missingId = '00000000-0000-4000-8000-000000000001';
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/users/${missingId}`)
+        .set('Authorization', `Bearer ${users.admin.token}`)
+        .expect(404);
+      expect(response.body.statusCode).toBe(404);
+    });
+  });
+
   describe('Account status checks precedence before role authorization', () => {
     it('should reject suspended user with 403 ACCOUNT_SUSPENDED even on valid token', async () => {
       // Manually issue a token for the suspended user by temporarily activating, logging in, then suspending

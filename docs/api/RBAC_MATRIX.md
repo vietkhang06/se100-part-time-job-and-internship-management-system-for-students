@@ -34,7 +34,7 @@ Theo tài liệu kiến trúc `docs/ROLES_AND_STATES.md` và mã nguồn enum `U
 | `POST` | `/api/v1/auth/resend-verification` | Public | Khách mang email chưa xác minh | 400 `VALIDATION_ERROR` nếu thiếu email | N/A | FR-03, Contract C-01 |
 | `POST` | `/api/v1/auth/forgot-password` | Public | Khách mang email | 400 `VALIDATION_ERROR` nếu thiếu email | N/A | FR-04, Contract C-01 |
 | `POST` | `/api/v1/auth/reset-password` | Public | Khách mang token đặt lại mật khẩu | 400 `VALIDATION_ERROR` nếu thiếu token | N/A | FR-04, Contract C-01 |
-| `GET` | `/api/v1/users/:id` | Công khai / Tra cứu | Chưa gán giới hạn vai trò (Chờ FR-05 / FR-19) | N/A (Trả về 200 / 404) | N/A | Khởi tạo ban đầu (Pending decision) |
+| `GET` | `/api/v1/users/:id` | Bearer Token (`JwtAuthGuard`) | Mọi vai trò đã xác thực cho tài khoản của mình; `ADMIN` được xem mọi tài khoản | 401 `UNAUTHORIZED` khi thiếu/sai token; 403 `FORBIDDEN` khi không phải admin và xem tài khoản khác | 404 nếu người gọi được phép nhưng tài khoản đích không tồn tại | S3-M01-03 |
 
 ### 2.2 Quy hoạch Phân quyền cho các Endpoint thuộc Scope Baseline (Planned FR Endpoints)
 
@@ -144,6 +144,6 @@ Quá trình kiểm soát quyền truy cập tuân theo mô hình 2 lớp bảo v
 
 1. **Bản chất hiện thực hóa:** Hiện thực hóa RBAC trong task S2-M01-02 là một **Cơ chế phân quyền tái sử dụng (Reusable Authorization Mechanism)**, hoàn chỉnh về mặt hạ tầng (`@Roles`, `RolesGuard`, mã lỗi `FORBIDDEN`, unit tests, E2E tests).
 2. **Trạng thái đăng ký Guard:** `RolesGuard` được khai báo provider và export tại `AuthModule`. Guard **không** đăng ký dạng `APP_GUARD` toàn cục (đúng theo quy ước kiến trúc NestJS của dự án: áp dụng tường minh qua `@UseGuards(JwtAuthGuard, RolesGuard)`).
-3. **Trạng thái kích hoạt trên Route sản xuất:** **Chưa kích hoạt trên bất kỳ route sản xuất nào**, vì toàn bộ các endpoint sản xuất hiện có trong repository đều là Public hoặc cho phép tất cả vai trò đã đăng nhập (`/auth/me`, `/auth/logout-all`). Endpoint `GET /api/v1/users/:id` là mã scaffold ban đầu chưa có yêu cầu phân quyền được phê duyệt.
-4. **Phân biệt Route kiểm thử E2E:** 21 test case trong `apps/api/test/rbac.e2e-spec.ts` kiểm thử trên 2 controller thử nghiệm (`RbacTestController`, `RbacPrecedenceTestController`) gắn vào fixture test, tương tác với tài khoản thật và token thật sinh ra từ PostgreSQL qua endpoint sản xuất `POST /api/v1/auth/login`.
-5. **Kích hoạt thực tế trong tương lai:** Việc kích hoạt `@Roles(...)` trên các route sản xuất sẽ diễn ra tại các task nghiệp vụ tương ứng (S2-M01-03+, FR-06, FR-07, FR-09, FR-16, FR-19) khi các controller sản xuất đó được triển khai.
+3. **Trạng thái kích hoạt trên Route sản xuất:** `GET /api/v1/users/:id` yêu cầu JWT hợp lệ. Người dùng chỉ xem được tài khoản có ID trùng với `AuthContext.id`; `ADMIN` có thể xem tài khoản khác. Từ chối cross-account cho vai trò không phải admin diễn ra trước truy vấn repository.
+4. **Phân biệt Route kiểm thử E2E:** Các ca hợp đồng trong `apps/api/test/rbac.e2e-spec.ts` kiểm thử trên controller fixture; nhóm Production user lookup trong cùng suite gọi route `UsersController` thật của `AppModule` với JWT thật được cấp qua `POST /api/v1/auth/login`.
+5. **Response contract:** Route chỉ trả về `id`, `email`, `fullName`, `role`, `status`, và `emailVerified`; không trả về thông tin xác thực hoặc số điện thoại.
