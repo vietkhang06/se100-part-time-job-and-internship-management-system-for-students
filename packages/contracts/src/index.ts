@@ -38,6 +38,23 @@ export enum StudentProfileErrorCode {
   FORBIDDEN = 'FORBIDDEN',
 }
 
+
+export enum CompanyErrorCode {
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  COMPANY_NOT_FOUND = 'COMPANY_NOT_FOUND',
+  EMPLOYER_HAS_NO_COMPANY = 'EMPLOYER_HAS_NO_COMPANY',
+  TAX_ID_ALREADY_EXISTS = 'TAX_ID_ALREADY_EXISTS',
+  UNAUTHORIZED = 'UNAUTHORIZED',
+  FORBIDDEN = 'FORBIDDEN',
+  INVALID_VERIFICATION_STATE = 'INVALID_VERIFICATION_STATE',
+  DOCUMENTS_REQUIRED = 'DOCUMENTS_REQUIRED',
+  REJECTION_REASON_REQUIRED = 'REJECTION_REASON_REQUIRED',
+  BRANCH_NOT_FOUND = 'BRANCH_NOT_FOUND',
+  BRANCH_IN_USE_CANNOT_DELETE = 'BRANCH_IN_USE_CANNOT_DELETE',
+  INVALID_COORDINATES = 'INVALID_COORDINATES',
+  CROSS_COMPANY_BRANCH_FORBIDDEN = 'CROSS_COMPANY_BRANCH_FORBIDDEN',
+}
+
 export enum CvErrorCode {
   VALIDATION_ERROR = 'VALIDATION_ERROR',
   CV_NOT_FOUND = 'CV_NOT_FOUND',
@@ -52,7 +69,7 @@ export interface ApiErrorResponse {
   statusCode: number;
   message: string | string[];
   error: string;
-  code?: AuthErrorCode | StudentProfileErrorCode | CvErrorCode | (string & {});
+  code?: AuthErrorCode | StudentProfileErrorCode | CvErrorCode | CompanyErrorCode | (string & {});
   timestamp: string;
   path: string;
   correlationId?: string;
@@ -530,6 +547,7 @@ export interface CompanyDto {
   id: string;
   name: string;
   legalName?: string | null;
+  representativeName?: string | null;
   taxId: string;
   website?: string | null;
   industry?: string | null;
@@ -566,6 +584,8 @@ export interface CompanyBranchDto {
   country: string;
   phone?: string | null;
   email?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   isHeadquarter: boolean;
   createdAt: string;
   updatedAt: string;
@@ -581,6 +601,7 @@ export interface CompanyVerificationDto {
   reviewedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  documents?: CompanyVerificationDocumentDto[];
 }
 
 export interface CompanyVerificationDocumentDto {
@@ -590,6 +611,150 @@ export interface CompanyVerificationDocumentDto {
   documentType: DocumentType;
   createdAt: string;
   fileAsset?: FileAssetDto | null;
+}
+
+
+export interface VerificationDocumentAttachmentInput {
+  fileAssetId: string;
+  documentType?: DocumentType;
+}
+
+export interface CreateCompanyRequestDto {
+  name: string;
+  legalName?: string | null;
+  representativeName?: string | null;
+  taxId: string;
+  website?: string | null;
+  industry?: string | null;
+  companySize?: string | null;
+  description?: string | null;
+  logoUrl?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  documents?: VerificationDocumentAttachmentInput[];
+}
+
+export interface UpdateCompanyProfileRequestDto {
+  name?: string;
+  legalName?: string | null;
+  representativeName?: string | null;
+  website?: string | null;
+  industry?: string | null;
+  companySize?: string | null;
+  description?: string | null;
+  logoUrl?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  documents?: VerificationDocumentAttachmentInput[];
+}
+
+export interface CompanyProfileResponseDto {
+  message?: string;
+  company: CompanyDto;
+}
+
+export interface CompanyResponseDto {
+  message?: string;
+  company: CompanyDto;
+}
+
+export interface UpdateCompanyVerificationStatusRequestDto {
+  status: CompanyVerificationStatus;
+  rejectionReason?: string | null;
+}
+
+export interface CreateCompanyBranchRequestDto {
+  branchName: string;
+  addressLine: string;
+  ward?: string | null;
+  district?: string | null;
+  city: string;
+  country?: string;
+  phone?: string | null;
+  email?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  isHeadquarter?: boolean;
+}
+
+export interface UpdateCompanyBranchRequestDto {
+  branchName?: string;
+  addressLine?: string;
+  ward?: string | null;
+  district?: string | null;
+  city?: string;
+  country?: string;
+  phone?: string | null;
+  email?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  isHeadquarter?: boolean;
+}
+
+export interface CompanyBranchResponseDto {
+  message?: string;
+  branch: CompanyBranchDto;
+}
+
+export interface CompanyBranchListResponseDto {
+  message?: string;
+  data: CompanyBranchDto[];
+  total: number;
+}
+
+export interface DeleteCompanyBranchResponseDto {
+  message: string;
+  deletedBranchId: string;
+}
+
+// ============================================================================
+// M03 · JOB POSTING CONTRACTS (C-07 / FR-08)
+// ============================================================================
+
+export enum JobType {
+  PART_TIME = 'PART_TIME',
+  INTERNSHIP = 'INTERNSHIP',
+  FULL_TIME = 'FULL_TIME',
+}
+
+export enum JobStatus {
+  PENDING_APPROVAL = 'PENDING_APPROVAL', // Chờ duyệt
+  OPEN = 'OPEN',                         // Đang tuyển
+  PAUSED = 'PAUSED',                     // Tạm dừng
+  CLOSED = 'CLOSED',                     // Đã đóng
+}
+
+export interface JobPostingDto {
+  id: string;
+  companyId: string;
+  branchId: string;
+  title: string;
+  description: string;
+  industry: string;
+  type: JobType;
+  skills: string[];
+  quantity: number;
+  salary?: string | null;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  isSalaryNegotiable: boolean;
+  schedule?: string | null;
+  benefits?: string | null;
+  deadline: string;
+  status: JobStatus;
+  viewCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SavedJobDto {
+  id: string;
+  studentId: string;
+  jobId: string;
+  createdAt: string;
+  job?: JobPostingDto | null;
 }
 
 // ============================================================================
