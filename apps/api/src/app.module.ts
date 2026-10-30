@@ -14,6 +14,7 @@ import { StorageModule } from './shared/storage/storage.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SanctionsModule } from './modules/sanctions/sanctions.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
+import {AdminOverviewModule} from "./modules/admin-overview/admin-overview.module";
 import { CompaniesModule } from './modules/companies/companies.module';
 
 @Module({
@@ -36,6 +37,7 @@ import { CompaniesModule } from './modules/companies/companies.module';
     ReportsModule,
     SanctionsModule,
     ReviewsModule,
+    AdminOverviewModule,
     CompaniesModule,
   ],
 })
