@@ -83,6 +83,7 @@ describe('DecideModerationItemUseCase', () => {
         eventType: NotificationEventType.JOB_APPROVED,
         recipientId: 'emp1',
         dedupeKey: 'JOB_APPROVED:job1:d1',
+        payload: expect.objectContaining({ jobId: 'job1', moderationItemId: 'i1' }),
       }),
     );
     expect(result.decision.targetSynced).toBe(true);

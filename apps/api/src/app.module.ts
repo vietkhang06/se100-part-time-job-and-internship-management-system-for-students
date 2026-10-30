@@ -15,6 +15,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { SanctionsModule } from './modules/sanctions/sanctions.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import {AdminOverviewModule} from "./modules/admin-overview/admin-overview.module";
+import { CompaniesModule } from './modules/companies/companies.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import {AdminOverviewModule} from "./modules/admin-overview/admin-overview.modul
     SanctionsModule,
     ReviewsModule,
     AdminOverviewModule,
+    CompaniesModule,
   ],
 })
 export class AppModule implements NestModule {
