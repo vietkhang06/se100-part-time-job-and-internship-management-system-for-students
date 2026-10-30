@@ -1,4 +1,8 @@
-import { ICompanyRepository } from '../../domain/repositories/company.repository.interface';
+import {
+  ICompanyRepository,
+  PublicCompanyWithDetails,
+  SearchPublicCompaniesOptions,
+} from '../../domain/repositories/company.repository.interface';
 import { CompanyEntity } from '../../domain/entities/company.entity';
 import { CompanyVerificationStatus } from '@campusjob/contracts';
 
@@ -58,6 +62,59 @@ export class InMemoryCompanyRepository implements ICompanyRepository {
     });
     this.companies.set(id, entity);
     return this.clone(entity);
+  }
+
+  async searchPublic(
+    options: SearchPublicCompaniesOptions,
+  ): Promise<{ companies: CompanyEntity[]; total: number }> {
+    let matched = Array.from(this.companies.values()).filter((c) => {
+      if (c.verificationStatus !== CompanyVerificationStatus.VERIFIED) return false;
+      if (options.keyword) {
+        const kw = options.keyword.toLowerCase();
+        const inName = c.name.toLowerCase().includes(kw);
+        const inInd = c.industry?.toLowerCase().includes(kw) ?? false;
+        const inDesc = c.description?.toLowerCase().includes(kw) ?? false;
+        if (!inName && !inInd && !inDesc) return false;
+      }
+      if (options.industry && c.industry?.toLowerCase() !== options.industry.toLowerCase()) {
+        return false;
+      }
+      return true;
+    });
+
+    matched.sort((a, b) => {
+      const timeDiff = b.createdAt.getTime() - a.createdAt.getTime();
+      if (timeDiff !== 0) return timeDiff;
+      return b.id.localeCompare(a.id);
+    });
+
+    const total = matched.length;
+    const page = Math.max(1, options.page ?? 1);
+    const limit = Math.min(Math.max(1, options.limit ?? 10), 50);
+    const skip = (page - 1) * limit;
+    const paged = matched.slice(skip, skip + limit);
+
+    return {
+      companies: paged.map((c) => this.clone(c)),
+      total,
+    };
+  }
+
+  async findPublicById(id: string): Promise<PublicCompanyWithDetails | null> {
+    const found = this.companies.get(id);
+    if (!found || found.verificationStatus !== CompanyVerificationStatus.VERIFIED) {
+      return null;
+    }
+
+    return {
+      company: this.clone(found),
+      branches: [],
+      activeJobs: [],
+    };
+  }
+
+  clear(): void {
+    this.companies.clear();
   }
 
   private clone(entity: CompanyEntity): CompanyEntity {

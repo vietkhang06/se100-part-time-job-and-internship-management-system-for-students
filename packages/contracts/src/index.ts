@@ -1033,3 +1033,108 @@ export interface CompanyReviewListDto {
   summary: ReviewSummaryDto;
 }
 
+// ============================================================================
+// M03 ? PUBLIC DIRECTORY & SEARCH CONTRACTS (C-06, C-07, C-08 / UC15, UC16, UC22, UC23)
+// ============================================================================
+
+export interface PublicCompanyDto {
+  id: string;
+  name: string;
+  legalName?: string | null;
+  representativeName?: string | null;
+  website?: string | null;
+  industry?: string | null;
+  companySize?: string | null;
+  description?: string | null;
+  logoUrl?: string | null;
+  address?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublicCompanyBranchDto {
+  id: string;
+  companyId: string;
+  branchName: string;
+  addressLine: string;
+  ward?: string | null;
+  district?: string | null;
+  city: string;
+  country?: string;
+  phone?: string | null;
+  isHeadquarter: boolean;
+}
+
+export interface PublicJobPostingDto {
+  id: string;
+  companyId: string;
+  branchId: string;
+  title: string;
+  description: string;
+  industry: string;
+  type: JobType;
+  skills: string[];
+  quantity: number;
+  salary?: string | null;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  isSalaryNegotiable: boolean;
+  schedule?: string | null;
+  benefits?: string | null;
+  deadline: string;
+  status: JobStatus;
+  viewCount: number;
+  createdAt: string;
+  updatedAt: string;
+  companyName?: string;
+  companyLogoUrl?: string | null;
+  branchCity?: string;
+  branchName?: string;
+}
+
+export interface PublicCompanyDetailDto extends PublicCompanyDto {
+  branches: PublicCompanyBranchDto[];
+  activeJobs: PublicJobPostingDto[];
+  reviewSummary?: ReviewSummaryDto | null;
+}
+
+export interface PublicCompanyResponseDto {
+  company: PublicCompanyDetailDto;
+}
+
+export interface PublicCompanyListResponseDto {
+  companies: PublicCompanyDto[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface PublicJobPostingResponseDto {
+  job: PublicJobPostingDto;
+}
+
+export interface PublicJobPostingListResponseDto {
+  jobs: PublicJobPostingDto[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+// ============================================================================
+// M03 ? JOB?APPLICATION CONTRACT FOR M04 (C-07 / S2-M03-06)
+// ============================================================================
+
+export interface JobApplicationEligibilityDto {
+  jobId: string;
+  companyId: string;
+  companyName: string;
+  branchId: string;
+  title: string;
+  status: JobStatus;
+  deadline: string;
+  quantity: number;
+  acceptingApplications: boolean;
+}
+

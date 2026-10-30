@@ -1,4 +1,4 @@
-import { CompanyDto, CompanyVerificationStatus } from '@campusjob/contracts';
+import { CompanyDto, CompanyVerificationStatus, PublicCompanyDto } from '@campusjob/contracts';
 
 export interface CompanyProps {
   id: string;
@@ -205,6 +205,22 @@ export class CompanyEntity {
       phone: this._phone,
       address: this._address,
       verificationStatus: this._verificationStatus,
+      createdAt: this._createdAt.toISOString(),
+      updatedAt: this._updatedAt.toISOString(),
+    };
+  }
+  toPublicDto(): PublicCompanyDto {
+    return {
+      id: this._id,
+      name: this._name,
+      legalName: this._legalName,
+      representativeName: this._representativeName,
+      website: this._website,
+      industry: this._industry,
+      companySize: this._companySize,
+      description: this._description,
+      logoUrl: this._logoUrl,
+      address: this._address,
       createdAt: this._createdAt.toISOString(),
       updatedAt: this._updatedAt.toISOString(),
     };
