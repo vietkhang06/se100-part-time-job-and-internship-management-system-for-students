@@ -11,6 +11,7 @@ import { UpdateCvUseCase } from './application/use-cases/update-cv.use-case';
 import { SetDefaultCvUseCase } from './application/use-cases/set-default-cv.use-case';
 import { DeleteCvUseCase } from './application/use-cases/delete-cv.use-case';
 import { UploadCvFileUseCase } from './application/use-cases/upload-cv-file.use-case';
+import { DownloadCvFileUseCase } from './application/use-cases/download-cv-file.use-case';
 import { PrismaStudentProfileRepository } from './infrastructure/persistence/prisma-student-profile.repository';
 import { PrismaCvRepository } from './infrastructure/persistence/prisma-cv.repository';
 import {
@@ -41,6 +42,7 @@ import { CV_REPOSITORY_TOKEN } from './domain/repositories/cv.repository.interfa
     SetDefaultCvUseCase,
     DeleteCvUseCase,
     UploadCvFileUseCase,
+    DownloadCvFileUseCase,
 
     // Snapshot Use Cases & Adapters (UC37–UC38 / Contract C-03)
     GetCvSnapshotUseCase,
@@ -67,6 +69,7 @@ import { CV_REPOSITORY_TOKEN } from './domain/repositories/cv.repository.interfa
     GetCvDetailUseCase,
     ListCvsUseCase,
     UploadCvFileUseCase,
+    DownloadCvFileUseCase,
     GetCvSnapshotUseCase,
     CvSnapshotSourceAdapter,
     CV_SNAPSHOT_SOURCE_TOKEN,
