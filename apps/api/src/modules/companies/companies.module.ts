@@ -1,31 +1,55 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleInit, Optional } from '@nestjs/common';
+import { ModerationTargetType } from '@campusjob/contracts';
 import { DatabaseModule } from '../../shared/database/database.module';
 import { StorageModule } from '../../shared/storage/storage.module';
+import { ModerationModule } from '../moderation/moderation.module';
+import { ModerationTargetHandlerRegistry } from '../moderation/application/ports/moderation-target-handler.port';
+
 import { CompaniesController } from './presentation/controllers/companies.controller';
 import { CompanyBranchesController } from './presentation/controllers/company-branches.controller';
+import { JobsController } from './presentation/controllers/jobs.controller';
+
 import { GetCompanyProfileUseCase } from './application/use-cases/get-company-profile.use-case';
 import { UpdateCompanyProfileUseCase } from './application/use-cases/update-company-profile.use-case';
 import { CreateCompanyUseCase } from './application/use-cases/create-company.use-case';
 import { VerifyCompanyUseCase } from './application/use-cases/verify-company.use-case';
 import { ResubmitCompanyVerificationUseCase } from './application/use-cases/resubmit-company-verification.use-case';
 import { GetCompanyVerificationHistoryUseCase } from './application/use-cases/get-company-verification-history.use-case';
+
 import { CreateBranchUseCase } from './application/use-cases/create-branch.use-case';
 import { ListBranchesUseCase } from './application/use-cases/list-branches.use-case';
 import { GetBranchDetailUseCase } from './application/use-cases/get-branch-detail.use-case';
 import { UpdateBranchUseCase } from './application/use-cases/update-branch.use-case';
 import { DeleteBranchUseCase } from './application/use-cases/delete-branch.use-case';
+
+import { CreateJobPostingUseCase } from './application/use-cases/create-job-posting.use-case';
+import { UpdateJobPostingUseCase } from './application/use-cases/update-job-posting.use-case';
+import { ListEmployerJobsUseCase } from './application/use-cases/list-employer-jobs.use-case';
+import { GetEmployerJobDetailUseCase } from './application/use-cases/get-employer-job-detail.use-case';
+import { PauseJobPostingUseCase } from './application/use-cases/pause-job-posting.use-case';
+import { ResumeJobPostingUseCase } from './application/use-cases/resume-job-posting.use-case';
+import { CloseJobPostingUseCase } from './application/use-cases/close-job-posting.use-case';
+import { SubmitJobPostingUseCase } from './application/use-cases/submit-job-posting.use-case';
+import { JobModerationTargetHandler } from './application/use-cases/job-moderation-target.handler';
+
 import { COMPANY_REPOSITORY_TOKEN } from './domain/repositories/company.repository.interface';
 import { COMPANY_MEMBER_REPOSITORY_TOKEN } from './domain/repositories/company-member.repository.interface';
 import { COMPANY_BRANCH_REPOSITORY_TOKEN } from './domain/repositories/company-branch.repository.interface';
 import { COMPANY_VERIFICATION_REPOSITORY_TOKEN } from './domain/repositories/company-verification.repository.interface';
+import { JOB_POSTING_REPOSITORY_TOKEN } from './domain/repositories/job-posting.repository.interface';
+import { JOB_BRANCH_USAGE_CHECKER_TOKEN } from './domain/ports/job-branch-usage-checker.port';
+import { JOB_MODERATION_QUEUE_PORT_TOKEN } from './domain/ports/job-moderation-queue.port';
+
 import { PrismaCompanyRepository } from './infrastructure/persistence/prisma-company.repository';
 import { PrismaCompanyMemberRepository } from './infrastructure/persistence/prisma-company-member.repository';
 import { PrismaCompanyBranchRepository } from './infrastructure/persistence/prisma-company-branch.repository';
 import { PrismaCompanyVerificationRepository } from './infrastructure/persistence/prisma-company-verification.repository';
+import { PrismaJobPostingRepository } from './infrastructure/persistence/prisma-job-posting.repository';
+import { ModerationQueueAdapter } from './infrastructure/adapters/moderation-queue.adapter';
 
 @Module({
-  imports: [DatabaseModule, StorageModule],
-  controllers: [CompaniesController, CompanyBranchesController],
+  imports: [DatabaseModule, StorageModule, ModerationModule],
+  controllers: [CompaniesController, CompanyBranchesController, JobsController],
   providers: [
     GetCompanyProfileUseCase,
     UpdateCompanyProfileUseCase,
@@ -38,6 +62,15 @@ import { PrismaCompanyVerificationRepository } from './infrastructure/persistenc
     GetBranchDetailUseCase,
     UpdateBranchUseCase,
     DeleteBranchUseCase,
+    CreateJobPostingUseCase,
+    UpdateJobPostingUseCase,
+    ListEmployerJobsUseCase,
+    GetEmployerJobDetailUseCase,
+    PauseJobPostingUseCase,
+    ResumeJobPostingUseCase,
+    CloseJobPostingUseCase,
+    SubmitJobPostingUseCase,
+    JobModerationTargetHandler,
     {
       provide: COMPANY_REPOSITORY_TOKEN,
       useClass: PrismaCompanyRepository,
@@ -54,6 +87,18 @@ import { PrismaCompanyVerificationRepository } from './infrastructure/persistenc
       provide: COMPANY_VERIFICATION_REPOSITORY_TOKEN,
       useClass: PrismaCompanyVerificationRepository,
     },
+    {
+      provide: JOB_POSTING_REPOSITORY_TOKEN,
+      useClass: PrismaJobPostingRepository,
+    },
+    {
+      provide: JOB_BRANCH_USAGE_CHECKER_TOKEN,
+      useExisting: JOB_POSTING_REPOSITORY_TOKEN,
+    },
+    {
+      provide: JOB_MODERATION_QUEUE_PORT_TOKEN,
+      useClass: ModerationQueueAdapter,
+    },
   ],
   exports: [
     GetCompanyProfileUseCase,
@@ -67,10 +112,35 @@ import { PrismaCompanyVerificationRepository } from './infrastructure/persistenc
     GetBranchDetailUseCase,
     UpdateBranchUseCase,
     DeleteBranchUseCase,
+    CreateJobPostingUseCase,
+    UpdateJobPostingUseCase,
+    ListEmployerJobsUseCase,
+    GetEmployerJobDetailUseCase,
+    PauseJobPostingUseCase,
+    ResumeJobPostingUseCase,
+    CloseJobPostingUseCase,
+    SubmitJobPostingUseCase,
+    JobModerationTargetHandler,
     COMPANY_REPOSITORY_TOKEN,
     COMPANY_MEMBER_REPOSITORY_TOKEN,
     COMPANY_BRANCH_REPOSITORY_TOKEN,
     COMPANY_VERIFICATION_REPOSITORY_TOKEN,
+    JOB_POSTING_REPOSITORY_TOKEN,
+    JOB_BRANCH_USAGE_CHECKER_TOKEN,
+    JOB_MODERATION_QUEUE_PORT_TOKEN,
   ],
 })
-export class CompaniesModule {}
+export class CompaniesModule implements OnModuleInit {
+  constructor(
+    @Optional()
+    private readonly handlerRegistry?: ModerationTargetHandlerRegistry,
+    @Optional()
+    private readonly jobHandler?: JobModerationTargetHandler,
+  ) {}
+
+  onModuleInit() {
+    if (this.handlerRegistry && this.jobHandler) {
+      this.handlerRegistry.register(ModerationTargetType.JOB, this.jobHandler);
+    }
+  }
+}

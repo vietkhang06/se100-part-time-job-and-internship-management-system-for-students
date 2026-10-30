@@ -1,5 +1,8 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import {
+  BadRequestException,
+} from '@nestjs/common';
+import {
   CompanyVerificationStatus,
   CompanyMemberRole,
   CompanyMemberStatus,
@@ -13,7 +16,9 @@ import { PrismaCompanyRepository } from './prisma-company.repository';
 import { PrismaCompanyMemberRepository } from './prisma-company-member.repository';
 import { PrismaCompanyBranchRepository } from './prisma-company-branch.repository';
 import { PrismaCompanyVerificationRepository } from './prisma-company-verification.repository';
+import { PrismaJobPostingRepository } from './prisma-job-posting.repository';
 import { CompanyMemberEntity } from '../../domain/entities/company-member.entity';
+import { ResumeJobPostingUseCase } from '../../application/use-cases/resume-job-posting.use-case';
 
 const databaseUrl =
   process.env.DATABASE_URL ||
@@ -25,6 +30,7 @@ describe('Prisma Repositories Integration & Composite FK (Scratch DB)', () => {
   let memberRepo: PrismaCompanyMemberRepository;
   let branchRepo: PrismaCompanyBranchRepository;
   let verificationRepo: PrismaCompanyVerificationRepository;
+  let jobPostingRepo: PrismaJobPostingRepository;
 
   let isDbAvailable = false;
   const testRunId = Date.now().toString(36);
@@ -41,7 +47,6 @@ describe('Prisma Repositories Integration & Composite FK (Scratch DB)', () => {
 
     try {
       await prisma.$connect();
-      // Quick query check
       await prisma.$executeRaw`SELECT 1`;
       isDbAvailable = true;
     } catch {
@@ -53,6 +58,7 @@ describe('Prisma Repositories Integration & Composite FK (Scratch DB)', () => {
     memberRepo = new PrismaCompanyMemberRepository(prisma as any);
     branchRepo = new PrismaCompanyBranchRepository(prisma as any);
     verificationRepo = new PrismaCompanyVerificationRepository(prisma as any);
+    jobPostingRepo = new PrismaJobPostingRepository(prisma as any);
 
     // Create test users for relations
     userA = await prisma.user.create({
@@ -380,5 +386,102 @@ describe('Prisma Repositories Integration & Composite FK (Scratch DB)', () => {
 
     // Clean up validJob so afterAll cascades cleanly
     await prisma.jobPosting.delete({ where: { id: validJob.id } });
+  });
+
+  it('6. PrismaJobPostingRepository: durable rejection, hiddenByModeration flag, and persisted auto-close on expired job', async () => {
+    if (!isDbAvailable) return;
+
+    const company = await companyRepo.create({
+      name: `Job Repo Corp ${testRunId}`,
+      taxId: `TAX-${testRunId}-J`,
+      verificationStatus: CompanyVerificationStatus.VERIFIED,
+    });
+
+    await memberRepo.create({
+      companyId: company.id,
+      userId: userA.id,
+      role: CompanyMemberRole.OWNER,
+      status: CompanyMemberStatus.ACTIVE,
+    });
+
+    const branch = await branchRepo.create({
+      companyId: company.id,
+      branchName: 'Job Branch',
+      addressLine: '789 Le Duan',
+      city: 'Da Nang',
+    });
+
+    // 1. Create job with durable rejection fields
+    const createdJob = await jobPostingRepo.create({
+      companyId: company.id,
+      branchId: branch.id,
+      title: 'DevOps Engineer',
+      description: 'CI/CD pipeline lead',
+      industry: 'IT',
+      type: JobType.FULL_TIME,
+      skills: ['Docker', 'Kubernetes'],
+      quantity: 1,
+      deadline: new Date(Date.now() + 7 * 86400000),
+      status: JobStatus.PENDING_APPROVAL,
+      rejectionReason: 'Thiếu thông tin chứng chỉ.',
+      rejectedAt: new Date(),
+    });
+
+    expect(createdJob.rejectionReason).toBe('Thiếu thông tin chứng chỉ.');
+    expect(createdJob.rejectedAt).toBeDefined();
+    expect(createdJob.hiddenByModeration).toBe(false);
+
+    // Verify DB direct persistence
+    const dbRow1 = await prisma.jobPosting.findUnique({
+      where: { id: createdJob.id },
+    });
+    expect(dbRow1?.rejectionReason).toBe('Thiếu thông tin chứng chỉ.');
+    expect(dbRow1?.rejectedAt).not.toBeNull();
+    expect(dbRow1?.hiddenByModeration).toBe(false);
+
+    // 2. Update with hiddenByModeration: true
+    const updatedJob = await jobPostingRepo.update(createdJob.id, {
+      status: JobStatus.PAUSED,
+      hiddenByModeration: true,
+    });
+    expect(updatedJob.status).toBe(JobStatus.PAUSED);
+    expect(updatedJob.hiddenByModeration).toBe(true);
+
+    const dbRow2 = await prisma.jobPosting.findUnique({
+      where: { id: createdJob.id },
+    });
+    expect(dbRow2?.status).toBe('PAUSED');
+    expect(dbRow2?.hiddenByModeration).toBe(true);
+
+    // 3. Persisted auto-close on expired job (no rollback of close)
+    const expiredJob = await jobPostingRepo.create({
+      companyId: company.id,
+      branchId: branch.id,
+      title: 'Expired Java Job',
+      description: 'Legacy stack',
+      industry: 'IT',
+      type: JobType.FULL_TIME,
+      skills: ['Java'],
+      quantity: 1,
+      deadline: new Date(Date.now() - 3600000), // Expired 1 hour ago
+      status: JobStatus.PAUSED,
+    });
+
+    const resumeUseCase = new ResumeJobPostingUseCase(
+      jobPostingRepo,
+      memberRepo,
+      companyRepo,
+    );
+
+    // Calling resume on expired job must throw BadRequestException
+    await expect(
+      resumeUseCase.execute(userA.id, expiredJob.id),
+    ).rejects.toThrow(BadRequestException);
+
+    // CRITICAL: The status change to CLOSED must persist in PostgreSQL (no transaction rollback)
+    const dbRowExpired = await prisma.jobPosting.findUnique({
+      where: { id: expiredJob.id },
+    });
+    expect(dbRowExpired?.status).toBe('CLOSED');
   });
 });
