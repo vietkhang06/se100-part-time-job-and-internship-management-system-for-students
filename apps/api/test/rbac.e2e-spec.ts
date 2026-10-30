@@ -12,7 +12,7 @@ import { Roles } from '../src/shared/decorators/roles.decorator';
 import { Public } from '../src/shared/decorators/public.decorator';
 import { PasswordHasher } from '../src/modules/auth/infrastructure/security/password-hasher';
 
-const request = (typeof supertest === 'function' ? supertest : (supertest as any).default) as typeof supertest;
+const request = supertest;
 
 // Test controllers to verify route-level and controller-level RBAC enforcement
 @Controller('test-rbac')

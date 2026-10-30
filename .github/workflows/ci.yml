@@ -63,13 +63,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Prisma Validate
-        run: pnpm --filter @campusjob/api exec prisma validate
+        run: pnpm --filter @campusjob/api exec prisma validate --schema prisma/schema.prisma
 
       - name: Prisma Generate
         run: pnpm db:generate
 
       - name: Prisma Migrate Deploy on CI Database
-        run: pnpm db:deploy
+        run: pnpm --filter @campusjob/api exec prisma migrate deploy --schema prisma/schema.prisma
 
       - name: Build Contracts
         run: pnpm --filter @campusjob/contracts build
@@ -85,6 +85,9 @@ jobs:
 
       - name: Run E2E Tests (health + auth flow)
         run: pnpm test:e2e
+
+      - name: Run M02 integration E2E
+        run: pnpm test:e2e:m02
 
       - name: Build Monorepo Artifacts
         run: pnpm build

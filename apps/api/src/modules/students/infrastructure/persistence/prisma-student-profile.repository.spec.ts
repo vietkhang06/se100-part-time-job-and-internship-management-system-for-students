@@ -1,10 +1,18 @@
 import { PrismaStudentProfileRepository } from './prisma-student-profile.repository';
 import { PrismaService } from '../../../../shared/database/prisma.service';
 import { JobSeekingStatus } from '@campusjob/contracts';
+import { Prisma } from '@prisma/client';
+
+interface StudentProfilePrismaMock {
+  studentProfile: { findUnique: jest.Mock; upsert: jest.Mock };
+  skill: { upsert: jest.Mock<Promise<unknown>, [Prisma.SkillUpsertArgs]> };
+  studentSkill: { deleteMany: jest.Mock; upsert: jest.Mock };
+  $transaction: jest.Mock;
+}
 
 describe('PrismaStudentProfileRepository (W2-DB-01 Skill Normalization & Persistence)', () => {
   let repository: PrismaStudentProfileRepository;
-  let mockPrisma: any;
+  let mockPrisma: StudentProfilePrismaMock;
 
   beforeEach(() => {
     mockPrisma = {
@@ -19,10 +27,11 @@ describe('PrismaStudentProfileRepository (W2-DB-01 Skill Normalization & Persist
         deleteMany: jest.fn(),
         upsert: jest.fn(),
       },
-      $transaction: jest.fn(async (cb) => cb(mockPrisma)),
+      $transaction: jest.fn(async (cb: (tx: StudentProfilePrismaMock) => Promise<unknown>) => cb(mockPrisma)),
     };
 
-    repository = new PrismaStudentProfileRepository(mockPrisma as PrismaService);
+    const prisma = Object.assign(Object.create(PrismaService.prototype) as PrismaService, mockPrisma);
+    repository = new PrismaStudentProfileRepository(prisma);
   });
 
   describe('toDomain mapping with normalized studentSkills', () => {
@@ -110,7 +119,7 @@ describe('PrismaStudentProfileRepository (W2-DB-01 Skill Normalization & Persist
         userId: 'user-1',
       });
 
-      mockPrisma.skill.upsert.mockImplementation(({ where, create }: any) => {
+      mockPrisma.skill.upsert.mockImplementation(({ where, create }) => {
         return Promise.resolve({
           id: `id-${where.normalizedName}`,
           name: create.name,

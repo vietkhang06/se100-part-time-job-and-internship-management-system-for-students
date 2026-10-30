@@ -11,7 +11,6 @@ import { PasswordHasher } from '../src/modules/auth/infrastructure/security/pass
 import { GlobalExceptionFilter } from '../src/shared/filters/http-exception.filter';
 import {
   AuthErrorCode,
-  AuthContext,
   CvSnapshotDto,
   UserRole,
   UserStatus,
@@ -26,7 +25,7 @@ import {
 } from '../src/modules/applications/application/m04-ports';
 import { RolesGuard } from '../src/shared/guards/roles.guard';
 
-const request = (typeof supertest === 'function' ? supertest : (supertest as any).default) as typeof supertest;
+const request = supertest;
 
 /**
  * S2-M01-06: Account Integration (E2E & Contract-Boundary Integration Tests)
@@ -233,7 +232,7 @@ describe('S2-M01-06: Account Integration (E2E & Contract-Boundary)', () => {
             bio: `Initial bio for ${key}`,
           },
         });
-        (acc as any).profileId = profile.id;
+        Object.assign(acc, { profileId: profile.id });
       }
     }
 
@@ -532,7 +531,7 @@ describe('S2-M01-06: Account Integration (E2E & Contract-Boundary)', () => {
         .expect(200);
 
       expect(Array.isArray(resA.body.data)).toBe(true);
-      const idsA = resA.body.data.map((n: any) => n.id);
+      const idsA = resA.body.data.map((n: { id: string }) => n.id);
       expect(idsA).toContain(notifAId);
       expect(idsA).not.toContain(notifBId); // Student A CANNOT see Student B's notification
 
@@ -543,7 +542,7 @@ describe('S2-M01-06: Account Integration (E2E & Contract-Boundary)', () => {
         .expect(200);
 
       expect(Array.isArray(resB.body.data)).toBe(true);
-      const idsB = resB.body.data.map((n: any) => n.id);
+      const idsB = resB.body.data.map((n: { id: string }) => n.id);
       expect(idsB).toContain(notifBId);
       expect(idsB).not.toContain(notifAId); // Student B CANNOT see Student A's notification
     });
@@ -601,7 +600,7 @@ describe('S2-M01-06: Account Integration (E2E & Contract-Boundary)', () => {
         .expect(200);
 
       expect(Array.isArray(res.body)).toBe(true);
-      const appIds = res.body.map((a: any) => a.id);
+      const appIds = res.body.map((a: { id: string }) => a.id);
       expect(appIds).toContain(createdApplicationIdA);
     });
   });

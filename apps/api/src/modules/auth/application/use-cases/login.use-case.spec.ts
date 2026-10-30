@@ -6,13 +6,15 @@ import { IAuthSessionRepository } from '../../domain/repositories/auth-session.r
 import { UserEntity } from '../../../users/domain/entities/user.entity';
 import { AuthSessionEntity } from '../../domain/entities/auth-session.entity';
 import { PasswordHasher } from '../../infrastructure/security/password-hasher';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 describe('LoginUseCase', () => {
   let useCase: LoginUseCase;
   let userRepository: jest.Mocked<IUserRepository>;
   let authSessionRepository: jest.Mocked<IAuthSessionRepository>;
-  let jwtService: any;
-  let configService: any;
+  let jwtService: JwtService;
+  let configService: ConfigService;
 
   const validPassword = 'SecurePassword123!';
   let passwordHash: string;
@@ -28,7 +30,9 @@ describe('LoginUseCase', () => {
       create: jest.fn(),
       createWithVerificationToken: jest.fn(),
       updateStatus: jest.fn(),
-    } as any;
+      updatePassword: jest.fn(),
+      changePasswordAndRevokeSessions: jest.fn(),
+    };
 
     authSessionRepository = {
       create: jest.fn(),
@@ -40,16 +44,9 @@ describe('LoginUseCase', () => {
       rotateSession: jest.fn(),
     };
 
-    jwtService = {
-      sign: jest.fn().mockReturnValue('mock.jwt.access_token'),
-    };
-
-    configService = {
-      get: jest.fn().mockImplementation((key: string, defaultVal: any) => {
-        if (key === 'REFRESH_TOKEN_TTL_DAYS') return 30;
-        return defaultVal;
-      }),
-    };
+    jwtService = new JwtService();
+    jest.spyOn(jwtService, 'sign').mockReturnValue('mock.jwt.access_token');
+    configService = new ConfigService({ REFRESH_TOKEN_TTL_DAYS: 30 });
 
     useCase = new LoginUseCase(
       userRepository,

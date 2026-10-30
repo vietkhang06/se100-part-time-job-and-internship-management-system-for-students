@@ -4,11 +4,11 @@ import { CreateCvDto } from './create-cv.dto';
 import { UpdateCvDto } from './update-cv.dto';
 
 describe('CV DTO Validation Tests (S2-M02-03 Contract & Rule Matrix)', () => {
-  function toCreateDto(plain: Record<string, any>): CreateCvDto {
+  function toCreateDto(plain: Record<string, unknown>): CreateCvDto {
     return plainToInstance(CreateCvDto, plain);
   }
 
-  function toUpdateDto(plain: Record<string, any>): UpdateCvDto {
+  function toUpdateDto(plain: Record<string, unknown>): UpdateCvDto {
     return plainToInstance(UpdateCvDto, plain);
   }
 
@@ -254,7 +254,7 @@ describe('CV DTO Validation Tests (S2-M02-03 Contract & Rule Matrix)', () => {
 
     it('từ chối khi isDefault không phải boolean', async () => {
       const dto = toUpdateDto({
-        isDefault: 'not-a-boolean' as any,
+        isDefault: 'not-a-boolean',
       });
       const errors = await validate(dto);
       expect(errors.some((e) => e.property === 'isDefault')).toBe(true);

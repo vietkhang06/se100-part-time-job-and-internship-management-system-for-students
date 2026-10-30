@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import type { ModerationDecision, ModerationItem } from '@prisma/client';
 import { ModerationStatus } from '@campusjob/contracts';
 import { PrismaService } from '../../../../shared/database/prisma.service';
 import {
@@ -18,13 +19,13 @@ import {
 export class PrismaModerationRepository implements IModerationRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  private toItem(raw: any): ModerationItemEntity {
+  private toItem(raw: ModerationItem): ModerationItemEntity {
     return new ModerationItemEntity({
       id: raw.id,
-      targetType: raw.targetType,
+      targetType: raw.targetType as ModerationItemEntity['targetType'],
       targetId: raw.targetId,
       round: raw.round,
-      status: raw.status,
+      status: raw.status as ModerationItemEntity['status'],
       summary: raw.summary ?? null,
       submitterId: raw.submitterId ?? null,
       assigneeId: raw.assigneeId ?? null,
@@ -34,11 +35,11 @@ export class PrismaModerationRepository implements IModerationRepository {
     });
   }
 
-  private toDecision(raw: any): ModerationDecisionEntity {
+  private toDecision(raw: ModerationDecision): ModerationDecisionEntity {
     return new ModerationDecisionEntity({
       id: raw.id,
       itemId: raw.itemId,
-      decision: raw.decision,
+      decision: raw.decision as ModerationDecisionEntity['decision'],
       reason: raw.reason ?? null,
       proposedAction: raw.proposedAction ?? null,
       reviewerId: raw.reviewerId,
@@ -71,9 +72,12 @@ export class PrismaModerationRepository implements IModerationRepository {
         },
       });
       return { item: this.toItem(raw), created: true };
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Hai lần enqueue song song cùng vòng: bên thua lấy lại bản ghi của bên thắng.
-      if (err?.code === 'P2002') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
         const again = await findLatest();
         if (again) {
           return { item: this.toItem(again), created: false };

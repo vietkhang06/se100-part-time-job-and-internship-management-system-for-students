@@ -68,9 +68,10 @@ export class PublishNotificationUseCase implements INotificationPublisher {
     if (content.sendEmail) {
       try {
         await this.dispatchEmail.execute(notification.id);
-      } catch (err: any) {
+      } catch (err: unknown) {
         // Dispatch đã tự bắt lỗi SMTP; đây chỉ là lưới an toàn (ví dụ lỗi DB khi ghi trạng thái).
-        this.logger.error(`Dispatch email crashed for ${notification.id}: ${err?.message}`);
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error(`Dispatch email crashed for ${notification.id}: ${message}`);
       }
     }
 

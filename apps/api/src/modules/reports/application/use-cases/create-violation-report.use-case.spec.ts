@@ -16,6 +16,9 @@ import { CreateViolationReportUseCase } from './create-violation-report.use-case
 import { ReportTargetResolverRegistry } from '../ports/report-target-resolver.port';
 import { ViolationReportEntity } from '../../domain/entities/violation-report.entity';
 import { CreateViolationReportDto } from '../dto/violation-report.dto';
+import { IViolationReportRepository } from '../../domain/repositories/violation-report.repository.interface';
+import { IModerationQueue } from '../../../moderation/application/ports/moderation-queue.port';
+import { INotificationPublisher } from '../../../notifications/application/ports/notification-publisher.port';
 
 const entity = () =>
   new ViolationReportEntity({
@@ -44,21 +47,24 @@ const input = (over: Partial<CreateViolationReportDto> = {}): CreateViolationRep
 
 describe('CreateViolationReportUseCase', () => {
   const student = { id: 'stu1', role: UserRole.STUDENT };
-  let repo: any;
+  let repo: jest.Mocked<IViolationReportRepository>;
   let resolvers: ReportTargetResolverRegistry;
-  let queue: { enqueue: jest.Mock };
-  let notifications: { publish: jest.Mock };
+  let queue: jest.Mocked<IModerationQueue>;
+  let notifications: jest.Mocked<INotificationPublisher>;
   let useCase: CreateViolationReportUseCase;
 
   beforeEach(() => {
-    repo = { create: jest.fn(), markUnderReview: jest.fn() };
+    repo = {
+      create: jest.fn(), findById: jest.fn(), listByReporter: jest.fn(), listByStatus: jest.fn(),
+      markUnderReview: jest.fn(), markResolved: jest.fn(), applyModerationOutcome: jest.fn(),
+    };
     resolvers = new ReportTargetResolverRegistry();
     resolvers.register(T.COMPANY, {
       resolve: jest.fn().mockResolvedValue({ ownerUserId: 'emp1', label: 'ACME' }),
     });
     queue = { enqueue: jest.fn().mockResolvedValue({ itemId: 'i1', round: 1, outcome: 'CREATED' }) };
-    notifications = { publish: jest.fn().mockResolvedValue({ outcome: 'CREATED' }) };
-    useCase = new CreateViolationReportUseCase(repo, resolvers, queue as any, notifications as any);
+    notifications = { publish: jest.fn().mockResolvedValue({ outcome: 'CREATED' }), publishMany: jest.fn() };
+    useCase = new CreateViolationReportUseCase(repo, resolvers, queue, notifications);
   });
 
   it('creates the report, acknowledges it and forwards it to moderation', async () => {
@@ -101,14 +107,14 @@ describe('CreateViolationReportUseCase', () => {
 
     await useCase.execute(student, input({ targetType: T.REVIEW }));
 
-    const types = queue.enqueue.mock.calls.map((c: any[]) => c[0].targetType);
+    const types = queue.enqueue.mock.calls.map(([entry]) => entry.targetType);
     expect(types).toEqual([ModerationTargetType.REPORT, ModerationTargetType.REVIEW]);
   });
 
   it('does not queue a REVIEW item for other target types', async () => {
     repo.create.mockResolvedValue({ report: entity(), duplicate: false });
     await useCase.execute(student, input());
-    const types = queue.enqueue.mock.calls.map((c: any[]) => c[0].targetType);
+    const types = queue.enqueue.mock.calls.map(([entry]) => entry.targetType);
     expect(types).toEqual([ModerationTargetType.REPORT]);
   });
 

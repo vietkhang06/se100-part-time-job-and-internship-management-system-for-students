@@ -2,27 +2,31 @@ import {
   ConflictException,
   ForbiddenException,
   NotFoundException,
-  BadRequestException,
 } from '@nestjs/common';
 import {
   CompanyMemberRole,
   CompanyMemberStatus,
   CompanyVerificationStatus,
-  CompanyErrorCode,
 } from '@campusjob/contracts';
 import { InMemoryCompanyRepository } from '../../infrastructure/persistence/in-memory-company.repository';
 import { InMemoryCompanyMemberRepository } from '../../infrastructure/persistence/in-memory-company-member.repository';
 import { InMemoryCompanyVerificationRepository } from '../../infrastructure/persistence/in-memory-company-verification.repository';
+import { CompanyEntity } from '../../domain/entities/company.entity';
 import { CreateCompanyUseCase } from './create-company.use-case';
 import { GetCompanyProfileUseCase } from './get-company-profile.use-case';
 import { UpdateCompanyProfileUseCase } from './update-company-profile.use-case';
 import { FileAssetService } from '../../../../shared/storage/file-asset.service';
+import { FileAssetStatus } from '@prisma/client';
+import { Test } from '@nestjs/testing';
+import { PrismaService } from '../../../../shared/database/prisma.service';
+import { STORAGE_SERVICE_TOKEN } from '../../../../shared/storage/storage.interface';
 
 describe('S4-M03-01: Company Profile CRUD & Authorization', () => {
   let companyRepo: InMemoryCompanyRepository;
   let memberRepo: InMemoryCompanyMemberRepository;
   let verificationRepo: InMemoryCompanyVerificationRepository;
-  let fileAssetService: jest.Mocked<FileAssetService>;
+  let fileAssetService: FileAssetService;
+  let verifyOwnership: jest.SpiedFunction<FileAssetService['verifyOwnership']>;
 
   let createCompanyUseCase: CreateCompanyUseCase;
   let getProfileUseCase: GetCompanyProfileUseCase;
@@ -39,8 +43,11 @@ describe('S4-M03-01: Company Profile CRUD & Authorization', () => {
     memberRepo = new InMemoryCompanyMemberRepository();
     verificationRepo = new InMemoryCompanyVerificationRepository();
 
-    fileAssetService = {
-      verifyOwnership: jest.fn().mockResolvedValue({
+    const fileAssetModule = await Test.createTestingModule({
+      providers: [FileAssetService, { provide: PrismaService, useValue: {} }, { provide: STORAGE_SERVICE_TOKEN, useValue: {} }],
+    }).compile();
+    fileAssetService = fileAssetModule.get(FileAssetService);
+    verifyOwnership = jest.spyOn(fileAssetService, 'verifyOwnership').mockResolvedValue({
         id: 'file-asset-1',
         ownerUserId,
         originalName: 'license.pdf',
@@ -48,11 +55,10 @@ describe('S4-M03-01: Company Profile CRUD & Authorization', () => {
         sizeBytes: 2048,
         checksumSha256: 'dummy-sha256',
         storageKey: 'secure-key-1',
-        status: 'PERMANENT',
+        status: FileAssetStatus.PERMANENT,
         uploadedAt: new Date(),
         updatedAt: new Date(),
-      }),
-    } as any;
+      });
 
     createCompanyUseCase = new CreateCompanyUseCase(
       companyRepo,
@@ -69,7 +75,8 @@ describe('S4-M03-01: Company Profile CRUD & Authorization', () => {
     );
 
     // Seed Company A
-    await companyRepo.create({
+    const createdA = new CompanyEntity({
+      id: companyAId,
       name: 'Tech Corp A',
       legalName: 'Technology Corporation A JSC',
       representativeName: 'Nguyen Van A',
@@ -83,10 +90,6 @@ describe('S4-M03-01: Company Profile CRUD & Authorization', () => {
       description: 'Leading software development',
       verificationStatus: CompanyVerificationStatus.PENDING_REVIEW,
     });
-    // Set fixed ID for testing
-    const createdA = Array.from(companyRepo.companies.values())[0];
-    (createdA as any)._id = companyAId;
-    companyRepo.companies.delete(createdA.id);
     companyRepo.companies.set(companyAId, createdA);
 
     // Seed Member roles for Company A
@@ -104,13 +107,12 @@ describe('S4-M03-01: Company Profile CRUD & Authorization', () => {
     });
 
     // Seed Company B with another owner
-    const compB = await companyRepo.create({
+    const compB = new CompanyEntity({
+      id: companyBId,
       name: 'Tech Corp B',
       taxId: '0209876543',
       verificationStatus: CompanyVerificationStatus.VERIFIED,
     });
-    (compB as any)._id = companyBId;
-    companyRepo.companies.delete(compB.id);
     companyRepo.companies.set(companyBId, compB);
 
     await memberRepo.create({
@@ -178,7 +180,7 @@ describe('S4-M03-01: Company Profile CRUD & Authorization', () => {
         documents: [{ fileAssetId: 'asset-doc-1' }],
       });
 
-      expect(fileAssetService.verifyOwnership).toHaveBeenCalledWith(
+      expect(verifyOwnership).toHaveBeenCalledWith(
         'asset-doc-1',
         newUserId,
       );
@@ -192,7 +194,7 @@ describe('S4-M03-01: Company Profile CRUD & Authorization', () => {
     });
 
     it('should reject creation if attached FileAsset is not owned by the user', async () => {
-      fileAssetService.verifyOwnership.mockRejectedValueOnce(
+      verifyOwnership.mockRejectedValueOnce(
         new ForbiddenException('Not owner of file'),
       );
 
@@ -258,9 +260,9 @@ describe('S4-M03-01: Company Profile CRUD & Authorization', () => {
 
     it('should never expose legal document binaries or storage keys in company profile response', async () => {
       const result = await getProfileUseCase.execute(ownerUserId);
-      expect((result.company as any).storageKey).toBeUndefined();
-      expect((result.company as any).fileBuffer).toBeUndefined();
-      expect((result.company as any).documents).toBeUndefined();
+      expect('storageKey' in result.company).toBe(false);
+      expect('fileBuffer' in result.company).toBe(false);
+      expect('documents' in result.company).toBe(false);
     });
   });
 

@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { JobStatus, JobType, JobPostingDto } from '@campusjob/contracts';
+import { JobStatus, JobType } from '@campusjob/contracts';
 
 describe('S3-M03-05: JobPosting Schema, Contracts & Integrity', () => {
   const schemaPath = path.resolve(__dirname, '../../../prisma/schema.prisma');

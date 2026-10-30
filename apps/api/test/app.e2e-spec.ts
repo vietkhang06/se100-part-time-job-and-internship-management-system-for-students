@@ -3,7 +3,7 @@ import { INestApplication } from '@nestjs/common';
 import supertest from 'supertest';
 import { AppModule } from '../src/app.module';
 
-const request = (typeof supertest === 'function' ? supertest : (supertest as any).default) as typeof supertest;
+const request = supertest;
 
 
 describe('AppController (e2e)', () => {

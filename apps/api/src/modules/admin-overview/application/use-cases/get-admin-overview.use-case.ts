@@ -36,8 +36,9 @@ export class GetAdminOverviewUseCase {
         breakdown: result.breakdown.map((item) => ({ key: item.key, label: item.label, count: item.count })),
         unavailableReason: null,
       };
-    } catch (err: any) {
-      this.logger.error(`Overview source ${definition.key} failed: ${err?.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Overview source ${definition.key} failed: ${message}`);
       return this.unavailable(definition, 'Không truy vấn được nguồn dữ liệu lúc này.');
     }
   }

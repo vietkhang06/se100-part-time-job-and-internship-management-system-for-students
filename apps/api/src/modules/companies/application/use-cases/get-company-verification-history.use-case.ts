@@ -2,11 +2,11 @@ import {
   Inject,
   Injectable,
   NotFoundException,
-  ForbiddenException,
 } from '@nestjs/common';
 import {
   CompanyErrorCode,
   CompanyVerificationDto,
+  FileAssetStatus,
 } from '@campusjob/contracts';
 import {
   ICompanyMemberRepository,
@@ -85,7 +85,7 @@ export class GetCompanyVerificationHistoryUseCase {
                 sizeBytes: d.fileAsset.sizeBytes,
                 checksumSha256: '', // sanitize
                 storageKey: '', // sanitize: never expose storage keys
-                status: 'PERMANENT' as any,
+                status: FileAssetStatus.PERMANENT,
                 uploadedAt: d.fileAsset.uploadedAt.toISOString(),
                 updatedAt: d.fileAsset.uploadedAt.toISOString(),
               }

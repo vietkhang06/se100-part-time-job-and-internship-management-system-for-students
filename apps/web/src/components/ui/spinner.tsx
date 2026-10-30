@@ -2,7 +2,7 @@ import * as React from 'react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
-export interface SpinnerProps extends React.SVGAttributes<SVGSVGElement> {}
+export type SpinnerProps = React.SVGAttributes<SVGSVGElement>;
 
 export function Spinner({ className, ...props }: SpinnerProps) {
   return (

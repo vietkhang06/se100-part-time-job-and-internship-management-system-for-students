@@ -4,7 +4,7 @@ import { JobSeekingStatus } from '@campusjob/contracts';
 import { UpdateStudentProfileDto } from './update-student-profile.dto';
 
 describe('UpdateStudentProfileDto (S2-M02-01 Contract & Validation Test)', () => {
-  function toDto(plain: Record<string, any>): UpdateStudentProfileDto {
+  function toDto(plain: Record<string, unknown>): UpdateStudentProfileDto {
     return plainToInstance(UpdateStudentProfileDto, plain);
   }
 
@@ -54,7 +54,7 @@ describe('UpdateStudentProfileDto (S2-M02-01 Contract & Validation Test)', () =>
       const errorsAbove = await validate(aboveMax);
       expect(errorsAbove.some((e) => e.property === 'graduationYear')).toBe(true);
 
-      const notInt = toDto({ graduationYear: 2025.5 as any });
+      const notInt = toDto({ graduationYear: 2025.5 });
       const errorsNotInt = await validate(notInt);
       expect(errorsNotInt.some((e) => e.property === 'graduationYear')).toBe(true);
     });
@@ -94,7 +94,7 @@ describe('UpdateStudentProfileDto (S2-M02-01 Contract & Validation Test)', () =>
     });
 
     it('từ chối trạng thái tìm việc không có trong danh mục quy định', async () => {
-      const dto = toDto({ jobSeekingStatus: 'BUSY_STUDYING' as any });
+      const dto = toDto({ jobSeekingStatus: 'BUSY_STUDYING' });
       const errors = await validate(dto);
 
       expect(errors.some((e) => e.property === 'jobSeekingStatus')).toBe(true);

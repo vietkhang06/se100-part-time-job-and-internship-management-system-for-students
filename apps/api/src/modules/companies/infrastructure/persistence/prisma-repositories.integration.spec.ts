@@ -1,4 +1,5 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../../../shared/database/prisma.service';
 import {
   CompanyVerificationStatus,
   CompanyMemberRole,
@@ -20,7 +21,7 @@ const databaseUrl =
   'postgresql://campusjob:campusjob_dev@localhost:5435/campusjob_m03_scratch?schema=public';
 
 describe('Prisma Repositories Integration & Composite FK (Scratch DB)', () => {
-  let prisma: PrismaClient;
+  let prisma: PrismaService;
   let companyRepo: PrismaCompanyRepository;
   let memberRepo: PrismaCompanyMemberRepository;
   let branchRepo: PrismaCompanyBranchRepository;
@@ -33,7 +34,7 @@ describe('Prisma Repositories Integration & Composite FK (Scratch DB)', () => {
   let adminUser: { id: string };
 
   beforeAll(async () => {
-    prisma = new PrismaClient({
+    prisma = new PrismaService({
       datasources: {
         db: { url: databaseUrl },
       },
@@ -49,10 +50,10 @@ describe('Prisma Repositories Integration & Composite FK (Scratch DB)', () => {
       return;
     }
 
-    companyRepo = new PrismaCompanyRepository(prisma as any);
-    memberRepo = new PrismaCompanyMemberRepository(prisma as any);
-    branchRepo = new PrismaCompanyBranchRepository(prisma as any);
-    verificationRepo = new PrismaCompanyVerificationRepository(prisma as any);
+    companyRepo = new PrismaCompanyRepository(prisma);
+    memberRepo = new PrismaCompanyMemberRepository(prisma);
+    branchRepo = new PrismaCompanyBranchRepository(prisma);
+    verificationRepo = new PrismaCompanyVerificationRepository(prisma);
 
     // Create test users for relations
     userA = await prisma.user.create({

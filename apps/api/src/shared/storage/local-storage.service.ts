@@ -13,6 +13,15 @@ import {
   FileNotFoundException,
 } from './storage.interface';
 
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
+const isMissingFileError = (error: unknown): boolean =>
+  typeof error === 'object' &&
+  error !== null &&
+  'code' in error &&
+  error.code === 'ENOENT';
+
 // Strict UUIDv4 with optional extension regex (alphanumeric extension, 1-10 chars)
 const STORAGE_KEY_REGEX = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}(\.[a-zA-Z0-9]{1,10})?$/;
 
@@ -60,9 +69,9 @@ export class LocalStorageService implements IStorageService, OnModuleInit {
         fs.mkdirSync(dir, { recursive: true });
         this.logger.log(`Initialized storage root directory: ${dir}`);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       throw new StorageException(
-        `Failed to initialize storage directory [${dir}]: ${err.message}`,
+        `Failed to initialize storage directory [${dir}]: ${errorMessage(err)}`,
       );
     }
   }
@@ -117,7 +126,7 @@ export class LocalStorageService implements IStorageService, OnModuleInit {
             `Symlink target [${realTarget}] escapes storage root [${this.storageRoot}]`,
           );
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (err instanceof StoragePathTraversalException) {
           throw err;
         }
@@ -176,7 +185,7 @@ export class LocalStorageService implements IStorageService, OnModuleInit {
         byteSize,
         checksumSha256,
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Clean up temporary file if write or rename failed
       try {
         if (fs.existsSync(tempPath)) {
@@ -186,7 +195,7 @@ export class LocalStorageService implements IStorageService, OnModuleInit {
         // Suppress secondary cleanup error
       }
 
-      throw new StorageException(`Failed to store file [${storageKey}]: ${err.message}`);
+      throw new StorageException(`Failed to store file [${storageKey}]: ${errorMessage(err)}`);
     }
   }
 
@@ -195,11 +204,11 @@ export class LocalStorageService implements IStorageService, OnModuleInit {
 
     try {
       return await fs.promises.readFile(filePath);
-    } catch (err: any) {
-      if (err.code === 'ENOENT') {
+    } catch (err: unknown) {
+      if (isMissingFileError(err)) {
         throw new FileNotFoundException(`File not found with key [${storageKey}]`);
       }
-      throw new StorageException(`Failed to read file [${storageKey}]: ${err.message}`);
+      throw new StorageException(`Failed to read file [${storageKey}]: ${errorMessage(err)}`);
     }
   }
 
@@ -209,13 +218,13 @@ export class LocalStorageService implements IStorageService, OnModuleInit {
     try {
       await fs.promises.unlink(filePath);
       this.logger.log(`Deleted stored file [${storageKey}]`);
-    } catch (err: any) {
-      if (err.code === 'ENOENT') {
+    } catch (err: unknown) {
+      if (isMissingFileError(err)) {
         // Idempotent deletion: already absent is considered success
         this.logger.debug(`File [${storageKey}] already absent during delete operation`);
         return;
       }
-      throw new StorageException(`Failed to delete file [${storageKey}]: ${err.message}`);
+      throw new StorageException(`Failed to delete file [${storageKey}]: ${errorMessage(err)}`);
     }
   }
 

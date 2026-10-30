@@ -43,7 +43,7 @@ import {
   SANCTION_QUERY_TOKEN,
 } from '../src/modules/sanctions/application/ports/sanction-query.port';
 
-const request = (typeof supertest === 'function' ? supertest : (supertest as any).default) as typeof supertest;
+const request = supertest;
 
 /**
  * S2-M05-06: Trust Integration (C-16 → C-20).
@@ -183,23 +183,30 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
     prisma.notification.count({ where: { recipientId, ...(eventType ? { eventType } : {}) } });
 
   /** Tìm một mục trong danh sách phân trang (hàng đợi sắp cũ nhất trước nên có thể không nằm ở trang đầu). */
-  async function findInPages(path: string, token: string, predicate: (item: any) => boolean): Promise<any | undefined> {
+  async function findInPages<T extends Record<string, unknown>>(
+    path: string,
+    token: string,
+    predicate: (item: T) => boolean,
+  ): Promise<T | undefined> {
     for (let page = 1; page <= 50; page++) {
       const separator = path.includes('?') ? '&' : '?';
       const res = await api()
         .get(`/api/v1${path}${separator}page=${page}&limit=50`)
         .set(bearer(token))
         .expect(200);
-      const hit = res.body.data.find(predicate);
+      const data: T[] = res.body.data;
+      const hit = data.find(predicate);
       if (hit) return hit;
       if (!res.body.meta.hasNextPage) return undefined;
     }
     return undefined;
   }
 
-  const payloadOf = async (recipientId: string, eventType: NotificationEventType): Promise<Record<string, any>> => {
+  const payloadOf = async (recipientId: string, eventType: NotificationEventType): Promise<Record<string, unknown>> => {
     const n = await prisma.notification.findFirstOrThrow({ where: { recipientId, eventType }, orderBy: { createdAt: 'desc' } });
-    return (n.payload ?? {}) as Record<string, any>;
+    const payload: unknown = n.payload ?? {};
+    if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return {};
+    return { ...payload };
   };
 
   /** Báo cáo mới → Kiểm duyệt viên kết luận "có căn cứ". Trả về báo cáo ở trạng thái SUBSTANTIATED. */
@@ -424,7 +431,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
 
     it('[TM-A14] API thông báo chỉ trả thông báo của chính mình và đánh dấu đã đọc hoạt động đúng', async () => {
       const list = await api().get('/api/v1/notifications').set(bearer(target.token)).expect(200);
-      expect(list.body.data.map((n: any) => n.eventType)).toEqual(['SANCTION_APPLIED']);
+      expect(list.body.data.map((n: { eventType: string }) => n.eventType)).toEqual(['SANCTION_APPLIED']);
       const notificationId = list.body.data[0].id;
 
       const unread = await api().get('/api/v1/notifications/unread-count').set(bearer(target.token)).expect(200);
@@ -444,7 +451,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
         .send({ reason: 'Khiếu nại thành công' })
         .expect(200);
       expect(res.body.status).toBe('LIFTED');
-      expect(res.body.events.map((e: any) => e.action)).toEqual(['APPLIED', 'LIFTED']);
+      expect(res.body.events.map((e: { action: string }) => e.action)).toEqual(['APPLIED', 'LIFTED']);
 
       const query = app.get<ISanctionQuery>(SANCTION_QUERY_TOKEN, { strict: false });
       expect((await query.getApplicationLock(target.id)).locked).toBe(false);

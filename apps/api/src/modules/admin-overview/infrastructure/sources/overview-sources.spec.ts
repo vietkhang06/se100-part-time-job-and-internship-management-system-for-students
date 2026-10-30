@@ -1,19 +1,17 @@
 import { UserRole, ViolationReportStatus } from '@campusjob/contracts';
 import { UsersOverviewSource } from './users-overview.source';
 import { ReportsOverviewSource } from './reports-overview.source';
+import { PrismaService } from '../../../../shared/database/prisma.service';
 
 describe('UsersOverviewSource', () => {
   it('counts users by role, fills missing roles with 0 and totals the breakdown', async () => {
-    const prisma = {
-      user: {
-        groupBy: jest.fn().mockResolvedValue([
-          { role: 'STUDENT', _count: { _all: 5 } },
-          { role: 'EMPLOYER', _count: { _all: 2 } },
-        ]),
-      },
-    };
+    const prisma = new PrismaService();
+    jest.spyOn(prisma.user, 'groupBy').mockResolvedValue([
+      { role: 'STUDENT', _count: { _all: 5 } },
+      { role: 'EMPLOYER', _count: { _all: 2 } },
+    ] as Awaited<ReturnType<typeof prisma.user.groupBy>>);
 
-    const result = await new UsersOverviewSource(prisma as any).collect();
+    const result = await new UsersOverviewSource(prisma).collect();
 
     expect(result.total).toBe(7);
     expect(result.breakdown.map((b) => b.key)).toEqual(Object.values(UserRole));
@@ -25,16 +23,13 @@ describe('UsersOverviewSource', () => {
 
 describe('ReportsOverviewSource', () => {
   it('counts reports by status, fills missing statuses with 0 and totals the breakdown', async () => {
-    const prisma = {
-      violationReport: {
-        groupBy: jest.fn().mockResolvedValue([
-          { status: 'UNDER_REVIEW', _count: { _all: 3 } },
-          { status: 'RESOLVED', _count: { _all: 1 } },
-        ]),
-      },
-    };
+    const prisma = new PrismaService();
+    jest.spyOn(prisma.violationReport, 'groupBy').mockResolvedValue([
+      { status: 'UNDER_REVIEW', _count: { _all: 3 } },
+      { status: 'RESOLVED', _count: { _all: 1 } },
+    ] as Awaited<ReturnType<typeof prisma.violationReport.groupBy>>);
 
-    const result = await new ReportsOverviewSource(prisma as any).collect();
+    const result = await new ReportsOverviewSource(prisma).collect();
 
     expect(result.total).toBe(4);
     expect(result.breakdown.map((b) => b.key)).toEqual(Object.values(ViolationReportStatus));
@@ -43,8 +38,9 @@ describe('ReportsOverviewSource', () => {
   });
 
   it('returns zero totals for an empty table (real zero, not a missing source)', async () => {
-    const prisma = { violationReport: { groupBy: jest.fn().mockResolvedValue([]) } };
-    const result = await new ReportsOverviewSource(prisma as any).collect();
+    const prisma = new PrismaService();
+    jest.spyOn(prisma.violationReport, 'groupBy').mockResolvedValue([]);
+    const result = await new ReportsOverviewSource(prisma).collect();
     expect(result.total).toBe(0);
   });
 });

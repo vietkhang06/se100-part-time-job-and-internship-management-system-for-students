@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { EmailVerificationToken } from '@prisma/client';
 import { PrismaService } from '../../../../shared/database/prisma.service';
 import { IEmailVerificationTokenRepository } from '../../domain/repositories/email-verification-token.repository.interface';
 import { EmailVerificationTokenEntity } from '../../domain/entities/email-verification-token.entity';
@@ -10,7 +11,7 @@ export class PrismaEmailVerificationTokenRepository
 {
   constructor(private readonly prisma: PrismaService) {}
 
-  private toDomain(raw: any): EmailVerificationTokenEntity {
+  private toDomain(raw: EmailVerificationToken): EmailVerificationTokenEntity {
     return new EmailVerificationTokenEntity(
       raw.id,
       raw.userId,

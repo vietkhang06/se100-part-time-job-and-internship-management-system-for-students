@@ -5,6 +5,7 @@ import {
   ReviewVisibility,
 } from '@campusjob/contracts';
 import { ReviewModerationTargetHandler } from './review-moderation-target.handler';
+import { IReviewRepository } from '../../domain/repositories/review.repository.interface';
 
 const ctx = (decision: D) => ({
   itemId: 'i1', decisionId: 'd1', targetType: T.REVIEW, targetId: 'rev1', decision,
@@ -12,12 +13,15 @@ const ctx = (decision: D) => ({
 });
 
 describe('ReviewModerationTargetHandler', () => {
-  let repo: { setVisibility: jest.Mock };
+  let repo: jest.Mocked<IReviewRepository>;
   let handler: ReviewModerationTargetHandler;
 
   beforeEach(() => {
-    repo = { setVisibility: jest.fn().mockResolvedValue(true) };
-    handler = new ReviewModerationTargetHandler(repo as any);
+    repo = {
+      create: jest.fn(), findById: jest.fn(), listByStudent: jest.fn(), listVisibleByCompany: jest.fn(),
+      summarizeVisibleByCompany: jest.fn(), createReply: jest.fn(), setVisibility: jest.fn().mockResolvedValue(true),
+    };
+    handler = new ReviewModerationTargetHandler(repo);
   });
 
   it('hides on HIDE and restores on RESTORE', async () => {

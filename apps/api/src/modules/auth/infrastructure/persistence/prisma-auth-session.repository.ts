@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { AuthSession } from '@prisma/client';
 import { PrismaService } from '../../../../shared/database/prisma.service';
 import {
   IAuthSessionRepository,
@@ -10,7 +11,7 @@ import { AuthSessionEntity } from '../../domain/entities/auth-session.entity';
 export class PrismaAuthSessionRepository implements IAuthSessionRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  private toDomain(raw: any): AuthSessionEntity {
+  private toDomain(raw: AuthSession): AuthSessionEntity {
     return new AuthSessionEntity(
       raw.id,
       raw.userId,

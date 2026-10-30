@@ -5,6 +5,8 @@ import { IUserRepository } from '../../../users/domain/repositories/user.reposit
 import { INotificationEmailSender } from '../ports/notification-email-sender.port';
 import { NotificationEntity } from '../../domain/entities/notification.entity';
 import { MAX_EMAIL_ATTEMPTS } from '../../domain/policies/email-retry.policy';
+import { UserEntity } from '../../../users/domain/entities/user.entity';
+import { UserRole, UserStatus } from '@campusjob/contracts';
 
 const makeNotification = (over: Partial<ConstructorParameters<typeof NotificationEntity>[0]> = {}) =>
   new NotificationEntity({
@@ -27,7 +29,7 @@ const makeNotification = (over: Partial<ConstructorParameters<typeof Notificatio
 
 describe('DispatchNotificationEmailUseCase', () => {
   let repo: jest.Mocked<INotificationRepository>;
-  let users: jest.Mocked<Pick<IUserRepository, 'findById'>>;
+  let users: jest.Mocked<IUserRepository>;
   let sender: jest.Mocked<INotificationEmailSender>;
   let useCase: DispatchNotificationEmailUseCase;
   const now = new Date('2026-10-13T00:00:00.000Z');
@@ -46,9 +48,13 @@ describe('DispatchNotificationEmailUseCase', () => {
       markEmailFailed: jest.fn(),
       findEmailDispatchable: jest.fn(),
     };
-    users = { findById: jest.fn().mockResolvedValue({ id: 'u1', email: 'a@b.com' }) };
+    users = {
+      findById: jest.fn().mockResolvedValue(new UserEntity('u1', 'a@b.com', 'hash', 'User', UserRole.STUDENT, UserStatus.ACTIVE)),
+      findByEmail: jest.fn(), create: jest.fn(), createWithVerificationToken: jest.fn(), updateStatus: jest.fn(),
+      updatePassword: jest.fn(), changePasswordAndRevokeSessions: jest.fn(),
+    };
     sender = { send: jest.fn().mockResolvedValue(undefined) };
-    useCase = new DispatchNotificationEmailUseCase(repo, users as any, sender);
+    useCase = new DispatchNotificationEmailUseCase(repo, users, sender);
   });
 
   it('marks SENT and escapes html on success', async () => {

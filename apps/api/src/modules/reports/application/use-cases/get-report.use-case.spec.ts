@@ -2,6 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { ViolationReason, ViolationReportStatus, ViolationTargetType } from '@campusjob/contracts';
 import { GetReportUseCase } from './get-report.use-case';
 import { ViolationReportEntity } from '../../domain/entities/violation-report.entity';
+import { IViolationReportRepository } from '../../domain/repositories/violation-report.repository.interface';
 
 const report = new ViolationReportEntity({
   id: 'r1', reporterId: 'u1', targetType: ViolationTargetType.JOB, targetId: 'j1', targetLabel: 'Job',
@@ -10,8 +11,11 @@ const report = new ViolationReportEntity({
 });
 
 describe('GetReportUseCase', () => {
-  const repo = { findById: jest.fn() };
-  const useCase = new GetReportUseCase(repo as any);
+  const repo: jest.Mocked<IViolationReportRepository> = {
+    create: jest.fn(), findById: jest.fn(), listByReporter: jest.fn(), listByStatus: jest.fn(),
+    markUnderReview: jest.fn(), markResolved: jest.fn(), applyModerationOutcome: jest.fn(),
+  };
+  const useCase = new GetReportUseCase(repo);
 
   it('lets the reporter see their own report', async () => {
     repo.findById.mockResolvedValue(report);

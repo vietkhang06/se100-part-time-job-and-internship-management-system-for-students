@@ -3,6 +3,9 @@ import { NotificationEmailStatus, NotificationEventType } from '@campusjob/contr
 import { PublishNotificationUseCase } from './publish-notification.use-case';
 import { INotificationRepository } from '../../domain/repositories/notification.repository.interface';
 import { NotificationEntity } from '../../domain/entities/notification.entity';
+import { DispatchNotificationEmailUseCase } from './dispatch-notification-email.use-case';
+import { IUserRepository } from '../../../users/domain/repositories/user.repository.interface';
+import { INotificationEmailSender } from '../ports/notification-email-sender.port';
 
 const entity = (id = 'n1') =>
   new NotificationEntity({
@@ -24,15 +27,26 @@ const entity = (id = 'n1') =>
 
 describe('PublishNotificationUseCase', () => {
   let repo: jest.Mocked<INotificationRepository>;
-  let users: { findById: jest.Mock };
-  let dispatch: { execute: jest.Mock };
+  let users: jest.Mocked<IUserRepository>;
+  let dispatch: DispatchNotificationEmailUseCase;
+  let dispatchExecute: jest.SpiedFunction<DispatchNotificationEmailUseCase['execute']>;
   let useCase: PublishNotificationUseCase;
 
   beforeEach(() => {
-    repo = { create: jest.fn() } as any;
-    users = { findById: jest.fn().mockResolvedValue({ id: 'u1' }) };
-    dispatch = { execute: jest.fn().mockResolvedValue('SENT') };
-    useCase = new PublishNotificationUseCase(repo, users as any, dispatch as any);
+    repo = {
+      create: jest.fn(), findById: jest.fn(), findByIdForRecipient: jest.fn(), list: jest.fn(),
+      countUnread: jest.fn(), markRead: jest.fn(), markAllRead: jest.fn(), claimForEmailDispatch: jest.fn(),
+      markEmailSent: jest.fn(), markEmailFailed: jest.fn(), findEmailDispatchable: jest.fn(),
+    };
+    users = {
+      findById: jest.fn().mockResolvedValue({ id: 'u1' }), findByEmail: jest.fn(), create: jest.fn(),
+      createWithVerificationToken: jest.fn(), updateStatus: jest.fn(), updatePassword: jest.fn(),
+      changePasswordAndRevokeSessions: jest.fn(),
+    };
+    const sender: INotificationEmailSender = { send: jest.fn() };
+    dispatch = new DispatchNotificationEmailUseCase(repo, users, sender);
+    dispatchExecute = jest.spyOn(dispatch, 'execute').mockResolvedValue('SENT');
+    useCase = new PublishNotificationUseCase(repo, users, dispatch);
   });
 
   it('stores notification as PENDING email and dispatches for email-enabled events', async () => {
@@ -53,7 +67,7 @@ describe('PublishNotificationUseCase', () => {
         dedupeKey: 'JOB_APPROVED:j1:d1',
       }),
     );
-    expect(dispatch.execute).toHaveBeenCalledWith('n1');
+    expect(dispatchExecute).toHaveBeenCalledWith('n1');
   });
 
   it('uses NOT_REQUIRED and does not dispatch for in-app-only events', async () => {
@@ -67,7 +81,7 @@ describe('PublishNotificationUseCase', () => {
     expect(repo.create).toHaveBeenCalledWith(
       expect.objectContaining({ emailStatus: NotificationEmailStatus.NOT_REQUIRED }),
     );
-    expect(dispatch.execute).not.toHaveBeenCalled();
+    expect(dispatchExecute).not.toHaveBeenCalled();
   });
 
   it('returns DUPLICATE and does not send email again', async () => {
@@ -80,12 +94,12 @@ describe('PublishNotificationUseCase', () => {
     });
 
     expect(result.outcome).toBe('DUPLICATE');
-    expect(dispatch.execute).not.toHaveBeenCalled();
+    expect(dispatchExecute).not.toHaveBeenCalled();
   });
 
   it('still returns CREATED when dispatch crashes (event is already stored)', async () => {
     repo.create.mockResolvedValue({ notification: entity(), created: true });
-    dispatch.execute.mockRejectedValue(new Error('db down'));
+    dispatchExecute.mockRejectedValue(new Error('db down'));
 
     const result = await useCase.publish({
       eventType: NotificationEventType.JOB_APPROVED,
@@ -105,8 +119,11 @@ describe('PublishNotificationUseCase', () => {
   });
 
   it('rejects unknown event types', async () => {
-    await expect(
-      useCase.publish({ eventType: 'NOPE' as any, recipientId: 'u1' }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    const input: Parameters<PublishNotificationUseCase['publish']>[0] = {
+      eventType: NotificationEventType.JOB_APPROVED,
+      recipientId: 'u1',
+    };
+    Object.assign(input, { eventType: 'NOPE' });
+    await expect(useCase.publish(input)).rejects.toBeInstanceOf(BadRequestException);
   });
 });

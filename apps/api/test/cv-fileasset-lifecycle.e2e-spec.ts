@@ -4,12 +4,12 @@ import cookieParser from 'cookie-parser';
 import supertest from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/shared/database/prisma.service';
-import { FileAssetStatus } from '../src/shared/storage/file-asset.service';
+import { FileAssetStatus, FileAssetResult } from '../src/shared/storage/file-asset.service';
 import { IStorageService, STORAGE_SERVICE_TOKEN } from '../src/shared/storage/storage.interface';
 import { PasswordHasher } from '../src/modules/auth/infrastructure/security/password-hasher';
 import { UserRole, UserStatus, JobSeekingStatus } from '@campusjob/contracts';
 
-const request = (typeof supertest === 'function' ? supertest : (supertest as any).default) as typeof supertest;
+const request = supertest;
 
 describe('S3-M02-02: CV/FileAsset Lifecycle & Ownership Verification (e2e)', () => {
   let app: INestApplication;
@@ -39,8 +39,8 @@ describe('S3-M02-02: CV/FileAsset Lifecycle & Ownership Verification (e2e)', () 
     },
   };
 
-  let uploadedFileAssetA: any;
-  let uploadedFileAssetA2: any;
+  let uploadedFileAssetA: Pick<FileAssetResult, 'id' | 'storageKey'>;
+  let uploadedFileAssetA2: Pick<FileAssetResult, 'id' | 'storageKey'>;
   let createdCvAId: string;
   let createdCvNoFileId: string;
 
@@ -309,11 +309,11 @@ describe('S3-M02-02: CV/FileAsset Lifecycle & Ownership Verification (e2e)', () 
         .expect(200);
 
       expect(res.body.total).toBe(2);
-      const cvWithFile = res.body.data.find((c: any) => c.id === createdCvAId);
+      const cvWithFile = res.body.data.find((c: { id: string; fileAssetId: string | null }) => c.id === createdCvAId);
       expect(cvWithFile).toBeDefined();
       expect(cvWithFile.fileAssetId).toBe(uploadedFileAssetA.id);
 
-      const cvWithoutFile = res.body.data.find((c: any) => c.id === createdCvNoFileId);
+      const cvWithoutFile = res.body.data.find((c: { id: string; fileAssetId: string | null }) => c.id === createdCvNoFileId);
       expect(cvWithoutFile).toBeDefined();
       expect(cvWithoutFile.fileAssetId).toBeNull();
     });

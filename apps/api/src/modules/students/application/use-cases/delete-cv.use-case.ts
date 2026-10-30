@@ -80,9 +80,9 @@ export class DeleteCvUseCase {
     if (cv.fileAssetId && this.fileAssetService) {
       try {
         await this.fileAssetService.deleteFileAsset(cv.fileAssetId, userId);
-      } catch (err: any) {
+      } catch (err: unknown) {
         this.logger.warn(
-          `Could not delete FileAsset [${cv.fileAssetId}] safely: ${err.message}`,
+          `Could not delete FileAsset [${cv.fileAssetId}] safely: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     }

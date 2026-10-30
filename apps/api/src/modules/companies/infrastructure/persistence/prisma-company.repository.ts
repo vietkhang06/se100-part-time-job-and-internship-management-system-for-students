@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Company } from '@prisma/client';
 import { CompanyVerificationStatus } from '@campusjob/contracts';
 import { PrismaService } from '../../../../shared/database/prisma.service';
 import { ICompanyRepository } from '../../domain/repositories/company.repository.interface';
@@ -8,7 +9,7 @@ import { CompanyEntity } from '../../domain/entities/company.entity';
 export class PrismaCompanyRepository implements ICompanyRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  private toDomain(raw: any): CompanyEntity {
+  private toDomain(raw: Company): CompanyEntity {
     return new CompanyEntity({
       id: raw.id,
       name: raw.name,

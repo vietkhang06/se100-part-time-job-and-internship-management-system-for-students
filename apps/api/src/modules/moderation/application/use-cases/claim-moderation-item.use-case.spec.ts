@@ -2,6 +2,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { ModerationStatus as S, ModerationTargetType as T, UserRole } from '@campusjob/contracts';
 import { ClaimModerationItemUseCase } from './claim-moderation-item.use-case';
 import { ModerationItemEntity } from '../../domain/entities/moderation-item.entity';
+import { IModerationRepository } from '../../domain/repositories/moderation.repository.interface';
 
 const item = (status = S.PENDING, assigneeId: string | null = null) =>
   new ModerationItemEntity({
@@ -10,12 +11,15 @@ const item = (status = S.PENDING, assigneeId: string | null = null) =>
   });
 
 describe('ClaimModerationItemUseCase', () => {
-  let repo: { findById: jest.Mock; claim: jest.Mock };
+  let repo: jest.Mocked<IModerationRepository>;
   let useCase: ClaimModerationItemUseCase;
 
   beforeEach(() => {
-    repo = { findById: jest.fn(), claim: jest.fn() };
-    useCase = new ClaimModerationItemUseCase(repo as any);
+    repo = {
+      enqueue: jest.fn(), findById: jest.fn(), list: jest.fn(), claim: jest.fn(), decide: jest.fn(),
+      markDecisionSynced: jest.fn(), markDecisionSyncFailed: jest.fn(), findUnsyncedDecisions: jest.fn(),
+    };
+    useCase = new ClaimModerationItemUseCase(repo);
   });
 
   it('claims a pending item', async () => {

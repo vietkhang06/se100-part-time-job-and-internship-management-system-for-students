@@ -9,7 +9,7 @@ export interface NormalizedSkillResult {
  * - Discards empty strings.
  * - Computes lowercase normalizedName for canonical case-insensitive matching.
  */
-export function normalizeSkillName(raw: string): NormalizedSkillResult | null {
+export function normalizeSkillName(raw: unknown): NormalizedSkillResult | null {
   if (!raw || typeof raw !== 'string') {
     return null;
   }
@@ -32,7 +32,7 @@ export function normalizeSkillName(raw: string): NormalizedSkillResult | null {
  * - Trims whitespace and discards blanks.
  * - Deduplicates identical normalized names (preserving the first encountered display casing).
  */
-export function normalizeSkillList(rawList: string[]): NormalizedSkillResult[] {
+export function normalizeSkillList(rawList: unknown): NormalizedSkillResult[] {
   if (!rawList || !Array.isArray(rawList)) {
     return [];
   }
@@ -40,7 +40,7 @@ export function normalizeSkillList(rawList: string[]): NormalizedSkillResult[] {
   const seen = new Set<string>();
   const results: NormalizedSkillResult[] = [];
 
-  for (const item of rawList) {
+  for (const item of rawList as unknown[]) {
     const normalized = normalizeSkillName(item);
     if (!normalized) {
       continue;
