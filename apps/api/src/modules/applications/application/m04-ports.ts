@@ -107,6 +107,7 @@ export class M04WorkflowError extends Error {
       | 'INVALID_STATE'
       | 'INVALID_INPUT'
       | 'DUPLICATE_APPLICATION'
+      | 'QUOTA_EXCEEDED'
       | 'CONCURRENT_CHANGE',
   ) {
     super(code);
