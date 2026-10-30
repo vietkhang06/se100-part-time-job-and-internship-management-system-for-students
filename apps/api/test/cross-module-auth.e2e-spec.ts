@@ -26,7 +26,7 @@ import {
 } from '../src/modules/applications/application/m04-ports';
 import { RolesGuard } from '../src/shared/guards/roles.guard';
 
-const request = (typeof supertest === 'function' ? supertest : (supertest as any).default) as typeof supertest;
+const request = supertest;
 
 describe('S2-M01-05: Cross-Module Authorization (E2E & Contract Tests)', () => {
   let app: INestApplication;
@@ -206,7 +206,7 @@ describe('S2-M01-05: Cross-Module Authorization (E2E & Contract Tests)', () => {
           },
           update: {},
         });
-        (acc as any).profileId = profile.id;
+        Object.assign(acc, { profileId: profile.id });
       }
     }
 
@@ -377,7 +377,7 @@ describe('S2-M01-05: Cross-Module Authorization (E2E & Contract Tests)', () => {
         .expect(200);
 
       expect(Array.isArray(res.body.data)).toBe(true);
-      const cvIds = res.body.data.map((c: any) => c.id);
+      const cvIds = res.body.data.map((c: { id: string }) => c.id);
       expect(cvIds).toContain(accounts.studentA.cvId);
       expect(cvIds).not.toContain(accounts.studentB.cvId);
     });

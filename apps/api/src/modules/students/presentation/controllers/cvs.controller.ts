@@ -15,8 +15,9 @@ import {
   StreamableFile,
   Res,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { UploadFileInput } from '../../application/use-cases/upload-cv-file.use-case';
 
 export const CV_FILE_UPLOAD_LIMITS = {
   fileSize: 10 * 1024 * 1024, // 10MB HTTP boundary limit
@@ -24,7 +25,7 @@ export const CV_FILE_UPLOAD_LIMITS = {
 };
 
 export const cvFileFilter = (
-  req: any,
+  req: Request,
   file: { originalname?: string; mimetype?: string },
   callback: (error: Error | null, acceptFile: boolean) => void,
 ) => {
@@ -126,7 +127,7 @@ export class CvsController {
   @ApiResponse({ status: 403, description: 'Không phải vai trò STUDENT' })
   async uploadCvFile(
     @CurrentUser('id') userId: string,
-    @UploadedFile() file: any,
+    @UploadedFile() file: UploadFileInput,
   ): Promise<FileAssetDto> {
     if (!file) {
       throw new BadRequestException('Vui lòng chọn tệp tài liệu để tải lên.');

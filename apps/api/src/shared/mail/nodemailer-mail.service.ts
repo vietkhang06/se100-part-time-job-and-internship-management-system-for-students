@@ -34,8 +34,8 @@ export class NodemailerMailService implements IMailService {
         text: options.text,
       });
       this.logger.log(`Email '${options.subject}' dispatched successfully to ${options.to}`);
-    } catch (err: any) {
-      this.logger.error(`Failed to dispatch email to ${options.to}: ${err.message}`);
+    } catch (err: unknown) {
+      this.logger.error(`Failed to dispatch email to ${options.to}: ${err instanceof Error ? err.message : String(err)}`);
       // Do not rethrow in a way that exposes SMTP secrets or fails critical transactional state if mail transport is offline
       // But log the error clearly.
     }

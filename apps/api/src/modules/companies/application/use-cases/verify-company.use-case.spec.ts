@@ -1,24 +1,28 @@
 import {
   BadRequestException,
-  NotFoundException,
 } from '@nestjs/common';
 import {
   CompanyVerificationStatus,
   CompanyMemberRole,
   CompanyMemberStatus,
 } from '@campusjob/contracts';
+import { FileAssetStatus } from '@prisma/client';
+import { Test } from '@nestjs/testing';
 import { InMemoryCompanyRepository } from '../../infrastructure/persistence/in-memory-company.repository';
 import { InMemoryCompanyMemberRepository } from '../../infrastructure/persistence/in-memory-company-member.repository';
 import { InMemoryCompanyVerificationRepository } from '../../infrastructure/persistence/in-memory-company-verification.repository';
 import { VerifyCompanyUseCase } from './verify-company.use-case';
 import { ResubmitCompanyVerificationUseCase } from './resubmit-company-verification.use-case';
 import { FileAssetService } from '../../../../shared/storage/file-asset.service';
+import { CompanyEntity } from '../../domain/entities/company.entity';
+import { PrismaService } from '../../../../shared/database/prisma.service';
+import { STORAGE_SERVICE_TOKEN } from '../../../../shared/storage/storage.interface';
 
 describe('S4-M03-02: Company Verification Workflow', () => {
   let companyRepo: InMemoryCompanyRepository;
   let memberRepo: InMemoryCompanyMemberRepository;
   let verificationRepo: InMemoryCompanyVerificationRepository;
-  let fileAssetService: jest.Mocked<FileAssetService>;
+  let fileAssetService: FileAssetService;
 
   let verifyCompanyUseCase: VerifyCompanyUseCase;
   let resubmitUseCase: ResubmitCompanyVerificationUseCase;
@@ -32,13 +36,22 @@ describe('S4-M03-02: Company Verification Workflow', () => {
     memberRepo = new InMemoryCompanyMemberRepository();
     verificationRepo = new InMemoryCompanyVerificationRepository();
 
-    fileAssetService = {
-      verifyOwnership: jest.fn().mockResolvedValue({
+    const fileAssetModule = await Test.createTestingModule({
+      providers: [FileAssetService, { provide: PrismaService, useValue: {} }, { provide: STORAGE_SERVICE_TOKEN, useValue: {} }],
+    }).compile();
+    fileAssetService = fileAssetModule.get(FileAssetService);
+    jest.spyOn(fileAssetService, 'verifyOwnership').mockResolvedValue({
         id: 'file-asset-doc-1',
         ownerUserId,
-        status: 'PERMANENT',
-      } as any),
-    } as any;
+        originalName: 'license.pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: 2048,
+        checksumSha256: 'dummy-sha256',
+        storageKey: 'secure-key-1',
+        status: FileAssetStatus.PERMANENT,
+        uploadedAt: new Date(),
+        updatedAt: new Date(),
+      });
 
     verifyCompanyUseCase = new VerifyCompanyUseCase(
       companyRepo,
@@ -52,14 +65,12 @@ describe('S4-M03-02: Company Verification Workflow', () => {
     );
 
     // Seed Company in PENDING_REVIEW status
-    await companyRepo.create({
+    const created = new CompanyEntity({
+      id: companyId,
       name: 'Verify Corp',
       taxId: '0109998888',
       verificationStatus: CompanyVerificationStatus.PENDING_REVIEW,
     });
-    const created = Array.from(companyRepo.companies.values())[0];
-    (created as any)._id = companyId;
-    companyRepo.companies.delete(created.id);
     companyRepo.companies.set(companyId, created);
 
     // Seed Owner membership
@@ -172,7 +183,7 @@ describe('S4-M03-02: Company Verification Workflow', () => {
   describe('Resubmission & Verification History (nộp lại không xóa lịch sử cũ)', () => {
     it('should create a new verification record on resubmission and preserve earlier history', async () => {
       // 1. Initial submission with document
-      const firstVerif = await verificationRepo.createVerification({
+      await verificationRepo.createVerification({
         companyId,
         status: CompanyVerificationStatus.PENDING_REVIEW,
         documents: [{ fileAssetId: 'old-doc-1' }],

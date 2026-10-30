@@ -7,10 +7,11 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc --noEmit",
-    "lint": "echo \"@campusjob/contracts lint passed\"",
-    "test": "echo \"@campusjob/contracts test passed\""
+    "lint": "eslint \"src/**/*.ts\"",
+    "test": "pnpm --filter @campusjob/api exec jest --config test/jest-contracts.json --runInBand"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.14",
     "typescript": "^5.7.2"
   }
 }

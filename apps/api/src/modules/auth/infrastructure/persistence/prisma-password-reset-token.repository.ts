@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { PasswordResetToken } from '@prisma/client';
 import { PrismaService } from '../../../../shared/database/prisma.service';
 import { IPasswordResetTokenRepository } from '../../domain/repositories/password-reset-token.repository.interface';
 import { PasswordResetTokenEntity } from '../../domain/entities/password-reset-token.entity';
@@ -7,7 +8,7 @@ import { PasswordResetTokenEntity } from '../../domain/entities/password-reset-t
 export class PrismaPasswordResetTokenRepository implements IPasswordResetTokenRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  private toDomain(raw: any): PasswordResetTokenEntity {
+  private toDomain(raw: PasswordResetToken): PasswordResetTokenEntity {
     return new PasswordResetTokenEntity(
       raw.id,
       raw.userId,

@@ -54,8 +54,8 @@ export class LiftSanctionUseCase {
       }
       try {
         await handler.unsuspend(sanction.targetId, sanction.id);
-      } catch (err: any) {
-        this.logger.error(`Unsuspend company ${sanction.targetId} failed: ${err?.message}`);
+      } catch (err: unknown) {
+        this.logger.error(`Unsuspend company ${sanction.targetId} failed: ${err instanceof Error ? err.message : String(err)}`);
         throw new BadGatewayException({
           message: 'Không thể gỡ đình chỉ doanh nghiệp lúc này. Vui lòng thử lại.',
           code: 'SANCTION_TARGET_SYNC_FAILED',

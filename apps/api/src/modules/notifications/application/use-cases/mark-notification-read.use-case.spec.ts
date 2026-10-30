@@ -2,6 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { NotificationEmailStatus } from '@campusjob/contracts';
 import { MarkNotificationReadUseCase } from './mark-notification-read.use-case';
 import { NotificationEntity } from '../../domain/entities/notification.entity';
+import { INotificationRepository } from '../../domain/repositories/notification.repository.interface';
 
 const make = (readAt: Date | null) =>
   new NotificationEntity({
@@ -22,12 +23,16 @@ const make = (readAt: Date | null) =>
   });
 
 describe('MarkNotificationReadUseCase', () => {
-  let repo: { findByIdForRecipient: jest.Mock; markRead: jest.Mock };
+  let repo: jest.Mocked<INotificationRepository>;
   let useCase: MarkNotificationReadUseCase;
 
   beforeEach(() => {
-    repo = { findByIdForRecipient: jest.fn(), markRead: jest.fn() };
-    useCase = new MarkNotificationReadUseCase(repo as any);
+    repo = {
+      create: jest.fn(), findById: jest.fn(), findByIdForRecipient: jest.fn(), list: jest.fn(), countUnread: jest.fn(),
+      markRead: jest.fn(), markAllRead: jest.fn(), claimForEmailDispatch: jest.fn(), markEmailSent: jest.fn(),
+      markEmailFailed: jest.fn(), findEmailDispatchable: jest.fn(),
+    };
+    useCase = new MarkNotificationReadUseCase(repo);
   });
 
   it('marks an unread notification as read', async () => {

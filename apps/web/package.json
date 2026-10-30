@@ -6,9 +6,9 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
-    "lint": "echo \"@campusjob/web lint passed\"",
+    "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"@campusjob/web test passed\""
+    "test": "pnpm --filter @campusjob/api exec jest --config test/jest-web.json --runInBand"
   },
   "dependencies": {
     "@campusjob/contracts": "workspace:*",

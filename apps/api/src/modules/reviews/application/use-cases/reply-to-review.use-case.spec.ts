@@ -3,6 +3,7 @@ import { ReviewVisibility } from '@campusjob/contracts';
 import { ReplyToReviewUseCase } from './reply-to-review.use-case';
 import { ReviewSourcesRegistry } from '../ports/review-sources.port';
 import { ReviewEntity } from '../../domain/entities/review.entity';
+import { IReviewRepository } from '../../domain/repositories/review.repository.interface';
 
 const make = (over: Partial<ConstructorParameters<typeof ReviewEntity>[0]> = {}) =>
   new ReviewEntity({
@@ -11,20 +12,24 @@ const make = (over: Partial<ConstructorParameters<typeof ReviewEntity>[0]> = {})
   });
 
 describe('ReplyToReviewUseCase', () => {
-  let repo: { findById: jest.Mock; createReply: jest.Mock };
+  let repo: jest.Mocked<IReviewRepository>;
   let sources: ReviewSourcesRegistry;
   let companies: { findByEmployer: jest.Mock; findByJob: jest.Mock };
   let useCase: ReplyToReviewUseCase;
 
   beforeEach(() => {
-    repo = { findById: jest.fn().mockResolvedValue(make()), createReply: jest.fn().mockResolvedValue({ created: true }) };
+    repo = {
+      create: jest.fn(), findById: jest.fn().mockResolvedValue(make()), listByStudent: jest.fn(),
+      listVisibleByCompany: jest.fn(), summarizeVisibleByCompany: jest.fn(),
+      createReply: jest.fn().mockResolvedValue({ created: true }), setVisibility: jest.fn(),
+    };
     sources = new ReviewSourcesRegistry();
     companies = {
       findByEmployer: jest.fn().mockResolvedValue({ companyId: 'c1', companyName: 'ACME', ownerUserId: 'emp1' }),
       findByJob: jest.fn(),
     };
     sources.registerCompanyDirectory(companies);
-    useCase = new ReplyToReviewUseCase(repo as any, sources);
+    useCase = new ReplyToReviewUseCase(repo, sources);
   });
 
   it('lets the owning employer reply once and trims the content', async () => {
@@ -62,7 +67,7 @@ describe('ReplyToReviewUseCase', () => {
   it('returns 404 for unknown review and 503 when the company directory is missing', async () => {
     repo.findById.mockResolvedValue(null);
     await expect(useCase.execute('emp1', 'r1', 'hi')).rejects.toBeInstanceOf(NotFoundException);
-    useCase = new ReplyToReviewUseCase(repo as any, new ReviewSourcesRegistry());
+    useCase = new ReplyToReviewUseCase(repo, new ReviewSourcesRegistry());
     await expect(useCase.execute('emp1', 'r1', 'hi')).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 });

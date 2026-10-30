@@ -72,8 +72,8 @@ export class DispatchNotificationEmailUseCase {
       });
       await this.notificationRepository.markEmailSent(notification.id, new Date());
       return 'SENT';
-    } catch (err: any) {
-      const message = String(err?.message ?? err).slice(0, 500);
+    } catch (err: unknown) {
+      const message = (err instanceof Error ? err.message : String(err)).slice(0, 500);
       this.logger.warn(`Email for notification ${notification.id} failed (attempt ${attempts}): ${message}`);
       await this.notificationRepository.markEmailFailed(notification.id, {
         attempts,

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, type Sanction } from '@prisma/client';
 import {
   SanctionStatus,
   SanctionTargetType,
@@ -18,14 +18,14 @@ import {
 export class PrismaSanctionRepository implements ISanctionRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  private toDomain(raw: any): SanctionEntity {
+  private toDomain(raw: Sanction): SanctionEntity {
     return new SanctionEntity({
       id: raw.id,
       reportId: raw.reportId,
-      targetType: raw.targetType,
+      targetType: raw.targetType as SanctionEntity['targetType'],
       targetId: raw.targetId,
-      type: raw.type,
-      storedStatus: raw.status,
+      type: raw.type as SanctionEntity['type'],
+      storedStatus: raw.status as SanctionEntity['storedStatus'],
       reason: raw.reason,
       startsAt: raw.startsAt,
       endsAt: raw.endsAt ?? null,
@@ -73,9 +73,11 @@ export class PrismaSanctionRepository implements ISanctionRepository {
         return sanction;
       });
       return { sanction: this.toDomain(raw), duplicate: false };
-    } catch (err: any) {
+    } catch (err: unknown) {
       // reportId UNIQUE: báo cáo này đã có chế tài (hai Admin cùng bấm).
-      if (err?.code === 'P2002') return { sanction: null, duplicate: true };
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        return { sanction: null, duplicate: true };
+      }
       throw err;
     }
   }

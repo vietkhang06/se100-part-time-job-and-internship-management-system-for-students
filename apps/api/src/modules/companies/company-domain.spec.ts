@@ -3,11 +3,11 @@ import {
   CompanyMemberStatus,
   CompanyVerificationStatus,
   DocumentType,
-  CompanyDto,
   CompanyMemberDto,
   CompanyBranchDto,
   CompanyVerificationDto,
   CompanyVerificationDocumentDto,
+  FileAssetStatus,
 } from '@campusjob/contracts';
 
 describe('Company Domain & Verification Contracts (W2-DB-03 Schema Integrity)', () => {
@@ -109,7 +109,7 @@ describe('Company Domain & Verification Contracts (W2-DB-03 Schema Integrity)', 
           sizeBytes: 2048576,
           checksumSha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
           storageKey: '550e8400-e29b-41d4-a716-446655440000.pdf',
-          status: 'PERMANENT' as any,
+          status: FileAssetStatus.PERMANENT,
           uploadedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         },

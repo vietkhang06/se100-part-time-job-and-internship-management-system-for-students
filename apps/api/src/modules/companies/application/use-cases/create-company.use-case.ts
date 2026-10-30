@@ -2,7 +2,6 @@ import {
   Inject,
   Injectable,
   ConflictException,
-  BadRequestException,
 } from '@nestjs/common';
 import {
   CompanyProfileResponseDto,

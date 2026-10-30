@@ -3,6 +3,7 @@ import { ReviewVisibility } from '@campusjob/contracts';
 import { CreateReviewUseCase } from './create-review.use-case';
 import { ReviewSourcesRegistry } from '../ports/review-sources.port';
 import { ReviewEntity } from '../../domain/entities/review.entity';
+import { IReviewRepository } from '../../domain/repositories/review.repository.interface';
 
 const review = () =>
   new ReviewEntity({
@@ -11,14 +12,17 @@ const review = () =>
   });
 
 describe('CreateReviewUseCase', () => {
-  let repo: { create: jest.Mock };
+  let repo: jest.Mocked<IReviewRepository>;
   let sources: ReviewSourcesRegistry;
   let applications: { getOwnedApplication: jest.Mock };
   let companies: { findByJob: jest.Mock; findByEmployer: jest.Mock };
   let useCase: CreateReviewUseCase;
 
   beforeEach(() => {
-    repo = { create: jest.fn() };
+    repo = {
+      create: jest.fn(), findById: jest.fn(), listByStudent: jest.fn(), listVisibleByCompany: jest.fn(),
+      summarizeVisibleByCompany: jest.fn(), createReply: jest.fn(), setVisibility: jest.fn(),
+    };
     sources = new ReviewSourcesRegistry();
     applications = {
       getOwnedApplication: jest.fn().mockResolvedValue({ applicationId: 'a1', jobId: 'j1', status: 'ACCEPTED' }),
@@ -29,7 +33,7 @@ describe('CreateReviewUseCase', () => {
     };
     sources.registerApplicationSource(applications);
     sources.registerCompanyDirectory(companies);
-    useCase = new CreateReviewUseCase(repo as any, sources);
+    useCase = new CreateReviewUseCase(repo, sources);
   });
 
   const input = (over = {}) => ({ applicationId: 'a1', rating: 5, comment: '  Tốt  ', ...over });
@@ -52,7 +56,7 @@ describe('CreateReviewUseCase', () => {
   });
 
   it('fails closed (503) when M03/M04 adapters are not registered', async () => {
-    useCase = new CreateReviewUseCase(repo as any, new ReviewSourcesRegistry());
+    useCase = new CreateReviewUseCase(repo, new ReviewSourcesRegistry());
     await expect(useCase.execute('stu1', input())).rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(repo.create).not.toHaveBeenCalled();
   });

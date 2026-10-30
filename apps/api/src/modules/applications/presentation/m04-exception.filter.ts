@@ -18,7 +18,7 @@ export class M04ExceptionFilter implements ExceptionFilter {
     response.status(status).json({
       statusCode: status, message: exception.message, error: exception.name,
       code, timestamp: new Date().toISOString(), path: request.url,
-      correlationId: (request.headers['x-correlation-id'] || request.headers['x-request-id'] || (request as any).id),
+      correlationId: request.headers['x-correlation-id'] || request.headers['x-request-id'] || request.id,
     });
   }
 }

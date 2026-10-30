@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import {
   CompanyVerificationStatus,
   DocumentType,
@@ -9,13 +10,17 @@ import {
   VerificationRecord,
 } from '../../domain/repositories/company-verification.repository.interface';
 
+type VerificationWithDocuments = Prisma.CompanyVerificationGetPayload<{
+  include: { documents: { include: { fileAsset: true } } };
+}>;
+
 @Injectable()
 export class PrismaCompanyVerificationRepository
   implements ICompanyVerificationRepository
 {
   constructor(private readonly prisma: PrismaService) {}
 
-  private toDomain(raw: any): VerificationRecord {
+  private toDomain(raw: VerificationWithDocuments): VerificationRecord {
     return {
       id: raw.id,
       companyId: raw.companyId,
@@ -26,7 +31,7 @@ export class PrismaCompanyVerificationRepository
       reviewedAt: raw.reviewedAt,
       createdAt: raw.createdAt,
       updatedAt: raw.updatedAt,
-      documents: (raw.documents ?? []).map((d: any) => ({
+      documents: raw.documents.map((d) => ({
         id: d.id,
         verificationId: d.verificationId,
         fileAssetId: d.fileAssetId,

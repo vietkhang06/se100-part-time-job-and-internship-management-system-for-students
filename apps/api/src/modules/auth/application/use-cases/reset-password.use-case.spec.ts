@@ -140,10 +140,10 @@ describe('ResetPasswordUseCase', () => {
         newPassword: 'weak',
       });
       fail('Expected BadRequestException');
-    } catch (err: any) {
-      expect(err).toBeInstanceOf(BadRequestException);
+    } catch (err: unknown) {
+      if (!(err instanceof BadRequestException)) throw err;
       const res = err.getResponse();
-      expect(res.code).toBe(AuthErrorCode.WEAK_PASSWORD);
+      expect(res).toMatchObject({ code: AuthErrorCode.WEAK_PASSWORD });
     }
 
     expect(tokenRepository.resetPasswordAndRevokeSessions).not.toHaveBeenCalled();

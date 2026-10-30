@@ -13,6 +13,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import {
+  AuthContext,
   RegisterResponseDto,
   VerifyEmailResponseDto,
   ResendVerificationResponseDto,
@@ -217,7 +218,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Get current authenticated user profile' })
   @ApiResponse({ status: 200, description: 'Returns authenticated user info' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async me(@CurrentUser() user: any): Promise<MeResponseDto> {
+  async me(@CurrentUser() user: AuthContext): Promise<MeResponseDto> {
     return { user };
   }
 

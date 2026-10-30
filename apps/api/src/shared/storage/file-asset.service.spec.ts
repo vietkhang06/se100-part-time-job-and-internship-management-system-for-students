@@ -3,10 +3,19 @@ import { FileAssetService, FileAssetStatus } from './file-asset.service';
 import { IStorageService } from './storage.interface';
 import { PrismaService } from '../database/prisma.service';
 
+interface FileAssetPrismaMock {
+  fileAsset: {
+    create: jest.Mock; findUnique: jest.Mock; findMany: jest.Mock;
+    update: jest.Mock; delete: jest.Mock;
+  };
+  $transaction: jest.Mock;
+  $queryRaw: jest.Mock;
+}
+
 describe('FileAssetService (W2-DB-02 / W2-DO-01)', () => {
   let service: FileAssetService;
   let mockStorageService: jest.Mocked<IStorageService>;
-  let mockPrisma: any;
+  let mockPrisma: FileAssetPrismaMock;
 
   beforeEach(() => {
     mockStorageService = {
@@ -29,11 +38,12 @@ describe('FileAssetService (W2-DB-02 / W2-DO-01)', () => {
         update: jest.fn(),
         delete: jest.fn(),
       },
-      $transaction: jest.fn(async (cb) => cb(mockPrisma)),
+      $transaction: jest.fn(async (cb: (tx: FileAssetPrismaMock) => Promise<unknown>) => cb(mockPrisma)),
       $queryRaw: jest.fn().mockResolvedValue([{ id: 'asset-1' }]),
     };
 
-    service = new FileAssetService(mockPrisma as PrismaService, mockStorageService);
+    const prisma = Object.assign(Object.create(PrismaService.prototype) as PrismaService, mockPrisma);
+    service = new FileAssetService(prisma, mockStorageService);
   });
 
   describe('storeFileAsset', () => {
@@ -312,6 +322,7 @@ describe('FileAssetService (W2-DB-02 / W2-DO-01)', () => {
 
       const stats = await service.retryPendingDeletions();
 
+      expect(stats).toEqual({ attempted: 1, succeeded: 1, failed: 0 });
       expect(mockPrisma.fileAsset.update).toHaveBeenCalledWith({
         where: { id: 'asset-concurrent-1' },
         data: { status: FileAssetStatus.PERMANENT },

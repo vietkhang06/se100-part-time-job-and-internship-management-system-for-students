@@ -8,6 +8,8 @@ import {
 } from '@campusjob/contracts';
 import { DecideModerationItemUseCase } from './decide-moderation-item.use-case';
 import { ModerationTargetHandlerRegistry } from '../ports/moderation-target-handler.port';
+import { IModerationRepository } from '../../domain/repositories/moderation.repository.interface';
+import { INotificationPublisher } from '../../../notifications/application/ports/notification-publisher.port';
 import {
   ModerationDecisionEntity,
   ModerationItemEntity,
@@ -44,10 +46,10 @@ const decision = (d: D) =>
 
 describe('DecideModerationItemUseCase', () => {
   const moderator = { id: 'mod1', role: UserRole.MODERATOR };
-  let repo: any;
+  let repo: jest.Mocked<IModerationRepository>;
   let handlers: ModerationTargetHandlerRegistry;
   let handler: { applyDecision: jest.Mock };
-  let notifications: { publish: jest.Mock };
+  let notifications: jest.Mocked<INotificationPublisher>;
   let useCase: DecideModerationItemUseCase;
 
   beforeEach(() => {
@@ -56,12 +58,16 @@ describe('DecideModerationItemUseCase', () => {
       decide: jest.fn(),
       markDecisionSynced: jest.fn(),
       markDecisionSyncFailed: jest.fn(),
+      enqueue: jest.fn(),
+      list: jest.fn(),
+      claim: jest.fn(),
+      findUnsyncedDecisions: jest.fn(),
     };
     handlers = new ModerationTargetHandlerRegistry();
     handler = { applyDecision: jest.fn().mockResolvedValue(undefined) };
     handlers.register(T.JOB, handler);
-    notifications = { publish: jest.fn().mockResolvedValue({ outcome: 'CREATED' }) };
-    useCase = new DecideModerationItemUseCase(repo, handlers, notifications as any);
+    notifications = { publish: jest.fn().mockResolvedValue({ outcome: 'CREATED' }), publishMany: jest.fn() };
+    useCase = new DecideModerationItemUseCase(repo, handlers, notifications);
   });
 
   const approveSaved = () =>
@@ -92,7 +98,7 @@ describe('DecideModerationItemUseCase', () => {
 
   it('keeps the decision but marks it unsynced when no handler is registered', async () => {
     const empty = new ModerationTargetHandlerRegistry();
-    useCase = new DecideModerationItemUseCase(repo, empty, notifications as any);
+    useCase = new DecideModerationItemUseCase(repo, empty, notifications);
     approveSaved();
 
     const result = await useCase.execute('i1', moderator, { decision: D.APPROVE });

@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { ICvRepository } from '../../domain/repositories/cv.repository.interface';
+import {
+  CreateCvData,
+  ICvRepository,
+  UpdateCvData,
+} from '../../domain/repositories/cv.repository.interface';
 import { CvEntity } from '../../domain/entities/cv.entity';
 
 /**
@@ -121,7 +125,7 @@ export class InMemoryCvRepository implements ICvRepository {
     return (await this.findByStudentProfileId(studentProfileId)).length;
   }
 
-  async create(data: any): Promise<CvEntity> {
+  async create(data: CreateCvData): Promise<CvEntity> {
     const cv = new CvEntity(
       `cv-${Date.now()}`,
       data.studentProfileId,
@@ -143,7 +147,7 @@ export class InMemoryCvRepository implements ICvRepository {
     return cv;
   }
 
-  async update(id: string, data: any): Promise<CvEntity> {
+  async update(id: string, data: UpdateCvData): Promise<CvEntity> {
     const existing = await this.findById(id);
     if (!existing) throw new Error('CV not found');
     const updated = new CvEntity(
@@ -216,7 +220,8 @@ export class InMemoryCvRepository implements ICvRepository {
     return list[0] ?? null;
   }
 
-  async isCvInUse(_cvId: string): Promise<boolean> {
+  async isCvInUse(cvId: string): Promise<boolean> {
+    void cvId;
     return false;
   }
 
