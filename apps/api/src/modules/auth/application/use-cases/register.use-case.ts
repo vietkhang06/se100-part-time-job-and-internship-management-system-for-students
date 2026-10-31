@@ -5,6 +5,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { UserRole, UserStatus, RegisterResponseDto, AuthErrorCode } from '@campusjob/contracts';
 import {
   USER_REPOSITORY_TOKEN,
@@ -85,8 +86,12 @@ export class RegisterUseCase {
         tokenHash,
         expiresAt,
       );
-    } catch (err: any) {
-      if (err.code === 'P2002' || err.message?.includes('Unique constraint')) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      const isUniqueConflict =
+        (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') ||
+        message.includes('Unique constraint');
+      if (isUniqueConflict) {
         throw new ConflictException({
           message: 'Email is already registered',
           code: AuthErrorCode.EMAIL_ALREADY_EXISTS,

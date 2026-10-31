@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { CompanyBranch } from '@prisma/client';
 import { PrismaService } from '../../../../shared/database/prisma.service';
 import { ICompanyBranchRepository } from '../../domain/repositories/company-branch.repository.interface';
 import { CompanyBranchEntity } from '../../domain/entities/company-branch.entity';
@@ -9,7 +10,7 @@ export class PrismaCompanyBranchRepository
 {
   constructor(private readonly prisma: PrismaService) {}
 
-  private toDomain(raw: any): CompanyBranchEntity {
+  private toDomain(raw: CompanyBranch): CompanyBranchEntity {
     return new CompanyBranchEntity({
       id: raw.id,
       companyId: raw.companyId,

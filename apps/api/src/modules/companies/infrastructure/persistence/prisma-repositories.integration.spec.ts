@@ -1,4 +1,5 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../../../shared/database/prisma.service';
 import {
   BadRequestException,
 } from '@nestjs/common';
@@ -25,7 +26,7 @@ const databaseUrl =
   'postgresql://campusjob:campusjob_dev@localhost:5435/campusjob_m03_scratch?schema=public';
 
 describe('Prisma Repositories Integration & Composite FK (Scratch DB)', () => {
-  let prisma: PrismaClient;
+  let prisma: PrismaService;
   let companyRepo: PrismaCompanyRepository;
   let memberRepo: PrismaCompanyMemberRepository;
   let branchRepo: PrismaCompanyBranchRepository;
@@ -39,7 +40,7 @@ describe('Prisma Repositories Integration & Composite FK (Scratch DB)', () => {
   let adminUser: { id: string };
 
   beforeAll(async () => {
-    prisma = new PrismaClient({
+    prisma = new PrismaService({
       datasources: {
         db: { url: databaseUrl },
       },

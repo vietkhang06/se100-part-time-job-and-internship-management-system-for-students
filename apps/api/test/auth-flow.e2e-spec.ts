@@ -27,9 +27,7 @@ import { MAIL_SERVICE_TOKEN } from '../src/shared/mail/mail.service.interface';
 import { TokenUtils } from '../src/modules/auth/infrastructure/security/token.utils';
 import { PasswordHasher } from '../src/modules/auth/infrastructure/security/password-hasher';
 
-const request = (typeof supertest === 'function'
-  ? supertest
-  : (supertest as any).default) as typeof supertest;
+const request = supertest;
 
 jest.setTimeout(60_000);
 
@@ -99,12 +97,12 @@ describe('Auth flow (e2e): happy path & error paths', () => {
     // building) and only replace the network transport.
     const mailService = app.get(MAIL_SERVICE_TOKEN, { strict: false }) as object;
     expect(mailService).toHaveProperty('transporter'); // fails loudly if the service is refactored
-    (mailService as any).transporter = {
+    Object.assign(mailService, { transporter: {
       sendMail: async (options: SentMail) => {
         outbox.push({ ...options });
         return { messageId: `e2e-${outbox.length}` };
       },
-    };
+    } });
 
     await cleanup();
   });

@@ -1,5 +1,11 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import {
+  CertificationItemDto,
+  EducationItemDto,
+  ExperienceItemDto,
+  ProjectItemDto,
+} from '@campusjob/contracts';
 import { PrismaService } from '../../../../shared/database/prisma.service';
 import {
   ICvRepository,
@@ -8,11 +14,19 @@ import {
 } from '../../domain/repositories/cv.repository.interface';
 import { CvEntity } from '../../domain/entities/cv.entity';
 
+function serializeJson(value: unknown): Prisma.InputJsonValue {
+  const serialized = JSON.stringify(value);
+  if (serialized === undefined) {
+    throw new TypeError('CV JSON fields must be serializable.');
+  }
+  return JSON.parse(serialized) as Prisma.InputJsonValue;
+}
+
 @Injectable()
 export class PrismaCvRepository implements ICvRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  private toDomain(raw: any): CvEntity {
+  private toDomain(raw: Prisma.CvGetPayload<{ include: { studentProfile: true } }>): CvEntity {
     const userId = raw.studentProfile?.userId ?? '';
     return new CvEntity(
       raw.id,
@@ -23,10 +37,10 @@ export class PrismaCvRepository implements ICvRepository {
       raw.isDefault,
       raw.fileUrl ?? null,
       raw.skills ?? [],
-      (raw.educations as any[]) ?? [],
-      (raw.experiences as any[]) ?? [],
-      (raw.projects as any[]) ?? [],
-      (raw.certifications as any[]) ?? [],
+      (raw.educations as EducationItemDto[] | null) ?? [],
+      (raw.experiences as ExperienceItemDto[] | null) ?? [],
+      (raw.projects as ProjectItemDto[] | null) ?? [],
+      (raw.certifications as CertificationItemDto[] | null) ?? [],
       raw.createdAt,
       raw.updatedAt,
       raw.fileAssetId ?? null,
@@ -96,10 +110,10 @@ export class PrismaCvRepository implements ICvRepository {
           fileUrl: data.fileUrl ?? null,
           fileAssetId: data.fileAssetId ?? null,
           skills: data.skills ?? [],
-          educations: (data.educations as any) ?? [],
-          experiences: (data.experiences as any) ?? [],
-          projects: (data.projects as any) ?? [],
-          certifications: (data.certifications as any) ?? [],
+          educations: serializeJson(data.educations ?? []),
+          experiences: serializeJson(data.experiences ?? []),
+          projects: serializeJson(data.projects ?? []),
+          certifications: serializeJson(data.certifications ?? []),
         },
         include: { studentProfile: true },
       });
@@ -141,17 +155,17 @@ export class PrismaCvRepository implements ICvRepository {
         });
       }
 
-      const updatePayload: Record<string, any> = {};
+      const updatePayload: Prisma.CvUncheckedUpdateInput = {};
       if (data.title !== undefined) updatePayload.title = data.title;
       if (data.summary !== undefined) updatePayload.summary = data.summary;
       if (data.isDefault !== undefined) updatePayload.isDefault = data.isDefault;
       if (data.fileUrl !== undefined) updatePayload.fileUrl = data.fileUrl;
       if (data.fileAssetId !== undefined) updatePayload.fileAssetId = data.fileAssetId;
       if (data.skills !== undefined) updatePayload.skills = data.skills;
-      if (data.educations !== undefined) updatePayload.educations = data.educations;
-      if (data.experiences !== undefined) updatePayload.experiences = data.experiences;
-      if (data.projects !== undefined) updatePayload.projects = data.projects;
-      if (data.certifications !== undefined) updatePayload.certifications = data.certifications;
+      if (data.educations !== undefined) updatePayload.educations = serializeJson(data.educations);
+      if (data.experiences !== undefined) updatePayload.experiences = serializeJson(data.experiences);
+      if (data.projects !== undefined) updatePayload.projects = serializeJson(data.projects);
+      if (data.certifications !== undefined) updatePayload.certifications = serializeJson(data.certifications);
 
       const updated = await tx.cv.update({
         where: { id },
@@ -209,17 +223,14 @@ export class PrismaCvRepository implements ICvRepository {
 
   async isCvInUse(cvId: string): Promise<boolean> {
     // Contract C-03: Kiểm tra nếu có hồ sơ ứng tuyển liên kết với cvId
-    if ('application' in this.prisma) {
-      const count = await (this.prisma as any).application.count({
-        where: {
-          cvId,
-          status: {
-            notIn: ['ACCEPTED', 'REJECTED', 'WITHDRAWN'],
-          },
+    const count = await this.prisma.application.count({
+      where: {
+        cvId,
+        status: {
+          notIn: ['ACCEPTED', 'REJECTED', 'WITHDRAWN'],
         },
-      });
-      return count > 0;
-    }
-    return false;
+      },
+    });
+    return count > 0;
   }
 }

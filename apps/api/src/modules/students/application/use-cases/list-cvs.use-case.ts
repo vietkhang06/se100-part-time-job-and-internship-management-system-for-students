@@ -28,6 +28,7 @@ export class ListCvsUseCase {
         title: cv.title,
         isDefault: cv.isDefault,
         fileUrl: cv.fileUrl,
+        fileAssetId: cv.fileAssetId ?? null,
         skills: cv.skills,
         createdAt: cv.createdAt.toISOString(),
         updatedAt: cv.updatedAt.toISOString(),

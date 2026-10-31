@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../../shared/database/prisma.service';
 import {
   IStudentProfileRepository,
@@ -14,11 +15,13 @@ export class PrismaStudentProfileRepository
 {
   constructor(private readonly prisma: PrismaService) {}
 
-  private toDomain(raw: any): StudentProfileEntity {
+  private toDomain(raw: Prisma.StudentProfileGetPayload<{
+    include: { user: true; studentSkills: { include: { skill: true } } };
+  }>): StudentProfileEntity {
     const user = raw.user;
     const skills: string[] = raw.studentSkills
       ? raw.studentSkills
-          .map((ss: any) => ss.skill?.name ?? '')
+          .map((studentSkill) => studentSkill.skill?.name ?? '')
           .filter((name: string) => name.length > 0)
       : [];
 
@@ -85,14 +88,22 @@ export class PrismaStudentProfileRepository
     userId: string,
     data: UpdateStudentProfileData,
   ): Promise<StudentProfileEntity> {
-    const updatePayload: Record<string, any> = {};
+    const updatePayload: Prisma.StudentProfileUncheckedUpdateInput = {};
+    const createPayload: Prisma.StudentProfileUncheckedCreateInput = { userId };
     if (data.university !== undefined) updatePayload.university = data.university;
+    if (data.university !== undefined) createPayload.university = data.university;
     if (data.major !== undefined) updatePayload.major = data.major;
+    if (data.major !== undefined) createPayload.major = data.major;
     if (data.graduationYear !== undefined)
       updatePayload.graduationYear = data.graduationYear;
+    if (data.graduationYear !== undefined)
+      createPayload.graduationYear = data.graduationYear;
     if (data.jobSeekingStatus !== undefined)
       updatePayload.jobSeekingStatus = data.jobSeekingStatus;
+    if (data.jobSeekingStatus !== undefined)
+      createPayload.jobSeekingStatus = data.jobSeekingStatus;
     if (data.bio !== undefined) updatePayload.bio = data.bio;
+    if (data.bio !== undefined) createPayload.bio = data.bio;
 
     if (data.skills !== undefined) {
       const normalizedSkills = normalizeSkillList(data.skills);
@@ -102,10 +113,7 @@ export class PrismaStudentProfileRepository
         const profile = await tx.studentProfile.upsert({
           where: { userId },
           update: updatePayload,
-          create: {
-            userId,
-            ...updatePayload,
-          },
+          create: createPayload,
         });
 
         // Reconcile normalized canonical skills
@@ -155,6 +163,9 @@ export class PrismaStudentProfileRepository
           },
         });
 
+        if (!fresh) {
+          throw new Error('Student profile disappeared during update.');
+        }
         return this.toDomain(fresh);
       });
     }
@@ -162,10 +173,7 @@ export class PrismaStudentProfileRepository
     const raw = await this.prisma.studentProfile.upsert({
       where: { userId },
       update: updatePayload,
-      create: {
-        userId,
-        ...updatePayload,
-      },
+      create: createPayload,
       include: {
         user: true,
         studentSkills: { include: { skill: true } },

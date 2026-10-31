@@ -25,6 +25,14 @@ class MemoryRepository implements M04Repository {
     if ([...this.applications.values()].some((a) => a.studentId === input.studentId && a.jobId === input.jobId)) {
       throw new M04WorkflowError('DUPLICATE_APPLICATION');
     }
+    const activeCount = [...this.applications.values()].filter(
+      (a) =>
+        a.studentId === input.studentId &&
+        [ApplicationStatus.SUBMITTED, ApplicationStatus.REVIEWING, ApplicationStatus.INTERVIEW_SCHEDULED].includes(a.status),
+    ).length;
+    if (activeCount >= 5) {
+      throw new M04WorkflowError('QUOTA_EXCEEDED');
+    }
     const row: ApplicationRecord = {
       ...input, id: `app-${this.applications.size + 1}`, status: ApplicationStatus.SUBMITTED,
       rejectionReason: null, createdAt: new Date('2026-10-14T00:00:00.000Z'),
@@ -119,10 +127,10 @@ describe('M04 workflow with contract fixtures', () => {
   let returnedSnapshot: CvSnapshotDto;
   const jobs: JobAccessSource = {
     assertAcceptingApplications: async (jobId) => {
-      if (jobId !== 'job-a') throw new M04WorkflowError('INVALID_INPUT');
+      if (!jobId.startsWith('job-')) throw new M04WorkflowError('INVALID_INPUT');
     },
     assertManagedBy: async (jobId, employerId) => {
-      if (jobId !== 'job-a' || employerId !== owner) throw new M04WorkflowError('FORBIDDEN');
+      if (!jobId.startsWith('job-') || employerId !== owner) throw new M04WorkflowError('FORBIDDEN');
     },
   };
   const cvs: CvSnapshotSource = {
@@ -149,6 +157,26 @@ describe('M04 workflow with contract fixtures', () => {
     await expect(workflow.getMine('student-b', app.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(await workflow.listMine('student-a')).toHaveLength(1);
     expect(await workflow.listMine('student-b')).toHaveLength(0);
+  });
+
+  it('enforces maximum 5 active applications quota and allows new submission after withdrawal (S3-M04-03)', async () => {
+    await workflow.submit('student-a', 'job-1', 'cv-1');
+    await workflow.submit('student-a', 'job-2', 'cv-1');
+    await workflow.submit('student-a', 'job-3', 'cv-1');
+    await workflow.submit('student-a', 'job-4', 'cv-1');
+    const app5 = await workflow.submit('student-a', 'job-5', 'cv-1');
+
+    // 6th active application must be rejected with QUOTA_EXCEEDED
+    await expect(workflow.submit('student-a', 'job-6', 'cv-1')).rejects.toMatchObject({
+      code: 'QUOTA_EXCEEDED',
+    });
+
+    // Student withdraws one in-progress application -> freeing an active slot
+    await workflow.withdraw('student-a', app5.id);
+
+    // Now submitting a new job should succeed
+    const app6 = await workflow.submit('student-a', 'job-6', 'cv-1');
+    expect(app6.status).toBe(ApplicationStatus.SUBMITTED);
   });
 
   it('rejects a CV snapshot that does not match the actor and selected CV', async () => {

@@ -111,8 +111,8 @@ describe('CompaniesController', () => {
   it('should get company by ID without exposing private document details', async () => {
     const res = await controller.getById(companyId);
     expect(res.company.id).toBe(companyId);
-    expect((res.company as any).storageKey).toBeUndefined();
-    expect((res.company as any).fileBuffer).toBeUndefined();
+    expect('storageKey' in res.company).toBe(false);
+    expect('fileBuffer' in res.company).toBe(false);
   });
 
   it('should allow Admin to decide verification status', async () => {

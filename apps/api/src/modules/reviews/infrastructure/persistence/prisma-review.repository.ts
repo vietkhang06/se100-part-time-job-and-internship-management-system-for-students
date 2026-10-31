@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ReviewVisibility } from '@campusjob/contracts';
 import { PrismaService } from '../../../../shared/database/prisma.service';
 import { ReviewEntity } from '../../domain/entities/review.entity';
@@ -12,7 +13,7 @@ import {
 export class PrismaReviewRepository implements IReviewRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  private toDomain(raw: any): ReviewEntity {
+  private toDomain(raw: Prisma.ReviewGetPayload<{ include: { reply: true } }>): ReviewEntity {
     return new ReviewEntity({
       id: raw.id,
       applicationId: raw.applicationId,
@@ -20,7 +21,7 @@ export class PrismaReviewRepository implements IReviewRepository {
       companyId: raw.companyId,
       rating: raw.rating,
       comment: raw.comment ?? null,
-      visibility: raw.visibility,
+      visibility: raw.visibility as ReviewVisibility,
       createdAt: raw.createdAt,
       reply: raw.reply
         ? { employerId: raw.reply.employerId, content: raw.reply.content, createdAt: raw.reply.createdAt }
@@ -41,9 +42,11 @@ export class PrismaReviewRepository implements IReviewRepository {
         include: { reply: true },
       });
       return { review: this.toDomain(raw), duplicate: false };
-    } catch (err: any) {
+    } catch (err: unknown) {
       // applicationId UNIQUE: mỗi hồ sơ ứng tuyển chỉ có một đánh giá, kể cả khi hai request chạy song song.
-      if (err?.code === 'P2002') return { review: null, duplicate: true };
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        return { review: null, duplicate: true };
+      }
       throw err;
     }
   }
@@ -121,9 +124,11 @@ export class PrismaReviewRepository implements IReviewRepository {
         data: { reviewId: data.reviewId, employerId: data.employerId, content: data.content },
       });
       return { created: true };
-    } catch (err: any) {
+    } catch (err: unknown) {
       // reviewId UNIQUE: chỉ một phản hồi cho mỗi đánh giá.
-      if (err?.code === 'P2002') return { created: false };
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        return { created: false };
+      }
       throw err;
     }
   }

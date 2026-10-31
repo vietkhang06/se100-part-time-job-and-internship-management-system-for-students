@@ -242,8 +242,7 @@ export interface JwtPayload {
   sessionId?: string;
 }
 
-// ============================================================================
-// M05 · Notification (C-20 — DRAFT, chờ Lead/Owner M03-M04 chốt payload)
+// =====================================================================// M05 · Notification (C-20 — DRAFT, chờ Lead/Owner M03-M04 chốt payload)
 // ============================================================================
 
 export enum NotificationEventType {
@@ -398,6 +397,7 @@ export interface CvListItemDto {
   title: string;
   isDefault: boolean;
   fileUrl?: string | null;
+  fileAssetId?: string | null;
   skills: string[];
   createdAt: string;
   updatedAt: string;
@@ -473,6 +473,7 @@ export interface CvSnapshotDto {
   projects: ProjectItemDto[];
   certifications: CertificationItemDto[];
   fileUrl?: string | null;
+  fileAssetId?: string | null;
   capturedAt: string;
 }
 
@@ -1035,7 +1036,8 @@ export interface CompanyReviewListDto {
 
 // ============================================================================
 // M03 ? PUBLIC DIRECTORY & SEARCH CONTRACTS (C-06, C-07, C-08 / UC15, UC16, UC22, UC23)
-// ============================================================================
+//
+
 
 export interface PublicCompanyDto {
   id: string;
@@ -1138,3 +1140,40 @@ export interface JobApplicationEligibilityDto {
   acceptingApplications: boolean;
 }
 
+// M05 · Admin Overview (UC54)
+// ============================================================================
+export enum OverviewGroupKey {
+  USERS = 'USERS',
+  COMPANIES = 'COMPANIES',
+  JOBS = 'JOBS',
+  APPLICATIONS = 'APPLICATIONS',
+  REPORTS = 'REPORTS',
+}
+
+export enum OverviewGroupStatus {
+  AVAILABLE = 'AVAILABLE',
+  /** Chưa có nguồn dữ liệu (module nguồn chưa sẵn sàng) hoặc truy vấn lỗi: không hiển thị số giả. */
+  UNAVAILABLE = 'UNAVAILABLE',
+}
+
+export interface OverviewBreakdownItemDto {
+  key: string;
+  label: string;
+  count: number;
+}
+
+export interface OverviewGroupDto {
+  key: OverviewGroupKey;
+  label: string;
+  status: OverviewGroupStatus;
+  /** null khi UNAVAILABLE. */
+  total: number | null;
+  breakdownLabel: string | null;
+  breakdown: OverviewBreakdownItemDto[];
+  unavailableReason: string | null;
+}
+
+export interface AdminOverviewDto {
+  generatedAt: string;
+  groups: OverviewGroupDto[];
+}

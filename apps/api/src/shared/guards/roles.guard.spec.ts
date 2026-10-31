@@ -1,4 +1,4 @@
-import { ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { ExecutionContext, ForbiddenException, HttpException, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { RolesGuard } from './roles.guard';
 import { UserRole, AuthErrorCode } from '@campusjob/contracts';
@@ -15,10 +15,10 @@ describe('RolesGuard', () => {
   });
 
   function createMockExecutionContext(options: {
-    user?: any;
-    headers?: Record<string, any>;
-    query?: Record<string, any>;
-    body?: Record<string, any>;
+    user?: { id?: string; role?: UserRole };
+    headers?: Record<string, unknown>;
+    query?: Record<string, unknown>;
+    body?: Record<string, unknown>;
     isPublic?: boolean;
     requiredRoles?: UserRole[];
   }): ExecutionContext {
@@ -95,7 +95,8 @@ describe('RolesGuard', () => {
       expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
       try {
         guard.canActivate(context);
-      } catch (err: any) {
+      } catch (err: unknown) {
+        if (!(err instanceof HttpException)) throw err;
         expect(err.getResponse()).toMatchObject({
           code: AuthErrorCode.UNAUTHORIZED,
         });
@@ -111,7 +112,8 @@ describe('RolesGuard', () => {
       expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
       try {
         guard.canActivate(context);
-      } catch (err: any) {
+      } catch (err: unknown) {
+        if (!(err instanceof HttpException)) throw err;
         expect(err.getResponse()).toMatchObject({
           code: AuthErrorCode.UNAUTHORIZED,
         });
@@ -138,7 +140,8 @@ describe('RolesGuard', () => {
       expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
       try {
         guard.canActivate(context);
-      } catch (err: any) {
+      } catch (err: unknown) {
+        if (!(err instanceof HttpException)) throw err;
         expect(err.getResponse()).toMatchObject({
           code: AuthErrorCode.FORBIDDEN,
           message: 'Bạn không có quyền truy cập tài nguyên này.',
@@ -169,7 +172,8 @@ describe('RolesGuard', () => {
       expect(() => guard.canActivate(contextModerator)).toThrow(ForbiddenException);
       try {
         guard.canActivate(contextModerator);
-      } catch (err: any) {
+      } catch (err: unknown) {
+        if (!(err instanceof HttpException)) throw err;
         expect(err.getResponse()).toMatchObject({
           code: AuthErrorCode.FORBIDDEN,
         });

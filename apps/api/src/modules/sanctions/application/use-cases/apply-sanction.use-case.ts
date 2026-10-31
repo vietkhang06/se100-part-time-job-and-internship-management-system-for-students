@@ -12,7 +12,6 @@ import {
 import {
   NotificationEventType,
   SanctionDetailDto,
-  SanctionTargetType,
   SanctionType,
   UserRole,
   ViolationReportStatus,
@@ -123,8 +122,8 @@ export class ApplySanctionUseCase {
     if (input.type === SanctionType.COMPANY_SUSPENSION) {
       try {
         await this.companyHandlers.get()!.suspend(report.targetId, sanctionId, reason);
-      } catch (err: any) {
-        this.logger.error(`Suspend company ${report.targetId} failed: ${err?.message}`);
+      } catch (err: unknown) {
+        this.logger.error(`Suspend company ${report.targetId} failed: ${err instanceof Error ? err.message : String(err)}`);
         throw new BadGatewayException({
           message: 'Không thể đình chỉ doanh nghiệp lúc này. Vui lòng thử lại.',
           code: 'SANCTION_TARGET_SYNC_FAILED',
@@ -207,12 +206,20 @@ export class ApplySanctionUseCase {
       this.notifications.publish({
         eventType: NotificationEventType.SANCTION_APPLIED,
         recipientId: recipientUserId,
-        payload: { sanctionType: describeSanction(type, endsAt), reason },
+        // Liên kết thông báo với đúng đối tượng (chế tài, báo cáo) để giao diện điều hướng được.
+        payload: {
+          sanctionType: describeSanction(type, endsAt),
+          sanctionTypeCode: type,
+          sanctionId,
+          reportId,
+          reason,
+        },
         dedupeKey: `${NotificationEventType.SANCTION_APPLIED}:${sanctionId}`,
       }),
       this.notifications.publish({
         eventType: NotificationEventType.REPORT_RESOLVED,
         recipientId: reporterId,
+        payload: { reportId, sanctionId, outcome: 'SANCTIONED' },
         dedupeKey: `${NotificationEventType.REPORT_RESOLVED}:${reportId}`,
       }),
     ]);

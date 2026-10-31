@@ -1,4 +1,10 @@
 import { CvEntity } from '../entities/cv.entity';
+import {
+  CertificationItemDto,
+  EducationItemDto,
+  ExperienceItemDto,
+  ProjectItemDto,
+} from '@campusjob/contracts';
 
 export const CV_REPOSITORY_TOKEN = Symbol('CV_REPOSITORY_TOKEN');
 
@@ -10,10 +16,10 @@ export interface CreateCvData {
   fileUrl?: string | null;
   fileAssetId?: string | null;
   skills?: string[];
-  educations?: any[];
-  experiences?: any[];
-  projects?: any[];
-  certifications?: any[];
+  educations?: EducationItemDto[];
+  experiences?: ExperienceItemDto[];
+  projects?: ProjectItemDto[];
+  certifications?: CertificationItemDto[];
 }
 
 export interface UpdateCvData {
@@ -23,10 +29,10 @@ export interface UpdateCvData {
   fileUrl?: string | null;
   fileAssetId?: string | null;
   skills?: string[];
-  educations?: any[];
-  experiences?: any[];
-  projects?: any[];
-  certifications?: any[];
+  educations?: EducationItemDto[];
+  experiences?: ExperienceItemDto[];
+  projects?: ProjectItemDto[];
+  certifications?: CertificationItemDto[];
 }
 
 export interface ICvRepository {

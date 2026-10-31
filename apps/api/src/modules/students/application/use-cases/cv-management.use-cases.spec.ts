@@ -1,5 +1,5 @@
 import { NotFoundException, BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
-import { CvErrorCode, JobSeekingStatus } from '@campusjob/contracts';
+import { JobSeekingStatus } from '@campusjob/contracts';
 import { StudentProfileEntity } from '../../domain/entities/student-profile.entity';
 import { CvEntity } from '../../domain/entities/cv.entity';
 import { ICvRepository } from '../../domain/repositories/cv.repository.interface';
@@ -10,6 +10,7 @@ import { CreateCvUseCase } from './create-cv.use-case';
 import { UpdateCvUseCase } from './update-cv.use-case';
 import { SetDefaultCvUseCase } from './set-default-cv.use-case';
 import { DeleteCvUseCase } from './delete-cv.use-case';
+import { FileAssetService } from '../../../../shared/storage/file-asset.service';
 
 describe('CV Management Use Cases (S2-M02-04 Vertical Slice)', () => {
   let mockCvRepo: jest.Mocked<ICvRepository>;
@@ -244,9 +245,9 @@ describe('CV Management Use Cases (S2-M02-04 Vertical Slice)', () => {
       mockCvRepo.countByStudentProfileId.mockResolvedValue(1);
       mockCvRepo.create.mockResolvedValue(cvA2);
 
-      const mockFileAssetService = {
+      const mockFileAssetService = Object.assign(Object.create(FileAssetService.prototype) as FileAssetService, {
         verifyOwnership: jest.fn().mockResolvedValue({ id: 'file-asset-uuid-1', ownerUserId: 'user-a-id' }),
-      } as any;
+      });
 
       const useCase = new CreateCvUseCase(mockCvRepo, mockProfileRepo, mockFileAssetService);
       const res = await useCase.execute('user-a-id', {
@@ -263,9 +264,9 @@ describe('CV Management Use Cases (S2-M02-04 Vertical Slice)', () => {
       mockProfileRepo.findByUserId.mockResolvedValue(studentAProfile);
       mockCvRepo.findById.mockResolvedValue(cvA2);
 
-      const mockFileAssetService = {
+      const mockFileAssetService = Object.assign(Object.create(FileAssetService.prototype) as FileAssetService, {
         verifyOwnership: jest.fn().mockRejectedValue(new ForbiddenException('Bạn không có quyền')),
-      } as any;
+      });
 
       const useCase = new UpdateCvUseCase(mockCvRepo, mockProfileRepo, mockFileAssetService);
 
@@ -300,9 +301,9 @@ describe('CV Management Use Cases (S2-M02-04 Vertical Slice)', () => {
       mockCvRepo.findById.mockResolvedValue(cvWithFile);
       mockCvRepo.isCvInUse.mockResolvedValue(false);
 
-      const mockFileAssetService = {
+      const mockFileAssetService = Object.assign(Object.create(FileAssetService.prototype) as FileAssetService, {
         deleteFileAsset: jest.fn().mockResolvedValue({ deleted: true, status: 'DELETED' }),
-      } as any;
+      });
 
       const useCase = new DeleteCvUseCase(mockCvRepo, mockProfileRepo, mockFileAssetService);
       const result = await useCase.execute('user-a-id', 'cv-file-id');
@@ -335,9 +336,9 @@ describe('CV Management Use Cases (S2-M02-04 Vertical Slice)', () => {
       mockCvRepo.findById.mockResolvedValue(cvWithFile);
       mockCvRepo.isCvInUse.mockResolvedValue(false);
 
-      const mockFileAssetService = {
+      const mockFileAssetService = Object.assign(Object.create(FileAssetService.prototype) as FileAssetService, {
         deleteFileAsset: jest.fn().mockRejectedValue(new Error('Storage I/O Error')),
-      } as any;
+      });
 
       const useCase = new DeleteCvUseCase(mockCvRepo, mockProfileRepo, mockFileAssetService);
       const result = await useCase.execute('user-a-id', 'cv-file-id-fail');

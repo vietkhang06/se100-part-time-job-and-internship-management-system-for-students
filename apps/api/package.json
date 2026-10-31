@@ -11,12 +11,13 @@
     "admin:create": "ts-node -r tsconfig-paths/register src/cli/admin-create.ts",
     "student:seed": "ts-node -r tsconfig-paths/register src/cli/seed-student.ts",
     "prisma": "prisma",
-    "lint": "echo \"@campusjob/api lint passed\"",
+    "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "jest --config jest.config.js",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "test:e2e": "jest --config test/jest-e2e.json --runInBand"
+    "test:e2e": "jest --config test/jest-e2e.json --runInBand --forceExit",
+    "test:e2e:m02": "jest --config test/jest-m02-e2e.json --runInBand --forceExit"
   },
   "dependencies": {
     "@campusjob/contracts": "workspace:*",

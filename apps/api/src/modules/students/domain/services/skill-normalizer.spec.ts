@@ -15,8 +15,8 @@ describe('SkillNormalizer (W2-DB-01 Skill Normalization Rules)', () => {
     it('should return null for empty or whitespace-only inputs', () => {
       expect(normalizeSkillName('')).toBeNull();
       expect(normalizeSkillName('   ')).toBeNull();
-      expect(normalizeSkillName(null as any)).toBeNull();
-      expect(normalizeSkillName(undefined as any)).toBeNull();
+      expect(normalizeSkillName(null)).toBeNull();
+      expect(normalizeSkillName(undefined)).toBeNull();
     });
 
     it('should handle uppercase, lowercase, and mixed-case inputs consistently', () => {
@@ -60,8 +60,8 @@ describe('SkillNormalizer (W2-DB-01 Skill Normalization Rules)', () => {
 
     it('should handle empty or null array safely', () => {
       expect(normalizeSkillList([])).toEqual([]);
-      expect(normalizeSkillList(null as any)).toEqual([]);
-      expect(normalizeSkillList(undefined as any)).toEqual([]);
+      expect(normalizeSkillList(null)).toEqual([]);
+      expect(normalizeSkillList(undefined)).toEqual([]);
     });
 
     it('should preserve first encountered casing as the display name', () => {

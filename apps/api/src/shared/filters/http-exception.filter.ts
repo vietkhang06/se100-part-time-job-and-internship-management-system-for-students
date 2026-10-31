@@ -33,12 +33,20 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     if (typeof exceptionResponse === 'string') {
       message = exceptionResponse;
     } else if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
-      const respObj = exceptionResponse as Record<string, any>;
-      message = respObj['message'] || message;
-      error = respObj['error'] || (exception instanceof HttpException ? exception.name : error);
-      code = respObj['code'] || respObj['errorCode'];
-    } else if (exception instanceof Error) {
-      message = exception.message;
+      const respObj = exceptionResponse as Record<string, unknown>;
+      const responseMessage = respObj['message'];
+      if (
+        typeof responseMessage === 'string' ||
+        (Array.isArray(responseMessage) && responseMessage.every((item) => typeof item === 'string'))
+      ) {
+        message = responseMessage;
+      }
+      const responseError = respObj['error'];
+      error = typeof responseError === 'string'
+        ? responseError
+        : exception instanceof HttpException ? exception.name : error;
+      const responseCode = respObj['code'] ?? respObj['errorCode'];
+      code = typeof responseCode === 'string' ? responseCode : undefined;
     }
 
     if (!code) {
@@ -78,7 +86,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     const correlationId = (request.headers['x-correlation-id'] ||
       request.headers['x-request-id'] ||
-      (request as any).id) as string | undefined;
+      request.id) as string | undefined;
 
     const errorPayload: ApiErrorResponse = {
       statusCode: status,

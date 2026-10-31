@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ViolationReportStatus } from '@campusjob/contracts';
 import { PrismaService } from '../../../../shared/database/prisma.service';
 import { ViolationReportEntity } from '../../domain/entities/violation-report.entity';
@@ -11,17 +12,17 @@ import {
 export class PrismaViolationReportRepository implements IViolationReportRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  private toDomain(raw: any): ViolationReportEntity {
+  private toDomain(raw: Prisma.ViolationReportGetPayload<{ include: { evidence: true } }>): ViolationReportEntity {
     return new ViolationReportEntity({
       id: raw.id,
       reporterId: raw.reporterId,
-      targetType: raw.targetType,
+      targetType: raw.targetType as ViolationReportEntity['targetType'],
       targetId: raw.targetId,
       targetLabel: raw.targetLabel ?? null,
-      reason: raw.reason,
+      reason: raw.reason as ViolationReportEntity['reason'],
       description: raw.description,
-      status: raw.status,
-      evidence: (raw.evidence ?? []).map((e: any) => ({
+      status: raw.status as ViolationReportEntity['status'],
+      evidence: raw.evidence.map((e) => ({
         id: e.id,
         kind: e.kind,
         url: e.url ?? null,
@@ -58,9 +59,9 @@ export class PrismaViolationReportRepository implements IViolationReportReposito
         include: { evidence: true },
       });
       return { report: this.toDomain(raw), duplicate: false };
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Hai request song song cùng openKey: bên thua được coi là trùng.
-      if (err?.code === 'P2002') {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         return { report: null, duplicate: true };
       }
       throw err;

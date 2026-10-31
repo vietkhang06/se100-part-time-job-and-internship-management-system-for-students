@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, type Notification } from '@prisma/client';
 import { NotificationEmailStatus } from '@campusjob/contracts';
 import { PrismaService } from '../../../../shared/database/prisma.service';
 import { NotificationEntity } from '../../domain/entities/notification.entity';
@@ -13,7 +13,7 @@ import {
 export class PrismaNotificationRepository implements INotificationRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  private toDomain(raw: any): NotificationEntity {
+  private toDomain(raw: Notification): NotificationEntity {
     return new NotificationEntity({
       id: raw.id,
       recipientId: raw.recipientId,
@@ -23,7 +23,7 @@ export class PrismaNotificationRepository implements INotificationRepository {
       payload: (raw.payload as Record<string, unknown> | null) ?? null,
       dedupeKey: raw.dedupeKey ?? null,
       readAt: raw.readAt ?? null,
-      emailStatus: raw.emailStatus as NotificationEmailStatus,
+      emailStatus: raw.emailStatus as NotificationEntity['emailStatus'],
       emailAttempts: raw.emailAttempts,
       emailLastError: raw.emailLastError ?? null,
       emailSentAt: raw.emailSentAt ?? null,
@@ -57,9 +57,13 @@ export class PrismaNotificationRepository implements INotificationRepository {
         },
       });
       return { notification: this.toDomain(raw), created: true };
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Hai request cùng dedupeKey chạy song song: bên thua đua lấy lại bản ghi của bên thắng.
-      if (err?.code === 'P2002' && data.dedupeKey) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002' &&
+        data.dedupeKey
+      ) {
         const existing = await this.prisma.notification.findUnique({
           where: { dedupeKey: data.dedupeKey },
         });

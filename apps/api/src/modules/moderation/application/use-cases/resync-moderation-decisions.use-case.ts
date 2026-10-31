@@ -46,8 +46,8 @@ export class ResyncModerationDecisionsUseCase {
         });
         await this.repository.markDecisionSynced(decision.id, new Date());
         summary.synced++;
-      } catch (err: any) {
-        const message = String(err?.message ?? err).slice(0, 500);
+      } catch (err: unknown) {
+        const message = (err instanceof Error ? err.message : String(err)).slice(0, 500);
         this.logger.warn(`Resync decision ${decision.id} failed: ${message}`);
         await this.repository.markDecisionSyncFailed(decision.id, message);
         summary.failed++;

@@ -8,7 +8,6 @@ import { PasswordHasher } from '../src/modules/auth/infrastructure/security/pass
 import {
   AuthErrorCode,
   CvErrorCode,
-  StudentProfileErrorCode,
   UserRole,
   UserStatus,
   JobSeekingStatus,
@@ -19,7 +18,7 @@ import { JobAccessSource, M04WorkflowError } from '../src/modules/applications/a
 import { CV_SNAPSHOT_SOURCE_TOKEN } from '../src/modules/students/infrastructure/adapters/cv-snapshot-source.adapter';
 import { GetCvSnapshotUseCase } from '../src/modules/students/application/use-cases/get-cv-snapshot.use-case';
 
-const request = (typeof supertest === 'function' ? supertest : (supertest as any).default) as typeof supertest;
+const request = supertest;
 
 describe('S2-M02-06: M02 Integration Tests (UC11–UC12, UC31–UC35, UC37–UC38)', () => {
   let app: INestApplication;
@@ -384,7 +383,7 @@ describe('S2-M02-06: M02 Integration Tests (UC11–UC12, UC31–UC35, UC37–UC3
         .expect(200);
 
       expect(res.body.data).toBeDefined();
-      const cvIds = res.body.data.map((cv: any) => cv.id);
+      const cvIds = res.body.data.map((cv: { id: string }) => cv.id);
       expect(cvIds).toContain(accounts.studentA.cv1Id);
       expect(cvIds).not.toContain(accounts.studentB.cvId);
     });
@@ -466,8 +465,8 @@ describe('S2-M02-06: M02 Integration Tests (UC11–UC12, UC31–UC35, UC37–UC3
         .set('Authorization', `Bearer ${accounts.studentA.token}`)
         .expect(200);
 
-      const cv1 = listRes.body.data.find((c: any) => c.id === accounts.studentA.cv1Id);
-      const cv2 = listRes.body.data.find((c: any) => c.id === accounts.studentA.cv2Id);
+      const cv1 = listRes.body.data.find((c: { id: string; isDefault: boolean }) => c.id === accounts.studentA.cv1Id);
+      const cv2 = listRes.body.data.find((c: { id: string; isDefault: boolean }) => c.id === accounts.studentA.cv2Id);
       expect(cv1.isDefault).toBe(false);
       expect(cv2.isDefault).toBe(true);
     });

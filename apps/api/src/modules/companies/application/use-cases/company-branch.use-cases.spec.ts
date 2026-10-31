@@ -1,6 +1,5 @@
 import {
   ForbiddenException,
-  NotFoundException,
   ConflictException,
 } from '@nestjs/common';
 import { validate } from 'class-validator';
@@ -8,7 +7,6 @@ import {
   CompanyMemberRole,
   CompanyMemberStatus,
 } from '@campusjob/contracts';
-import { InMemoryCompanyRepository } from '../../infrastructure/persistence/in-memory-company.repository';
 import { InMemoryCompanyMemberRepository } from '../../infrastructure/persistence/in-memory-company-member.repository';
 import { InMemoryCompanyBranchRepository } from '../../infrastructure/persistence/in-memory-company-branch.repository';
 import { CreateBranchUseCase } from './create-branch.use-case';
@@ -17,11 +15,9 @@ import { GetBranchDetailUseCase } from './get-branch-detail.use-case';
 import { UpdateBranchUseCase } from './update-branch.use-case';
 import { DeleteBranchUseCase } from './delete-branch.use-case';
 import { CreateCompanyBranchDto } from '../dto/create-company-branch.dto';
-import { UpdateCompanyBranchDto } from '../dto/update-company-branch.dto';
 import { IJobBranchUsageChecker } from '../../domain/ports/job-branch-usage-checker.port';
 
 describe('S4-M03-03: Company Branch CRUD & Coordinates Validation', () => {
-  let companyRepo: InMemoryCompanyRepository;
   let memberRepo: InMemoryCompanyMemberRepository;
   let branchRepo: InMemoryCompanyBranchRepository;
   let jobBranchChecker: IJobBranchUsageChecker;
@@ -40,7 +36,6 @@ describe('S4-M03-03: Company Branch CRUD & Coordinates Validation', () => {
   const companyBId = 'company-b';
 
   beforeEach(async () => {
-    companyRepo = new InMemoryCompanyRepository();
     memberRepo = new InMemoryCompanyMemberRepository();
     branchRepo = new InMemoryCompanyBranchRepository();
 

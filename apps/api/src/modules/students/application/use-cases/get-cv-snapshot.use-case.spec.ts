@@ -36,25 +36,6 @@ describe('GetCvSnapshotUseCase – Contract C-03 (UC37–UC38)', () => {
     new Date('2026-01-01'),
   );
 
-  const studentB = new StudentProfileEntity(
-    'student-profile-id-2',
-    'user-id-2',
-    'Trần Thị B',
-    'tranthib@gmail.com',
-    '0987654321',
-    null,
-    'Đại học Khoa học Tự nhiên',
-    'Hệ thống thông tin',
-    2025,
-    JobSeekingStatus.ACTIVELY_LOOKING,
-    'Mục tiêu phát triển Frontend',
-    ['React', 'Vue', 'TailwindCSS'],
-    true,
-    'b.tran@hcmus.edu.vn',
-    new Date('2026-01-01'),
-    new Date('2026-01-01'),
-  );
-
   const cvOfStudentA = new CvEntity(
     'cv-id-100',
     'student-profile-id-1',
@@ -197,11 +178,13 @@ describe('GetCvSnapshotUseCase – Contract C-03 (UC37–UC38)', () => {
 
       try {
         await useCase.execute(studentA.id, cvOfStudentB.id);
-      } catch (error: any) {
-        expect(error).toBeInstanceOf(NotFoundException);
-        expect(error.response.statusCode).toBe(404);
-        expect(error.response.code).toBe(CvErrorCode.CV_NOT_FOUND);
-        expect(error.response.message).toContain('Không tìm thấy CV hoặc bạn không có quyền truy cập');
+      } catch (error: unknown) {
+        if (!(error instanceof NotFoundException)) throw error;
+        expect(error.getResponse()).toMatchObject({
+          statusCode: 404,
+          code: CvErrorCode.CV_NOT_FOUND,
+          message: expect.stringContaining('Không tìm thấy CV hoặc bạn không có quyền truy cập'),
+        });
       }
     });
 
@@ -222,8 +205,11 @@ describe('GetCvSnapshotUseCase – Contract C-03 (UC37–UC38)', () => {
 
       try {
         await useCase.execute('invalid-student-id', cvOfStudentA.id);
-      } catch (error: any) {
-        expect(error.response.code).toBe(StudentProfileErrorCode.STUDENT_PROFILE_NOT_FOUND);
+      } catch (error: unknown) {
+        if (!(error instanceof NotFoundException)) throw error;
+        expect(error.getResponse()).toMatchObject({
+          code: StudentProfileErrorCode.STUDENT_PROFILE_NOT_FOUND,
+        });
       }
     });
   });

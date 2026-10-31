@@ -5,12 +5,6 @@ import {
 import { FileAssetDto, FileAssetStatus } from '@campusjob/contracts';
 import { FileAssetService } from '../../../../shared/storage/file-asset.service';
 
-const ALLOWED_MIME_TYPES = new Set([
-  'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/msword',
-]);
-
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export interface UploadFileInput {

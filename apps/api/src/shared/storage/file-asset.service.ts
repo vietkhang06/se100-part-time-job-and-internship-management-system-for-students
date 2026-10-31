@@ -12,10 +12,12 @@ import { PrismaService } from '../database/prisma.service';
 import {
   IStorageService,
   STORAGE_SERVICE_TOKEN,
-  StorageException,
 } from './storage.interface';
 
 export { FileAssetStatus };
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
 export interface StoreFileAssetOptions {
   buffer: Buffer;
@@ -83,9 +85,9 @@ export class FileAssetService implements OnApplicationBootstrap {
           `OnApplicationBootstrap: Purged ${abandonedStats.succeeded}/${abandonedStats.attempted} abandoned unattached uploads`,
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.logger.warn(
-        `OnApplicationBootstrap: Startup maintenance encountered an error: ${err.message}`,
+        `OnApplicationBootstrap: Startup maintenance encountered an error: ${errorMessage(err)}`,
       );
     }
   }
@@ -127,18 +129,18 @@ export class FileAssetService implements OnApplicationBootstrap {
       });
 
       return created;
-    } catch (dbError: any) {
+    } catch (dbError: unknown) {
       this.logger.error(
-        `Failed to persist FileAsset metadata for key [${stored.storageKey}]: ${dbError.message}. Initiating rollback compensation.`,
+        `Failed to persist FileAsset metadata for key [${stored.storageKey}]: ${errorMessage(dbError)}. Initiating rollback compensation.`,
       );
 
       // Rollback compensation: remove physical file
       try {
         await this.storageService.delete(stored.storageKey);
         this.logger.log(`Rollback compensation succeeded for key [${stored.storageKey}]`);
-      } catch (cleanupError: any) {
+      } catch (cleanupError: unknown) {
         this.logger.error(
-          `Rollback compensation failed for key [${stored.storageKey}]: ${cleanupError.message}`,
+          `Rollback compensation failed for key [${stored.storageKey}]: ${errorMessage(cleanupError)}`,
         );
       }
 
@@ -299,9 +301,9 @@ export class FileAssetService implements OnApplicationBootstrap {
         assetStatus: null,
         status: 'DELETED',
       };
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.logger.error(
-        `Physical deletion failed for FileAsset [${fileAssetId}] (storageKey [${transition.storageKey}]): ${err.message}. Retaining PENDING_DELETION status for retry.`,
+        `Physical deletion failed for FileAsset [${fileAssetId}] (storageKey [${transition.storageKey}]): ${errorMessage(err)}. Retaining PENDING_DELETION status for retry.`,
       );
 
       return {
@@ -309,7 +311,7 @@ export class FileAssetService implements OnApplicationBootstrap {
         outcome: 'RETAINED_PENDING_RETRY',
         assetStatus: FileAssetStatus.PENDING_DELETION,
         status: 'PENDING_DELETION',
-        reason: `Physical storage deletion failed: ${err.message}`,
+        reason: `Physical storage deletion failed: ${errorMessage(err)}`,
       };
     }
   }
@@ -340,8 +342,8 @@ export class FileAssetService implements OnApplicationBootstrap {
         if (delResult.deleted) {
           succeeded++;
         }
-      } catch (err: any) {
-        this.logger.warn(`Failed to cleanup abandoned upload [${asset.id}]: ${err.message}`);
+      } catch (err: unknown) {
+        this.logger.warn(`Failed to cleanup abandoned upload [${asset.id}]: ${errorMessage(err)}`);
       }
     }
 
@@ -410,9 +412,9 @@ export class FileAssetService implements OnApplicationBootstrap {
         });
 
         succeeded++;
-      } catch (err: any) {
+      } catch (err: unknown) {
         this.logger.warn(
-          `Retry deletion failed for asset [${asset.id}] (storageKey: ${asset.storageKey}): ${err.message}`,
+          `Retry deletion failed for asset [${asset.id}] (storageKey: ${asset.storageKey}): ${errorMessage(err)}`,
         );
         failed++;
       }

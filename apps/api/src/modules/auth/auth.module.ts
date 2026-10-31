@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
+import { JwtModule, JwtModuleOptions, JwtService } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { DatabaseModule } from '../../shared/database/database.module';
@@ -26,6 +26,26 @@ import { JwtStrategy } from './infrastructure/security/jwt.strategy';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { RolesGuard } from '../../shared/guards/roles.guard';
 
+type JwtExpiration = NonNullable<JwtModuleOptions['signOptions']>['expiresIn'];
+
+export function parseJwtExpiration(value: string | undefined): JwtExpiration {
+  const normalized = value?.trim();
+  if (!normalized) {
+    throw new Error('JWT_ACCESS_EXPIRES_IN must be a non-empty duration string.');
+  }
+
+  try {
+    new JwtService().sign(
+      { iat: 100 },
+      { secret: 'jwt-duration-validation-only', expiresIn: normalized as JwtExpiration },
+    );
+  } catch {
+    throw new Error('JWT_ACCESS_EXPIRES_IN must be a valid duration string.');
+  }
+
+  return normalized as JwtExpiration;
+}
+
 @Module({
   imports: [
     DatabaseModule,
@@ -40,7 +60,9 @@ import { RolesGuard } from '../../shared/guards/roles.guard';
           'replace_with_long_random_access_secret',
         ),
         signOptions: {
-          expiresIn: configService.get<string>('JWT_ACCESS_EXPIRES_IN', '15m') as any,
+          expiresIn: parseJwtExpiration(
+            configService.get<string>('JWT_ACCESS_EXPIRES_IN', '15m'),
+          ),
         },
       }),
       inject: [ConfigService],

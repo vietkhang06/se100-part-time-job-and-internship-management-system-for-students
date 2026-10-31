@@ -74,11 +74,11 @@ export class CloseReportWithoutSanctionUseCase {
       await this.notifications.publish({
         eventType: NotificationEventType.REPORT_RESOLVED,
         recipientId: report.reporterId,
-        payload: { reason: text },
+        payload: { reportId, outcome: 'CLOSED_WITHOUT_SANCTION', reason: text },
         dedupeKey: `${NotificationEventType.REPORT_RESOLVED}:${reportId}`,
       });
-    } catch (err: any) {
-      this.logger.error(`Notify reporter for report ${reportId} failed: ${err?.message}`);
+    } catch (err: unknown) {
+      this.logger.error(`Notify reporter for report ${reportId} failed: ${err instanceof Error ? err.message : String(err)}`);
     }
     return { reportId };
   }

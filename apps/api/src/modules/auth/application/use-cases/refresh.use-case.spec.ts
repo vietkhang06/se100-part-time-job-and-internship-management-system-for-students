@@ -5,13 +5,15 @@ import { IAuthSessionRepository } from '../../domain/repositories/auth-session.r
 import { IUserRepository } from '../../../users/domain/repositories/user.repository.interface';
 import { AuthSessionEntity } from '../../domain/entities/auth-session.entity';
 import { UserEntity } from '../../../users/domain/entities/user.entity';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 describe('RefreshUseCase', () => {
   let useCase: RefreshUseCase;
   let authSessionRepository: jest.Mocked<IAuthSessionRepository>;
   let userRepository: jest.Mocked<IUserRepository>;
-  let jwtService: any;
-  let configService: any;
+  let jwtService: JwtService;
+  let configService: ConfigService;
 
   beforeEach(() => {
     authSessionRepository = {
@@ -30,18 +32,13 @@ describe('RefreshUseCase', () => {
       create: jest.fn(),
       createWithVerificationToken: jest.fn(),
       updateStatus: jest.fn(),
-    } as any;
-
-    jwtService = {
-      sign: jest.fn().mockReturnValue('mock.rotated.jwt.token'),
+      updatePassword: jest.fn(),
+      changePasswordAndRevokeSessions: jest.fn(),
     };
 
-    configService = {
-      get: jest.fn().mockImplementation((key: string, defaultVal: any) => {
-        if (key === 'REFRESH_TOKEN_TTL_DAYS') return 30;
-        return defaultVal;
-      }),
-    };
+    jwtService = new JwtService();
+    jest.spyOn(jwtService, 'sign').mockReturnValue('mock.rotated.jwt.token');
+    configService = new ConfigService({ REFRESH_TOKEN_TTL_DAYS: 30 });
 
     useCase = new RefreshUseCase(
       authSessionRepository,

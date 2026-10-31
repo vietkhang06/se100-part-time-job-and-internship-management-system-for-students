@@ -5,6 +5,7 @@ import {
   ViolationReportStatus,
 } from '@campusjob/contracts';
 import { ReportModerationTargetHandler } from './report-moderation-target.handler';
+import { IViolationReportRepository } from '../../domain/repositories/violation-report.repository.interface';
 
 const ctx = (decision: D) => ({
   itemId: 'i1', decisionId: 'd1', targetType: T.REPORT, targetId: 'r1', decision,
@@ -12,12 +13,15 @@ const ctx = (decision: D) => ({
 });
 
 describe('ReportModerationTargetHandler', () => {
-  let repo: { applyModerationOutcome: jest.Mock };
+  let repo: jest.Mocked<IViolationReportRepository>;
   let handler: ReportModerationTargetHandler;
 
   beforeEach(() => {
-    repo = { applyModerationOutcome: jest.fn().mockResolvedValue(true) };
-    handler = new ReportModerationTargetHandler(repo as any);
+    repo = {
+      create: jest.fn(), findById: jest.fn(), listByReporter: jest.fn(), listByStatus: jest.fn(),
+      markUnderReview: jest.fn(), markResolved: jest.fn(), applyModerationOutcome: jest.fn().mockResolvedValue(true),
+    };
+    handler = new ReportModerationTargetHandler(repo);
   });
 
   it('marks the report substantiated or dismissed', async () => {
