@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import supertest from 'supertest';
 import cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
@@ -15,6 +16,7 @@ const request = supertest;
 describe('AuthModule (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  let jwtService: JwtService;
 
   const testStudentEmail = 'e2e-student@campusjob.local';
   const testEmployerEmail = 'e2e-employer@campusjob.local';
@@ -39,6 +41,7 @@ describe('AuthModule (e2e)', () => {
 
     await app.init();
     prisma = app.get(PrismaService);
+    jwtService = app.get(JwtService, { strict: false });
 
     // Không gửi mail qua SMTP thật
     const mailService = app.get(MAIL_SERVICE_TOKEN, { strict: false }) as object;
@@ -77,6 +80,24 @@ describe('AuthModule (e2e)', () => {
     await prisma.user.deleteMany({
       where: { email: { in: testEmails } },
     });
+  }
+
+  function expectAccessTokenContract(token: string, user: { id: string; email: string; role: UserRole }) {
+    const payload = jwtService.verify<{
+      sub: string;
+      email: string;
+      role: UserRole;
+      sessionId: string;
+      iat: number;
+      exp: number;
+    }>(token);
+
+    expect(payload).toMatchObject({ sub: user.id, email: user.email, role: user.role });
+    expect(payload.sessionId).toEqual(expect.any(String));
+    expect(Object.keys(payload).sort()).toEqual(
+      ['email', 'exp', 'iat', 'role', 'sessionId', 'sub'].sort(),
+    );
+    expect(payload.exp - payload.iat).toBe(15 * 60);
   }
 
   async function ensureActiveStudent(password = 'BrandNewPassword999!@#') {
@@ -674,6 +695,7 @@ describe('AuthModule (e2e)', () => {
       expect(res.body).toHaveProperty('user');
       expect(res.body.user.email).toBe(testStudentEmail);
       expect(res.body.user.role).toBe(UserRole.STUDENT);
+      expectAccessTokenContract(res.body.accessToken, res.body.user);
 
       // Verify HttpOnly cookie
       const cookies = res.headers['set-cookie'];
@@ -847,6 +869,12 @@ describe('AuthModule (e2e)', () => {
       expect(refreshRes.body.accessToken).not.toBe(loginRes.body.accessToken);
       expect(refreshRes.body).toHaveProperty('user');
       expect(refreshRes.body.user.email).toBe(testStudentEmail);
+      expectAccessTokenContract(refreshRes.body.accessToken, refreshRes.body.user);
+
+      await request(app.getHttpServer())
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${refreshRes.body.accessToken}`)
+        .expect(200);
 
       const rotatedCookies = refreshRes.headers['set-cookie'];
       expect(rotatedCookies).toBeDefined();

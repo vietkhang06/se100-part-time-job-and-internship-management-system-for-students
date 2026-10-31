@@ -138,6 +138,20 @@ cp .env.example .env
 
 > **LƯU Ý:** Tuyệt đối không commit tệp `.env` lên Git. `.env` đã được cấu hình trong `.gitignore`.
 
+### Cấu hình bí mật xác thực
+
+`DATABASE_URL` và `JWT_ACCESS_SECRET` là bắt buộc. API dừng khởi động nếu thiếu hoặc không hợp lệ; lỗi chỉ nêu tên biến, không in giá trị. `JWT_ACCESS_SECRET` được dùng chung để ký và xác minh Access Token. Hãy tạo bí mật riêng cho từng môi trường, chẳng hạn:
+
+```bash
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+Đặt giá trị được tạo vào `JWT_ACCESS_SECRET` trong `.env` của máy cục bộ. Không dùng giá trị mẫu, không chia sẻ bí mật, và tuyệt đối không đưa giá trị thật vào `.env.example`, mã nguồn, log hoặc Git. Mỗi bản triển khai cần lưu bí mật trong kho quản lý secrets của môi trường đó.
+
+`JWT_ACCESS_EXPIRES_IN` giữ cách phân tích thời hạn hiện tại và mặc định `15m` khi bỏ trống. Refresh token là token ngẫu nhiên opaque được băm trong cơ sở dữ liệu, không phải JWT; không cần `JWT_REFRESH_SECRET` hay `JWT_REFRESH_EXPIRES_IN`. `REFRESH_TOKEN_TTL_DAYS` tùy chọn, mặc định 30, phải là số nguyên dương an toàn nếu được đặt. `COOKIE_SECURE` chỉ nhận `true` hoặc `false`; môi trường production bắt buộc đặt `COOKIE_SECURE=true` để tuân thủ C-01. Giá trị `false` dành cho HTTP local.
+
+Hợp đồng C-01 và tài liệu bảo mật hiện hành chưa quy định độ dài tối thiểu cho JWT secret. Vì vậy startup hiện chỉ yêu cầu secret không rỗng và không chấp nhận placeholder cũ; chưa áp dụng giới hạn độ dài. Đề xuất để chủ dự án phê duyệt: yêu cầu ít nhất 32 byte entropy ngẫu nhiên (ví dụ 64 ký tự hex). Đây là đề xuất chính sách, chưa phải điều kiện được thực thi.
+
 ---
 
 ## 8. Bảng phân bổ cổng mạng thực tế (Port Mapping)
