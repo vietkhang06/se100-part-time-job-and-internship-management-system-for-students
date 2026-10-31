@@ -6,6 +6,7 @@ export interface NavItem {
 
 export const CANDIDATE_NAV_ITEMS: NavItem[] = [
   { title: 'Tổng quan', href: '/candidate' },
+  { title: 'Việc làm đã lưu', href: '/candidate/saved-jobs' },
   { title: 'Hồ sơ cá nhân', href: '/candidate/profile' },
   { title: 'Quản lý CV', href: '/candidate/cvs' },
   { title: 'Lịch sử ứng tuyển', href: '/candidate/applications' },
