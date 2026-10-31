@@ -30,7 +30,6 @@ jobs:
       NODE_ENV: test
       DATABASE_URL: postgresql://campusjob:campusjob_password@localhost:5432/campusjob_test?schema=public
       JWT_ACCESS_SECRET: ci_access_secret_for_automated_testing_only_32chars
-      JWT_REFRESH_SECRET: ci_refresh_secret_for_automated_testing_only_32chars
       API_PORT: 8080
       WEB_PORT: 3000
       WEB_URL: http://localhost:3000

@@ -91,7 +91,7 @@ describe('Auth flow (e2e): happy path & error paths', () => {
     const config = app.get(ConfigService);
     webUrl = config.get<string>('WEB_URL', 'http://localhost:3000');
     cookieName = config.get<string>('COOKIE_NAME') || 'campusjob_refresh_token';
-    jwtSecret = config.get<string>('JWT_ACCESS_SECRET', 'replace_with_long_random_access_secret');
+    jwtSecret = config.getOrThrow<string>('JWT_ACCESS_SECRET');
 
     // Capture outgoing mail: keep the real NodemailerMailService (subject/link/token
     // building) and only replace the network transport.
