@@ -753,6 +753,8 @@ model JobPosting {
   company            Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   branch            CompanyBranch @relation(fields: [branchId, companyId], references: [id, companyId], onDelete: Restrict)
   savedJobs          SavedJob[]
+  viewLogs           JobViewLog[]
+  expiryReminderLogs JobExpiryReminderLog[]
 
   @@index([companyId])
   @@index([branchId])
@@ -769,5 +771,33 @@ model SavedJob {
 
   @@unique([studentId, jobId])
   @@index([studentId])
+  @@index([jobId])
+}
+
+
+model JobViewLog {
+  id        String     @id @default(uuid())
+  jobId     String
+  viewerKey String
+  viewDate  String
+  createdAt DateTime   @default(now())
+
+  job       JobPosting @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, viewerKey, viewDate])
+  @@index([jobId])
+  @@index([viewDate])
+}
+
+model JobExpiryReminderLog {
+  id           String     @id @default(uuid())
+  jobId        String
+  recipientId  String
+  deadlineDate String
+  sentAt       DateTime   @default(now())
+
+  job          JobPosting @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, recipientId, deadlineDate])
   @@index([jobId])
 }
