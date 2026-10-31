@@ -17,6 +17,10 @@ import {
   ICompanyMemberRepository,
   COMPANY_MEMBER_REPOSITORY_TOKEN,
 } from '../../domain/repositories/company-member.repository.interface';
+import {
+  ISavedJobRepository,
+  SAVED_JOB_REPOSITORY_TOKEN,
+} from '../../domain/repositories/saved-job.repository.interface';
 
 @Injectable()
 export class GetEmployerJobDetailUseCase {
@@ -25,6 +29,8 @@ export class GetEmployerJobDetailUseCase {
     private readonly jobRepo: IJobPostingRepository,
     @Inject(COMPANY_MEMBER_REPOSITORY_TOKEN)
     private readonly memberRepo: ICompanyMemberRepository,
+    @Inject(SAVED_JOB_REPOSITORY_TOKEN)
+    private readonly savedJobRepo: ISavedJobRepository,
   ) {}
 
   async execute(userId: string, jobId: string): Promise<JobPostingResponseDto> {
@@ -58,6 +64,9 @@ export class GetEmployerJobDetailUseCase {
       });
     }
 
-    return { job: job.toDto() };
+    // S6-M03-01: Trả thêm số lượt lưu cho doanh nghiệp sở hữu
+    const saveCount = await this.savedJobRepo.countByJobId(job.id);
+
+    return { job: job.toDto({ saveCount }) };
   }
 }

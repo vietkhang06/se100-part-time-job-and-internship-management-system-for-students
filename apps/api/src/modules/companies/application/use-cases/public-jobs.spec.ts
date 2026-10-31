@@ -8,6 +8,7 @@ import { SearchPublicJobsUseCase } from './search-public-jobs.use-case';
 import { GetPublicJobDetailUseCase } from './get-public-job-detail.use-case';
 import { InMemoryJobPostingRepository } from '../../infrastructure/persistence/in-memory-job-posting.repository';
 import { InMemoryCompanyRepository } from '../../infrastructure/persistence/in-memory-company.repository';
+import { InMemoryCompanyMemberRepository } from '../../infrastructure/persistence/in-memory-company-member.repository';
 import { CompanyEntity } from '../../domain/entities/company.entity';
 
 describe('Public Jobs Use Cases (UC22–UC23 / S5-M03-03)', () => {
@@ -15,6 +16,7 @@ describe('Public Jobs Use Cases (UC22–UC23 / S5-M03-03)', () => {
   let getDetailUseCase: GetPublicJobDetailUseCase;
   let jobRepo: InMemoryJobPostingRepository;
   let companyRepo: InMemoryCompanyRepository;
+  let memberRepo: InMemoryCompanyMemberRepository;
 
   const verifiedCompanyId = 'company-verified-1';
   const unverifiedCompanyId = 'company-unverified-2';
@@ -24,9 +26,10 @@ describe('Public Jobs Use Cases (UC22–UC23 / S5-M03-03)', () => {
   beforeEach(async () => {
     jobRepo = new InMemoryJobPostingRepository();
     companyRepo = new InMemoryCompanyRepository();
+    memberRepo = new InMemoryCompanyMemberRepository();
 
     searchUseCase = new SearchPublicJobsUseCase(jobRepo);
-    getDetailUseCase = new GetPublicJobDetailUseCase(jobRepo);
+    getDetailUseCase = new GetPublicJobDetailUseCase(jobRepo, memberRepo);
 
     // Seed verified company
     await companyRepo.save(

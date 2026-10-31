@@ -300,4 +300,140 @@ export class PrismaJobPostingRepository
       branchName: row.branch?.branchName ?? '',
     };
   }
+
+  async recordPublicView(jobId: string, viewerKey: string): Promise<boolean> {
+    const viewDate = new Date().toISOString().slice(0, 10);
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.jobViewLog.create({
+          data: {
+            jobId,
+            viewerKey,
+            viewDate,
+          },
+        });
+        await tx.jobPosting.update({
+          where: { id: jobId },
+          data: {
+            viewCount: { increment: 1 },
+          },
+        });
+      });
+      return true;
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        return false;
+      }
+      return false;
+    }
+  }
+
+  async closeExpiredJobs(now: Date = new Date()): Promise<number> {
+    const result = await this.prisma.jobPosting.updateMany({
+      where: {
+        status: { not: JobStatus.CLOSED as any },
+        deadline: { lt: now },
+      },
+      data: {
+        status: JobStatus.CLOSED as any,
+      },
+    });
+    return result.count;
+  }
+
+  async findExpiringJobs(now: Date, withinDays: number): Promise<JobPostingEntity[]> {
+    const upperLimit = new Date(now.getTime() + withinDays * 24 * 3600 * 1000);
+    const rows = await this.prisma.jobPosting.findMany({
+      where: {
+        status: JobStatus.OPEN as any,
+        deadline: {
+          gt: now,
+          lte: upperLimit,
+        },
+      },
+      orderBy: { deadline: 'asc' },
+    });
+    return rows.map((r) => this.toDomain(r));
+  }
+
+  async getAdminJobMetrics(): Promise<{
+    totalJobs: number;
+    totalViews: number;
+    totalSaves: number;
+    jobs: Array<{
+      jobId: string;
+      title: string;
+      companyId: string;
+      companyName: string;
+      status: JobStatus;
+      viewCount: number;
+      saveCount: number;
+    }>;
+  }> {
+    const [rows, savedCounts] = await Promise.all([
+      this.prisma.jobPosting.findMany({
+        include: {
+          company: true,
+          _count: {
+            select: { savedJobs: true },
+          },
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      }),
+      this.prisma.savedJob.count(),
+    ]);
+
+    let totalViews = 0;
+    const jobs = rows.map((r) => {
+      totalViews += r.viewCount;
+      return {
+        jobId: r.id,
+        title: r.title,
+        companyId: r.companyId,
+        companyName: r.company?.name ?? 'Unknown Company',
+        status: r.status as JobStatus,
+        viewCount: r.viewCount,
+        saveCount: r._count.savedJobs,
+      };
+    });
+
+    return {
+      totalJobs: rows.length,
+      totalViews,
+      totalSaves: savedCounts,
+      jobs,
+    };
+  }
+
+  async getSingleJobMetrics(jobId: string): Promise<{
+    jobId: string;
+    title: string;
+    companyId: string;
+    companyName: string;
+    status: JobStatus;
+    viewCount: number;
+    saveCount: number;
+  } | null> {
+    const row = await this.prisma.jobPosting.findUnique({
+      where: { id: jobId },
+      include: {
+        company: true,
+        _count: {
+          select: { savedJobs: true },
+        },
+      },
+    });
+
+    if (!row) return null;
+
+    return {
+      jobId: row.id,
+      title: row.title,
+      companyId: row.companyId,
+      companyName: row.company?.name ?? 'Unknown Company',
+      status: row.status as JobStatus,
+      viewCount: row.viewCount,
+      saveCount: row._count.savedJobs,
+    };
+  }
 }

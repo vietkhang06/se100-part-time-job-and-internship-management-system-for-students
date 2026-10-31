@@ -1,36 +1,47 @@
 import {
   Controller,
   Get,
+  Post,
+  Delete,
   Param,
   Query,
+  Req,
+  UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { Request } from 'express';
+import * as crypto from 'crypto';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiParam,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import {
   PublicJobPostingListResponseDto,
   PublicJobPostingResponseDto,
+  SaveJobResponseDto,
+  UserRole,
 } from '@campusjob/contracts';
 import { Public } from '../../../../shared/decorators/public.decorator';
+import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../../shared/guards/roles.guard';
+import { Roles } from '../../../../shared/decorators/roles.decorator';
+import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
 import { PublicJobQueryDto } from '../../application/dto/public-job-query.dto';
 import { SearchPublicJobsUseCase } from '../../application/use-cases/search-public-jobs.use-case';
 import { GetPublicJobDetailUseCase } from '../../application/use-cases/get-public-job-detail.use-case';
+import { SaveJobUseCase } from '../../application/use-cases/save-job.use-case';
+import { UnsaveJobUseCase } from '../../application/use-cases/unsave-job.use-case';
 
 /**
  * PublicJobsController
  *
  * S5-M03-03 (C-07, C-08): Tra cứu và xem chi tiết tin tuyển dụng công khai (UC22, UC23).
- * - Hoàn toàn không yêu cầu đăng nhập (@Public())
- * - Bộ lọc: từ khóa, ngành nghề, địa điểm, loại hình, mức lương, lịch làm việc
- * - Phân trang ổn định (createdAt desc, id desc), giới hạn tối đa 50 tin/trang
- * - Shared Visibility Predicate: chỉ hiển thị tin OPEN, hạn nộp > now, công ty VERIFIED
- * - Tuyệt đối không để lộ dữ liệu nhạy cảm (rejectionReason, rejectedAt, hiddenByModeration)
- * - Không tự động tăng viewCount (dành cho session metrics riêng)
+ * S6-M03-01: Ghi nhận lượt xem công khai (deduped per viewer per calendar day, atomic increment).
+ * S3-M03-03 / S5-M03-05: Lưu / bỏ lưu tin tuyển dụng (/jobs/:id/save).
  */
 @ApiTags('Public Jobs')
 @Controller(['jobs', 'public/jobs'])
@@ -38,6 +49,8 @@ export class PublicJobsController {
   constructor(
     private readonly searchJobsUseCase: SearchPublicJobsUseCase,
     private readonly getJobDetailUseCase: GetPublicJobDetailUseCase,
+    private readonly saveJobUseCase: SaveJobUseCase,
+    private readonly unsaveJobUseCase: UnsaveJobUseCase,
   ) {}
 
   @Get()
@@ -68,7 +81,89 @@ export class PublicJobsController {
   @ApiResponse({ status: 404, description: 'Tin tuyển dụng không tồn tại hoặc chưa công khai' })
   async getDetail(
     @Param('id') id: string,
+    @Req() req: Request = {} as Request,
   ): Promise<PublicJobPostingResponseDto> {
-    return this.getJobDetailUseCase.execute(id);
+    // S6-M03-01: Xác định viewerKey (authenticated vs anonymous SHA-256 IP+UA hash)
+    let viewerUserId: string | undefined = (req as any).user?.id;
+
+    if (!viewerUserId) {
+      const authHeader = req.headers?.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        try {
+          // Trích xuất payload JWT unverified cho public route
+          const parts = token.split('.');
+          if (parts.length === 3) {
+            const payload = JSON.parse(
+              Buffer.from(parts[1], 'base64').toString('utf8'),
+            );
+            if (payload && payload.sub) {
+              viewerUserId = payload.sub;
+            }
+          }
+        } catch {
+          // Bỏ qua lỗi token trên route công khai
+        }
+      }
+    }
+
+    let viewerKey: string;
+    if (viewerUserId) {
+      viewerKey = `user:${viewerUserId}`;
+    } else {
+      const forwarded = req.headers?.['x-forwarded-for'];
+      const ip =
+        (typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : '') ||
+        req.ip ||
+        req.socket?.remoteAddress ||
+        '127.0.0.1';
+      const ua = req.headers?.['user-agent'] || 'unknown';
+      const hash = crypto
+        .createHash('sha256')
+        .update(`${ip}|${ua}`)
+        .digest('hex')
+        .substring(0, 32);
+      viewerKey = `anon:${hash}`;
+    }
+
+    return this.getJobDetailUseCase.execute(id, {
+      userId: viewerUserId,
+      viewerKey,
+    });
+  }
+
+  @Post(':id/save')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.STUDENT)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'UC28 — Lưu tin tuyển dụng (Student only, Idempotent)',
+  })
+  @ApiParam({ name: 'id', description: 'ID tin tuyển dụng cần lưu' })
+  @ApiResponse({ status: 200, description: 'Đã lưu tin tuyển dụng' })
+  @ApiResponse({ status: 404, description: 'Tin không tồn tại hoặc không đủ điều kiện công khai' })
+  async saveJob(
+    @Param('id') jobId: string,
+    @CurrentUser('id') studentId: string,
+  ): Promise<SaveJobResponseDto> {
+    return this.saveJobUseCase.execute(studentId, jobId);
+  }
+
+  @Delete(':id/save')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.STUDENT)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'UC29 — Bỏ lưu tin tuyển dụng (Student only, Idempotent)',
+  })
+  @ApiParam({ name: 'id', description: 'ID tin tuyển dụng cần bỏ lưu' })
+  @ApiResponse({ status: 200, description: 'Đã bỏ lưu tin tuyển dụng' })
+  async unsaveJob(
+    @Param('id') jobId: string,
+    @CurrentUser('id') studentId: string,
+  ): Promise<SaveJobResponseDto> {
+    return this.unsaveJobUseCase.execute(studentId, jobId);
   }
 }

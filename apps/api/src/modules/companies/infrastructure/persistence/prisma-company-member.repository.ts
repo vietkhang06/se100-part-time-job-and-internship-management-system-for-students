@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../../../../shared/database/prisma.service';
 import { ICompanyMemberRepository } from '../../domain/repositories/company-member.repository.interface';
 import { CompanyMemberEntity } from '../../domain/entities/company-member.entity';
+import { CompanyMemberWithUser } from '../../domain/repositories/company-member.repository.interface';
 
 @Injectable()
 export class PrismaCompanyMemberRepository
@@ -53,6 +54,31 @@ export class PrismaCompanyMemberRepository
       where: { userId },
     });
     return rows.map((r) => this.toDomain(r));
+  }
+
+  async findActiveMembersByCompanyId(
+    companyId: string,
+  ): Promise<CompanyMemberWithUser[]> {
+    const rows = await this.prisma.companyMember.findMany({
+      where: {
+        companyId,
+        status: CompanyMemberStatus.ACTIVE,
+      },
+      include: {
+        user: {
+          select: { email: true, fullName: true },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return rows.map((r) => ({
+      member: this.toDomain(r),
+      user: {
+        email: r.user.email,
+        fullName: r.user.fullName,
+      },
+    }));
   }
 
   async create(data: {

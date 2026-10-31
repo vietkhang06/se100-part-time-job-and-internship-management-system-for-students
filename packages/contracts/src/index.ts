@@ -759,6 +759,7 @@ export interface JobPostingDto {
   deadline: string;
   status: JobStatus;
   viewCount: number;
+  saveCount?: number;
   rejectionReason?: string | null;
   rejectedAt?: string | null;
   hiddenByModeration?: boolean;
@@ -772,6 +773,69 @@ export interface SavedJobDto {
   jobId: string;
   createdAt: string;
   job?: JobPostingDto | null;
+}
+
+export interface SavedJobItemDto {
+  id: string;
+  studentId: string;
+  jobId: string;
+  createdAt: string;
+  isAvailable: boolean;
+  job: {
+    id: string;
+    title: string;
+    companyId: string;
+    companyName: string;
+    companyLogoUrl?: string | null;
+    branchId: string;
+    branchCity: string;
+    branchName: string;
+    type: JobType;
+    industry: string;
+    salary?: string | null;
+    salaryMin?: number | null;
+    salaryMax?: number | null;
+    isSalaryNegotiable?: boolean;
+    schedule?: string | null;
+    benefits?: string | null;
+    deadline: string;
+    status: JobStatus;
+  } | null;
+}
+
+export interface SavedJobListResponseDto {
+  savedJobs: SavedJobItemDto[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface SavedJobIdsResponseDto {
+  jobIds: string[];
+}
+
+export interface SaveJobResponseDto {
+  message: string;
+  saved: boolean;
+  savedJobId?: string;
+}
+
+export interface JobMetricsDto {
+  jobId: string;
+  title: string;
+  companyId: string;
+  companyName?: string;
+  status: JobStatus;
+  viewCount: number;
+  saveCount: number;
+}
+
+export interface AdminJobMetricsResponseDto {
+  totalJobs: number;
+  totalViews: number;
+  totalSaves: number;
+  jobs: JobMetricsDto[];
 }
 
 export interface CreateJobPostingRequestDto {
@@ -1083,7 +1147,6 @@ export interface PublicJobPostingDto {
   benefits?: string | null;
   deadline: string;
   status: JobStatus;
-  viewCount: number;
   createdAt: string;
   updatedAt: string;
   companyName?: string;
