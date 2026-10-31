@@ -19,8 +19,9 @@ Tài liệu kỹ thuật quy định các nguyên tắc tính toán số liệu 
 - Mỗi người xem chỉ được tính tối đa **1 lượt xem cho 1 tin tuyển dụng trong 1 ngày dương lịch (UTC Calendar Day, `YYYY-MM-DD`)**.
 - Định danh người xem (`viewerKey`) được xác định theo nguyên tắc:
   - **Người dùng đã đăng nhập (Authenticated)**: Sử dụng tiền tố `user:<userId>`.
-  - **Khách vãng lai (Anonymous / Unauthenticated)**: Băm mã bảo mật SHA-256 từ địa chỉ IP và chuỗi User-Agent:
-    `anon:sha256(ip + "|" + userAgent).substring(0, 32)`
+  - **Khách vãng lai (Anonymous / Unauthenticated)**: Băm mã bảo mật SHA-256 từ secret salt trên server (`VIEW_HASH_SALT`), địa chỉ IP và chuỗi User-Agent:
+    `anon:sha256(VIEW_HASH_SALT + "|" + ip + "|" + userAgent).substring(0, 32)`
+    *Lưu ý bảo mật*: hashed, salted, pending privacy review (bắt buộc cấu hình `VIEW_HASH_SALT` trên production).
 - Khử trùng lặp được đảm bảo bền vững tại tầng cơ sở dữ liệu thông qua ràng buộc duy nhất trên bảng `JobViewLog`:
   `@@unique([jobId, viewerKey, viewDate])`
 - Nếu cùng một người xem làm mới trang (refresh) hoặc thử lại yêu cầu (retry) nhiều lần trong cùng một ngày, hệ thống chặn duplicate tại DB (bắt mã lỗi `P2002`) và **không tăng số đếm lần hai**.

@@ -97,7 +97,6 @@ describe('JobExpirySchedulerService (S6-M03-02)', () => {
       status: CompanyMemberStatus.ACTIVE,
     });
 
-    // Deadline 2 ngày sau (trong khoảng 3 ngày)
     const deadline = new Date(Date.now() + 2 * 24 * 3600 * 1000);
     const expiringJob = await jobRepo.create({
       companyId: comp.id,
@@ -167,12 +166,12 @@ describe('JobExpirySchedulerService (S6-M03-02)', () => {
     expect(notifier.sendExpiryReminder).toHaveBeenCalledTimes(1);
   });
 
-  it('Lỗi gửi email không làm gián đoạn đóng tin và được ghi nhận trong kết quả', async () => {
+  it('overlapping runs do not double-send or double-close (chống chạy chồng chéo)', async () => {
     const past = new Date(Date.now() - 3600 * 1000);
     await jobRepo.create({
       companyId: 'comp-1',
       branchId: 'branch-1',
-      title: 'Expired Job',
+      title: 'Expired Job Overlap',
       description: 'Desc',
       industry: 'IT',
       type: JobType.FULL_TIME,
@@ -184,17 +183,14 @@ describe('JobExpirySchedulerService (S6-M03-02)', () => {
     });
 
     const comp = await companyRepo.create({
-      name: 'Fail Corp',
-      taxId: 'TAX-FAIL',
-      email: 'fail@example.com',
-      phone: '0123456789',
-      address: '123 St',
+      name: 'Overlap Corp',
+      taxId: 'TAX-OVERLAP',
       verificationStatus: CompanyVerificationStatus.VERIFIED,
     });
 
     await memberRepo.create({
       companyId: comp.id,
-      userId: 'user-owner',
+      userId: 'user-owner-overlap',
       role: CompanyMemberRole.OWNER,
       status: CompanyMemberStatus.ACTIVE,
     });
@@ -203,7 +199,7 @@ describe('JobExpirySchedulerService (S6-M03-02)', () => {
     await jobRepo.create({
       companyId: comp.id,
       branchId: 'branch-1',
-      title: 'Expiring Job Fail',
+      title: 'Expiring Job Overlap',
       description: 'Desc',
       industry: 'IT',
       type: JobType.FULL_TIME,
@@ -214,12 +210,100 @@ describe('JobExpirySchedulerService (S6-M03-02)', () => {
       status: JobStatus.OPEN,
     });
 
+    // Giả lập notifier mất 50ms để hoàn thành
+    notifier.sendExpiryReminder.mockImplementation(
+      () => new Promise((resolve) => setTimeout(resolve, 50)),
+    );
+
+    // Kích hoạt 2 lần chạy đồng thời
+    const [result1, result2] = await Promise.all([
+      service.runJobExpiryCheck('run-1'),
+      service.runJobExpiryCheck('run-2'),
+    ]);
+
+    // Một lần chạy thực thi bình thường, lần chạy còn lại bị bỏ qua vì isRunning = true
+    const executedRun = result1.errors.length === 0 ? result1 : result2;
+    const skippedRun = result1.errors.length === 0 ? result2 : result1;
+
+    expect(executedRun.closedCount).toBe(1);
+    expect(executedRun.remindersSent).toBe(1);
+
+    expect(skippedRun.closedCount).toBe(0);
+    expect(skippedRun.remindersSent).toBe(0);
+    expect(skippedRun.errors).toContain('Scheduler already running');
+
+    // Tổng số lần gọi gửi email vẫn chỉ là 1, không bị double-send
+    expect(notifier.sendExpiryReminder).toHaveBeenCalledTimes(1);
+  });
+
+  it('email failure does not block closing and is retried next run (lỗi email không chặn đóng tin và được retry lần sau)', async () => {
+    const past = new Date(Date.now() - 3600 * 1000);
+    const expired = await jobRepo.create({
+      companyId: 'comp-retry',
+      branchId: 'branch-1',
+      title: 'Expired Job Retry',
+      description: 'Desc',
+      industry: 'IT',
+      type: JobType.FULL_TIME,
+      skills: ['JS'],
+      quantity: 1,
+      isSalaryNegotiable: true,
+      deadline: past,
+      status: JobStatus.OPEN,
+    });
+
+    const comp = await companyRepo.create({
+      name: 'Retry Corp',
+      taxId: 'TAX-RETRY',
+      verificationStatus: CompanyVerificationStatus.VERIFIED,
+    });
+
+    await memberRepo.create({
+      companyId: comp.id,
+      userId: 'user-owner-retry',
+      role: CompanyMemberRole.OWNER,
+      status: CompanyMemberStatus.ACTIVE,
+    });
+
+    const deadline = new Date(Date.now() + 2 * 24 * 3600 * 1000);
+    await jobRepo.create({
+      companyId: comp.id,
+      branchId: 'branch-1',
+      title: 'Expiring Job Retry',
+      description: 'Desc',
+      industry: 'IT',
+      type: JobType.FULL_TIME,
+      skills: ['NestJS'],
+      quantity: 1,
+      isSalaryNegotiable: true,
+      deadline,
+      status: JobStatus.OPEN,
+    });
+
+    // Lần 1: Email fail
     notifier.sendExpiryReminder.mockRejectedValueOnce(new Error('SMTP Network Failure'));
 
-    const result = await service.runJobExpiryCheck();
+    const run1 = await service.runJobExpiryCheck('corr-fail');
+    expect(run1.closedCount).toBe(1); // Tin quá hạn vẫn đóng thành công!
+    expect(run1.remindersSent).toBe(0);
+    expect(run1.errors.length).toBeGreaterThan(0);
 
-    expect(result.closedCount).toBe(1);
-    expect(result.remindersSent).toBe(0);
-    expect(result.errors.length).toBeGreaterThan(0);
+    const updatedExpired = await jobRepo.findById(expired.id);
+    expect(updatedExpired?.status).toBe(JobStatus.CLOSED);
+
+    // Lần 2: Email hồi phục và gửi thành công (Retry)
+    notifier.sendExpiryReminder.mockResolvedValueOnce(undefined);
+    const run2 = await service.runJobExpiryCheck('corr-success');
+    expect(run2.remindersSent).toBe(1);
+    expect(run2.errors).toHaveLength(0);
+    expect(sentReminders.size).toBe(1);
+  });
+
+  it('correlation ID logged: mỗi lần chạy ghi nhận correlation ID xuyên suốt', async () => {
+    const customCorrelationId = 'custom-trace-uuid-12345';
+    const result = await service.runJobExpiryCheck(customCorrelationId);
+
+    expect(result.correlationId).toBe(customCorrelationId);
+    expect(typeof result.correlationId).toBe('string');
   });
 });

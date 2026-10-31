@@ -9,6 +9,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { Request } from 'express';
 import * as crypto from 'crypto';
@@ -83,7 +84,7 @@ export class PublicJobsController {
     @Param('id') id: string,
     @Req() req: Request = {} as Request,
   ): Promise<PublicJobPostingResponseDto> {
-    // S6-M03-01: Xác định viewerKey (authenticated vs anonymous SHA-256 IP+UA hash)
+    // S6-M03-01: Xác định viewerKey (authenticated vs anonymous SHA-256 IP+UA hash + secret salt)
     let viewerUserId: string | undefined = (req as any).user?.id;
 
     if (!viewerUserId) {
@@ -118,9 +119,15 @@ export class PublicJobsController {
         req.socket?.remoteAddress ||
         '127.0.0.1';
       const ua = req.headers?.['user-agent'] || 'unknown';
+      const salt = process.env.VIEW_HASH_SALT || '';
+      if (process.env.NODE_ENV === 'production' && !salt) {
+        throw new InternalServerErrorException(
+          'VIEW_HASH_SALT environment variable is required in production',
+        );
+      }
       const hash = crypto
         .createHash('sha256')
-        .update(`${ip}|${ua}`)
+        .update(`${salt}|${ip}|${ua}`)
         .digest('hex')
         .substring(0, 32);
       viewerKey = `anon:${hash}`;
