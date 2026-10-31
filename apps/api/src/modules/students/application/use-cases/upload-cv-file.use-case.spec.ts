@@ -4,10 +4,10 @@ import { FileAssetService, FileAssetStatus } from '../../../../shared/storage/fi
 
 describe('UploadCvFileUseCase', () => {
   let useCase: UploadCvFileUseCase;
-  let mockFileAssetService: jest.Mocked<FileAssetService>;
+  let mockFileAssetService: FileAssetService;
 
   beforeEach(() => {
-    mockFileAssetService = {
+    mockFileAssetService = Object.assign(Object.create(FileAssetService.prototype) as FileAssetService, {
       storeFileAsset: jest.fn().mockResolvedValue({
         id: 'asset-uuid-1',
         ownerUserId: 'user-student-1',
@@ -20,7 +20,7 @@ describe('UploadCvFileUseCase', () => {
         uploadedAt: new Date('2026-10-16T12:00:00Z'),
         updatedAt: new Date('2026-10-16T12:00:00Z'),
       }),
-    } as any;
+    });
 
     useCase = new UploadCvFileUseCase(mockFileAssetService);
   });

@@ -79,4 +79,14 @@ describe('M04 API contract with fixture adapters', () => {
       .expect(400);
     expect(workflow.invite).not.toHaveBeenCalled();
   });
+
+  it('maps QUOTA_EXCEEDED to HTTP 409 with explicit error code (S3-M04-03)', async () => {
+    workflow.submit.mockRejectedValue(new M04WorkflowError('QUOTA_EXCEEDED'));
+    const res = await request(app.getHttpServer()).post('/api/v1/jobs/job-a/apply')
+      .set('x-test-user', 'student-a').set('x-test-role', 'STUDENT')
+      .send({ cvId: 'cv-1' })
+      .expect(409);
+    expect(res.body.code).toBe('QUOTA_EXCEEDED');
+  });
 });
+

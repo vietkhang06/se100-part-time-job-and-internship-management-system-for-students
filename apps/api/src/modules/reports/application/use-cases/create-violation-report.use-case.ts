@@ -122,10 +122,11 @@ export class CreateViolationReportUseCase {
       await this.notifications.publish({
         eventType: NotificationEventType.REPORT_RECEIVED,
         recipientId: reporterId,
+        payload: { reportId },
         dedupeKey: `${NotificationEventType.REPORT_RECEIVED}:${reportId}`,
       });
-    } catch (err: any) {
-      this.logger.error(`Ack notification for report ${reportId} failed: ${err?.message}`);
+    } catch (err: unknown) {
+      this.logger.error(`Ack notification for report ${reportId} failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -150,8 +151,8 @@ export class CreateViolationReportUseCase {
       });
       await this.repository.markUnderReview(reportId);
       return 'UNDER_REVIEW' as const;
-    } catch (err: any) {
-      this.logger.error(`Forward report ${reportId} to moderation failed: ${err?.message}`);
+    } catch (err: unknown) {
+      this.logger.error(`Forward report ${reportId} to moderation failed: ${err instanceof Error ? err.message : String(err)}`);
       return 'SUBMITTED' as const;
     }
   }
@@ -167,8 +168,8 @@ export class CreateViolationReportUseCase {
         targetId: reviewId,
         summary: `Đánh giá bị báo cáo: ${label}`,
       });
-    } catch (err: any) {
-      this.logger.error(`Enqueue reported review ${reviewId} failed: ${err?.message}`);
+    } catch (err: unknown) {
+      this.logger.error(`Enqueue reported review ${reviewId} failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 }

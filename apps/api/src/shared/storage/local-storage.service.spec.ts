@@ -6,7 +6,6 @@ import { ConfigService } from '@nestjs/config';
 import { LocalStorageService } from './local-storage.service';
 import {
   StoragePathTraversalException,
-  InvalidStorageKeyException,
   FileNotFoundException,
   StorageException,
 } from './storage.interface';
@@ -14,22 +13,14 @@ import {
 describe('LocalStorageService (W2-DO-01 Unit Tests)', () => {
   let tempStorageDir: string;
   let service: LocalStorageService;
-  let mockConfigService: jest.Mocked<ConfigService>;
+  let configService: ConfigService;
 
   beforeEach(() => {
     // Create an isolated temporary test directory for each test
     tempStorageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'campusjob-storage-test-'));
 
-    mockConfigService = {
-      get: jest.fn((key: string, defaultValue?: any) => {
-        if (key === 'LOCAL_STORAGE_PATH') {
-          return tempStorageDir;
-        }
-        return defaultValue;
-      }),
-    } as any;
-
-    service = new LocalStorageService(mockConfigService);
+    configService = new ConfigService({ LOCAL_STORAGE_PATH: tempStorageDir });
+    service = new LocalStorageService(configService);
     service.onModuleInit();
   });
 
@@ -136,9 +127,7 @@ describe('LocalStorageService (W2-DO-01 Unit Tests)', () => {
     it('should throw StorageException if storage root is configured inside src directory', () => {
       const srcStorageDir = path.resolve(process.cwd(), 'src', 'fake-uploads');
 
-      const badConfigService = {
-        get: jest.fn().mockReturnValue(srcStorageDir),
-      } as any;
+      const badConfigService = new ConfigService({ LOCAL_STORAGE_PATH: srcStorageDir });
 
       expect(() => new LocalStorageService(badConfigService)).toThrow(StorageException);
     });
@@ -154,11 +143,9 @@ describe('LocalStorageService (W2-DO-01 Unit Tests)', () => {
       try {
         fs.symlinkSync(secretFile, symlinkPath);
         await expect(service.read(symlinkKey)).rejects.toThrow(StoragePathTraversalException);
-      } catch (e: any) {
+      } catch (e: unknown) {
         // On Windows environments where symlink creation requires elevated privileges, skip gracefully
-        if (e.code !== 'EPERM') {
-          throw e;
-        }
+        if (typeof e !== 'object' || e === null || !('code' in e) || e.code !== 'EPERM') throw e;
       } finally {
         fs.rmSync(externalDir, { recursive: true, force: true });
       }

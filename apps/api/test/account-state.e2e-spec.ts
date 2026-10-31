@@ -9,7 +9,7 @@ import { UserRole, UserStatus, AuthErrorCode } from '@campusjob/contracts';
 import { PasswordHasher } from '../src/modules/auth/infrastructure/security/password-hasher';
 import { TokenUtils } from '../src/modules/auth/infrastructure/security/token.utils';
 
-const request = (typeof supertest === 'function' ? supertest : (supertest as any).default) as typeof supertest;
+const request = supertest;
 
 describe('Account State Enforcement (e2e)', () => {
   let app: INestApplication;

@@ -19,6 +19,9 @@ import { CloseReportWithoutSanctionUseCase } from './close-report-without-sancti
 import { CompanySanctionHandlerRegistry } from '../ports/company-sanction-handler.port';
 import { SanctionEntity } from '../../domain/entities/sanction.entity';
 import { ViolationReportEntity } from '../../../reports/domain/entities/violation-report.entity';
+import { ISanctionRepository } from '../../domain/repositories/sanction.repository.interface';
+import { IReportAdmin } from '../../../reports/application/ports/report-admin.port';
+import { INotificationPublisher } from '../../../notifications/application/ports/notification-publisher.port';
 
 const sanction = (over: Partial<ConstructorParameters<typeof SanctionEntity>[0]> = {}) =>
   new SanctionEntity({
@@ -31,12 +34,14 @@ const sanction = (over: Partial<ConstructorParameters<typeof SanctionEntity>[0]>
 describe('LiftSanctionUseCase', () => {
   const admin = { id: 'adm1' };
   const now = new Date('2026-10-15T00:00:00.000Z');
-  let repo: any;
+  let repo: jest.Mocked<ISanctionRepository>;
   let handlers: CompanySanctionHandlerRegistry;
   let useCase: LiftSanctionUseCase;
 
   beforeEach(() => {
     repo = {
+      create: jest.fn(), list: jest.fn(), listByTarget: jest.fn(), countRecentWarnings: jest.fn(),
+      findActiveByTarget: jest.fn(), recordAudit: jest.fn(),
       findById: jest.fn().mockResolvedValue({ sanction: sanction(), events: [] }),
       lift: jest.fn().mockResolvedValue(sanction({ storedStatus: SanctionStatus.LIFTED, liftedAt: now })),
     };
@@ -97,9 +102,9 @@ describe('LiftSanctionUseCase', () => {
 
 describe('CloseReportWithoutSanctionUseCase', () => {
   const admin = { id: 'adm1' };
-  let repo: { recordAudit: jest.Mock };
-  let reports: { findById: jest.Mock; markResolved: jest.Mock };
-  let notifications: { publish: jest.Mock };
+  let repo: jest.Mocked<ISanctionRepository>;
+  let reports: jest.Mocked<IReportAdmin>;
+  let notifications: jest.Mocked<INotificationPublisher>;
   let useCase: CloseReportWithoutSanctionUseCase;
 
   const report = (status: RS) =>
@@ -110,10 +115,16 @@ describe('CloseReportWithoutSanctionUseCase', () => {
     });
 
   beforeEach(() => {
-    repo = { recordAudit: jest.fn().mockResolvedValue(undefined) };
-    reports = { findById: jest.fn().mockResolvedValue(report(RS.SUBSTANTIATED)), markResolved: jest.fn().mockResolvedValue(true) };
-    notifications = { publish: jest.fn().mockResolvedValue({ outcome: 'CREATED' }) };
-    useCase = new CloseReportWithoutSanctionUseCase(repo as any, reports as any, notifications as any);
+    repo = {
+      create: jest.fn(), findById: jest.fn(), list: jest.fn(), listByTarget: jest.fn(), countRecentWarnings: jest.fn(),
+      findActiveByTarget: jest.fn(), lift: jest.fn(), recordAudit: jest.fn().mockResolvedValue(undefined),
+    };
+    reports = {
+      findById: jest.fn().mockResolvedValue(report(RS.SUBSTANTIATED)), listByStatus: jest.fn(),
+      markResolved: jest.fn().mockResolvedValue(true),
+    };
+    notifications = { publish: jest.fn().mockResolvedValue({ outcome: 'CREATED' }), publishMany: jest.fn() };
+    useCase = new CloseReportWithoutSanctionUseCase(repo, reports, notifications);
   });
 
   it('closes a substantiated report, audits it and tells the reporter', async () => {
@@ -123,7 +134,11 @@ describe('CloseReportWithoutSanctionUseCase', () => {
       expect.objectContaining({ action: 'REPORT_CLOSED_WITHOUT_SANCTION', entityId: 'r1' }),
     );
     expect(notifications.publish).toHaveBeenCalledWith(
-      expect.objectContaining({ eventType: NotificationEventType.REPORT_RESOLVED, recipientId: 'rep1' }),
+      expect.objectContaining({
+        eventType: NotificationEventType.REPORT_RESOLVED,
+        recipientId: 'rep1',
+        payload: expect.objectContaining({ reportId: 'r1', outcome: 'CLOSED_WITHOUT_SANCTION' }),
+      }),
     );
   });
 

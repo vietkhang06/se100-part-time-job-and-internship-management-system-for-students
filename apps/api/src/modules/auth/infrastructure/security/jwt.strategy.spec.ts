@@ -3,11 +3,12 @@ import { UserRole, UserStatus, AuthErrorCode } from '@campusjob/contracts';
 import { JwtStrategy, JwtPayload } from './jwt.strategy';
 import { IUserRepository } from '../../../users/domain/repositories/user.repository.interface';
 import { UserEntity } from '../../../users/domain/entities/user.entity';
+import { ConfigService } from '@nestjs/config';
 
 describe('JwtStrategy', () => {
   let strategy: JwtStrategy;
   let userRepository: jest.Mocked<IUserRepository>;
-  let configService: any;
+  let configService: ConfigService;
 
   beforeEach(() => {
     userRepository = {
@@ -16,14 +17,11 @@ describe('JwtStrategy', () => {
       create: jest.fn(),
       createWithVerificationToken: jest.fn(),
       updateStatus: jest.fn(),
-    } as any;
-
-    configService = {
-      get: jest.fn().mockImplementation((key: string, defaultVal: any) => {
-        if (key === 'JWT_ACCESS_SECRET') return 'test_jwt_secret_key_12345';
-        return defaultVal;
-      }),
+      updatePassword: jest.fn(),
+      changePasswordAndRevokeSessions: jest.fn(),
     };
+
+    configService = new ConfigService({ JWT_ACCESS_SECRET: 'test_jwt_secret_key_12345' });
 
     strategy = new JwtStrategy(configService, userRepository);
   });
@@ -86,10 +84,9 @@ describe('JwtStrategy', () => {
     try {
       await strategy.validate(payload);
       fail('Expected ForbiddenException');
-    } catch (err: any) {
-      expect(err).toBeInstanceOf(ForbiddenException);
-      const res = err.getResponse();
-      expect(res.code).toBe(AuthErrorCode.ACCOUNT_SUSPENDED);
+    } catch (err: unknown) {
+      if (!(err instanceof ForbiddenException)) throw err;
+      expect(err.getResponse()).toMatchObject({ code: AuthErrorCode.ACCOUNT_SUSPENDED });
     }
   });
 
@@ -109,10 +106,9 @@ describe('JwtStrategy', () => {
     try {
       await strategy.validate(payload);
       fail('Expected ForbiddenException');
-    } catch (err: any) {
-      expect(err).toBeInstanceOf(ForbiddenException);
-      const res = err.getResponse();
-      expect(res.code).toBe(AuthErrorCode.ACCOUNT_LOCKED);
+    } catch (err: unknown) {
+      if (!(err instanceof ForbiddenException)) throw err;
+      expect(err.getResponse()).toMatchObject({ code: AuthErrorCode.ACCOUNT_LOCKED });
     }
   });
 
@@ -132,10 +128,9 @@ describe('JwtStrategy', () => {
     try {
       await strategy.validate(payload);
       fail('Expected ForbiddenException');
-    } catch (err: any) {
-      expect(err).toBeInstanceOf(ForbiddenException);
-      const res = err.getResponse();
-      expect(res.code).toBe(AuthErrorCode.ACCOUNT_PENDING_VERIFICATION);
+    } catch (err: unknown) {
+      if (!(err instanceof ForbiddenException)) throw err;
+      expect(err.getResponse()).toMatchObject({ code: AuthErrorCode.ACCOUNT_PENDING_VERIFICATION });
     }
   });
 });

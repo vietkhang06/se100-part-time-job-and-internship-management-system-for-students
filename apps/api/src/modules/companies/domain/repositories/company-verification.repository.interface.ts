@@ -1,7 +1,6 @@
 import {
   CompanyVerificationStatus,
   DocumentType,
-  CompanyVerificationDto,
 } from '@campusjob/contracts';
 
 export interface VerificationDocumentRecord {

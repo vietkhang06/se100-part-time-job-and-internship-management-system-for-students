@@ -239,7 +239,7 @@ export default function CandidateCvsPage() {
         isDefault: res.cv.isDefault ?? false,
       });
       setIsEditOpen(true);
-    } catch (err) {
+    } catch {
       setError('Không thể mở thông tin chỉnh sửa CV.');
     }
   };

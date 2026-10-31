@@ -2,6 +2,7 @@ import { ModerationDecisionType as D, ModerationStatus as S, ModerationTargetTyp
 import { ResyncModerationDecisionsUseCase } from './resync-moderation-decisions.use-case';
 import { ModerationTargetHandlerRegistry } from '../ports/moderation-target-handler.port';
 import { ModerationDecisionEntity, ModerationItemEntity } from '../../domain/entities/moderation-item.entity';
+import { IModerationRepository } from '../../domain/repositories/moderation.repository.interface';
 
 const pair = (type: T) => ({
   item: new ModerationItemEntity({
@@ -16,7 +17,8 @@ const pair = (type: T) => ({
 
 describe('ResyncModerationDecisionsUseCase', () => {
   it('applies unsynced decisions once a handler exists', async () => {
-    const repo: any = {
+    const repo: jest.Mocked<IModerationRepository> = {
+      enqueue: jest.fn(), findById: jest.fn(), list: jest.fn(), claim: jest.fn(), decide: jest.fn(),
       findUnsyncedDecisions: jest.fn().mockResolvedValue([pair(T.JOB)]),
       markDecisionSynced: jest.fn(),
       markDecisionSyncFailed: jest.fn(),
@@ -31,7 +33,8 @@ describe('ResyncModerationDecisionsUseCase', () => {
   });
 
   it('keeps failing decisions unsynced when handler is still missing', async () => {
-    const repo: any = {
+    const repo: jest.Mocked<IModerationRepository> = {
+      enqueue: jest.fn(), findById: jest.fn(), list: jest.fn(), claim: jest.fn(), decide: jest.fn(),
       findUnsyncedDecisions: jest.fn().mockResolvedValue([pair(T.JOB)]),
       markDecisionSynced: jest.fn(),
       markDecisionSyncFailed: jest.fn(),

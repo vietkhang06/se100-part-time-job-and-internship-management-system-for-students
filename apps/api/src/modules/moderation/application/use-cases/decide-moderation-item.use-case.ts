@@ -158,13 +158,14 @@ export class DecideModerationItemUseCase {
       const at = new Date();
       await this.repository.markDecisionSynced(decision.id, at);
       return new ModerationDecisionEntity({ ...decision, targetSyncedAt: at, targetSyncError: null });
-    } catch (err: any) {
-      const message = String(err?.message ?? err).slice(0, 500);
+    } catch (err: unknown) {
+      const message = (err instanceof Error ? err.message : String(err)).slice(0, 500);
       this.logger.error(`Sync decision ${decision.id} to ${item.targetType}:${item.targetId} failed: ${message}`);
       try {
         await this.repository.markDecisionSyncFailed(decision.id, message);
-      } catch (inner: any) {
-        this.logger.error(`Could not record sync failure for ${decision.id}: ${inner?.message}`);
+      } catch (inner: unknown) {
+        const message = inner instanceof Error ? inner.message : String(inner);
+        this.logger.error(`Could not record sync failure for ${decision.id}: ${message}`);
       }
       return decision;
     }
@@ -185,11 +186,17 @@ export class DecideModerationItemUseCase {
       await this.notifications.publish({
         eventType,
         recipientId: item.submitterId,
-        payload: { jobTitle: item.summary ?? undefined, jobId: item.targetId, reason: decision.reason ?? undefined },
+        payload: {
+          jobTitle: item.summary ?? undefined,
+          jobId: item.targetId,
+          moderationItemId: item.id,
+          reason: decision.reason ?? undefined,
+        },
         dedupeKey: `${eventType}:${item.targetId}:${decision.id}`,
       });
-    } catch (err: any) {
-      this.logger.error(`Notify submitter for decision ${decision.id} failed: ${err?.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Notify submitter for decision ${decision.id} failed: ${message}`);
     }
   }
 }

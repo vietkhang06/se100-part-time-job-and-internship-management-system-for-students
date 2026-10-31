@@ -43,7 +43,7 @@ import {
   SANCTION_QUERY_TOKEN,
 } from '../src/modules/sanctions/application/ports/sanction-query.port';
 
-const request = (typeof supertest === 'function' ? supertest : (supertest as any).default) as typeof supertest;
+const request = supertest;
 
 /**
  * S2-M05-06: Trust Integration (C-16 → C-20).
@@ -183,19 +183,31 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
     prisma.notification.count({ where: { recipientId, ...(eventType ? { eventType } : {}) } });
 
   /** Tìm một mục trong danh sách phân trang (hàng đợi sắp cũ nhất trước nên có thể không nằm ở trang đầu). */
-  async function findInPages(path: string, token: string, predicate: (item: any) => boolean): Promise<any | undefined> {
+  async function findInPages<T extends Record<string, unknown>>(
+    path: string,
+    token: string,
+    predicate: (item: T) => boolean,
+  ): Promise<T | undefined> {
     for (let page = 1; page <= 50; page++) {
       const separator = path.includes('?') ? '&' : '?';
       const res = await api()
         .get(`/api/v1${path}${separator}page=${page}&limit=50`)
         .set(bearer(token))
         .expect(200);
-      const hit = res.body.data.find(predicate);
+      const data: T[] = res.body.data;
+      const hit = data.find(predicate);
       if (hit) return hit;
       if (!res.body.meta.hasNextPage) return undefined;
     }
     return undefined;
   }
+
+  const payloadOf = async (recipientId: string, eventType: NotificationEventType): Promise<Record<string, unknown>> => {
+    const n = await prisma.notification.findFirstOrThrow({ where: { recipientId, eventType }, orderBy: { createdAt: 'desc' } });
+    const payload: unknown = n.payload ?? {};
+    if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return {};
+    return { ...payload };
+  };
 
   /** Báo cáo mới → Kiểm duyệt viên kết luận "có căn cứ". Trả về báo cáo ở trạng thái SUBSTANTIATED. */
   async function substantiatedReport(reporter: TestUser, targetType: string, targetId: string) {
@@ -249,16 +261,17 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       bystander = await newUser('a-bystander', UserRole.STUDENT, true);
     });
 
-    it('nhà tuyển dụng báo cáo sinh viên → 201, chờ thẩm tra, người báo cáo nhận đúng 1 thông báo REPORT_RECEIVED', async () => {
+    it('[TM-A1] nhà tuyển dụng báo cáo sinh viên → 201, chờ thẩm tra, người báo cáo nhận đúng 1 thông báo REPORT_RECEIVED', async () => {
       const res = await fileReport(reporter, 'STUDENT', target.id).expect(201);
       reportId = res.body.id;
 
       expect(res.body.status).toBe('UNDER_REVIEW');
       expect(res.body.evidenceCount).toBe(1);
       expect(await countNotifications(reporter.id, NotificationEventType.REPORT_RECEIVED)).toBe(1);
+      expect((await payloadOf(reporter.id, NotificationEventType.REPORT_RECEIVED)).reportId).toBe(reportId);
     });
 
-    it('báo cáo trùng bị chặn: không tạo thêm báo cáo, mục kiểm duyệt hay thông báo', async () => {
+    it('[TM-A2] báo cáo trùng bị chặn: không tạo thêm báo cáo, mục kiểm duyệt hay thông báo', async () => {
       const res = await fileReport(reporter, 'STUDENT', target.id).expect(409);
       expect(res.body.code).toBe('REPORT_DUPLICATE');
 
@@ -267,7 +280,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect(await countNotifications(reporter.id, NotificationEventType.REPORT_RECEIVED)).toBe(1);
     });
 
-    it('báo cáo xuất hiện trong hàng đợi của Kiểm duyệt viên, sinh viên không xem được hàng đợi', async () => {
+    it('[TM-A3] báo cáo xuất hiện trong hàng đợi của Kiểm duyệt viên, sinh viên không xem được hàng đợi', async () => {
       const found = await findInPages(
         '/moderation/queue?targetType=REPORT&status=PENDING',
         mod1.token,
@@ -279,7 +292,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       await api().get('/api/v1/moderation/queue').set(bearer(bystander.token)).expect(403);
     });
 
-    it('Kiểm duyệt viên xem được báo cáo kèm bằng chứng; người báo cáo không dùng được API thẩm tra', async () => {
+    it('[TM-A4] Kiểm duyệt viên xem được báo cáo kèm bằng chứng; người báo cáo không dùng được API thẩm tra', async () => {
       const res = await api().get(`/api/v1/reports/review/${reportId}`).set(bearer(mod1.token)).expect(200);
       expect(res.body.reporterId).toBe(reporter.id);
       expect(res.body.evidence).toHaveLength(1);
@@ -287,7 +300,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       await api().get(`/api/v1/reports/review/${reportId}`).set(bearer(reporter.token)).expect(403);
     });
 
-    it('chỉ người được giao mới xử lý mục kiểm duyệt', async () => {
+    it('[TM-A5] chỉ người được giao mới xử lý mục kiểm duyệt', async () => {
       await api().post(`/api/v1/moderation/items/${itemId}/claim`).set(bearer(mod1.token)).expect(200);
 
       const blocked = await decide(mod2, itemId, { decision: 'SUBSTANTIATE', reason: 'Thử xử lý hộ' }).expect(403);
@@ -296,7 +309,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect(claim.body.code).toBe('MODERATION_ALREADY_ASSIGNED');
     });
 
-    it('chưa có kết luận "có căn cứ" thì Admin không thể áp chế tài hay đóng báo cáo', async () => {
+    it('[TM-A6] chưa có kết luận "có căn cứ" thì Admin không thể áp chế tài hay đóng báo cáo', async () => {
       const apply = await sanction(admin, { reportId, type: 'WARNING', reason: 'Quá sớm' }).expect(409);
       expect(apply.body.code).toBe('SANCTION_REPORT_NOT_SUBSTANTIATED');
       await api()
@@ -308,7 +321,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect(await prisma.sanction.count({ where: { reportId } })).toBe(0);
     });
 
-    it('kết luận sơ bộ chỉ được ghi một lần; báo cáo chuyển sang SUBSTANTIATED và vẫn chưa có chế tài', async () => {
+    it('[TM-A7] kết luận sơ bộ chỉ được ghi một lần; báo cáo chuyển sang SUBSTANTIATED và vẫn chưa có chế tài', async () => {
       const res = await decide(mod1, itemId, {
         decision: 'SUBSTANTIATE',
         reason: 'Bằng chứng khớp với mô tả',
@@ -320,6 +333,10 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect(second.body.code).toBe('MODERATION_ALREADY_DECIDED');
 
       expect(await prisma.moderationDecision.count({ where: { itemId } })).toBe(1);
+      const stored = await prisma.moderationDecision.findFirstOrThrow({ where: { itemId } });
+      expect(stored.decision).toBe('SUBSTANTIATE');
+      expect(stored.reviewerId).toBe(mod1.id);
+      expect(stored.proposedAction).toBe('Đề xuất khóa tạm thời');
       const report = await prisma.violationReport.findUniqueOrThrow({ where: { id: reportId } });
       expect(report.status).toBe('SUBSTANTIATED');
       // Kết luận sơ bộ không áp chế tài và không báo "đã xử lý" cho người báo cáo.
@@ -327,7 +344,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect(await countNotifications(reporter.id, NotificationEventType.REPORT_RESOLVED)).toBe(0);
     });
 
-    it('chỉ Quản trị viên được áp chế tài (Moderator, nhà tuyển dụng, sinh viên đều bị 403)', async () => {
+    it('[TM-A8] chỉ Quản trị viên được áp chế tài (Moderator, nhà tuyển dụng, sinh viên đều bị 403)', async () => {
       const body = { reportId, type: 'WARNING', reason: 'Thử vượt quyền' };
       await sanction(mod1, body).expect(403);
       await sanction(reporter, body).expect(403);
@@ -335,12 +352,12 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect(await prisma.sanction.count({ where: { reportId } })).toBe(0);
     });
 
-    it('Admin thấy báo cáo đã có căn cứ trong danh sách chờ phán quyết', async () => {
+    it('[TM-A9] Admin thấy báo cáo đã có căn cứ trong danh sách chờ phán quyết', async () => {
       const found = await findInPages('/sanctions/reports', admin.token, (r) => r.id === reportId);
       expect(found).toBeDefined();
     });
 
-    it('Admin khóa quyền ứng tuyển: lưu chế tài kèm lịch sử, đóng báo cáo, ghi audit', async () => {
+    it('[TM-A10] Admin khóa quyền ứng tuyển: lưu chế tài kèm lịch sử, đóng báo cáo, ghi audit', async () => {
       const res = await sanction(admin, {
         reportId,
         type: 'APPLICATION_LOCK',
@@ -357,9 +374,16 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       const report = await prisma.violationReport.findUniqueOrThrow({ where: { id: reportId } });
       expect(report.status).toBe('RESOLVED');
       expect(await prisma.auditLog.count({ where: { entityId: sanctionId, action: 'SANCTION_APPLIED' } })).toBe(1);
+
+      // Chế tài liên kết đúng báo cáo, đúng đối tượng bị xử lý và đúng người ra quyết định.
+      const stored = await prisma.sanction.findUniqueOrThrow({ where: { id: sanctionId } });
+      expect(stored.reportId).toBe(reportId);
+      expect(stored.targetType).toBe('STUDENT');
+      expect(stored.targetId).toBe(target.id);
+      expect(stored.imposedBy).toBe(admin.id);
     });
 
-    it('thông báo đến đúng người, đúng một lần (kể cả email); người không liên quan không nhận gì', async () => {
+    it('[TM-A11] thông báo đến đúng người, đúng một lần (kể cả email); người không liên quan không nhận gì', async () => {
       expect(await countNotifications(target.id, NotificationEventType.SANCTION_APPLIED)).toBe(1);
       expect(await countNotifications(reporter.id, NotificationEventType.REPORT_RESOLVED)).toBe(1);
       expect(await countNotifications(bystander.id)).toBe(0);
@@ -370,9 +394,19 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       const toReporter = emailSender.to(reporter.email).filter((m) => m.subject === titleOf(NotificationEventType.REPORT_RESOLVED));
       expect(toReporter).toHaveLength(1);
       expect(emailSender.to(bystander.email)).toHaveLength(0);
+
+      // Mỗi thông báo mang liên kết tới đúng đối tượng để giao diện điều hướng.
+      const toTargetPayload = await payloadOf(target.id, NotificationEventType.SANCTION_APPLIED);
+      expect(toTargetPayload.sanctionId).toBe(sanctionId);
+      expect(toTargetPayload.reportId).toBe(reportId);
+      expect(toTargetPayload.sanctionTypeCode).toBe('APPLICATION_LOCK');
+      const toReporterPayload = await payloadOf(reporter.id, NotificationEventType.REPORT_RESOLVED);
+      expect(toReporterPayload.reportId).toBe(reportId);
+      expect(toReporterPayload.sanctionId).toBe(sanctionId);
+      expect(toReporterPayload.outcome).toBe('SANCTIONED');
     });
 
-    it('áp lại cho cùng báo cáo không đổi gì: không thêm chế tài, không thêm thông báo', async () => {
+    it('[TM-A12] áp lại cho cùng báo cáo không đổi gì: không thêm chế tài, không thêm thông báo', async () => {
       const res = await sanction(admin, { reportId, type: 'WARNING', reason: 'Áp lần hai' }).expect(409);
       expect(res.body.code).toBe('SANCTION_REPORT_ALREADY_RESOLVED');
 
@@ -381,7 +415,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect(await countNotifications(reporter.id, NotificationEventType.REPORT_RESOLVED)).toBe(1);
     });
 
-    it('sinh viên thấy chế tài của mình; M04 đọc được trạng thái khóa qua cổng ISanctionQuery', async () => {
+    it('[TM-A13] sinh viên thấy chế tài của mình; M04 đọc được trạng thái khóa qua cổng ISanctionQuery', async () => {
       const mine = await api().get('/api/v1/sanctions/mine').set(bearer(target.token)).expect(200);
       expect(mine.body.data).toHaveLength(1);
       expect(mine.body.data[0].type).toBe('APPLICATION_LOCK');
@@ -395,9 +429,9 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect((await query.getApplicationLock(bystander.id)).locked).toBe(false);
     });
 
-    it('API thông báo chỉ trả thông báo của chính mình và đánh dấu đã đọc hoạt động đúng', async () => {
+    it('[TM-A14] API thông báo chỉ trả thông báo của chính mình và đánh dấu đã đọc hoạt động đúng', async () => {
       const list = await api().get('/api/v1/notifications').set(bearer(target.token)).expect(200);
-      expect(list.body.data.map((n: any) => n.eventType)).toEqual(['SANCTION_APPLIED']);
+      expect(list.body.data.map((n: { eventType: string }) => n.eventType)).toEqual(['SANCTION_APPLIED']);
       const notificationId = list.body.data[0].id;
 
       const unread = await api().get('/api/v1/notifications/unread-count').set(bearer(target.token)).expect(200);
@@ -410,14 +444,14 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect(after.body.unreadCount).toBe(0);
     });
 
-    it('Admin gỡ chế tài: lịch sử được giữ, khóa ứng tuyển được nhả, gỡ lần hai bị từ chối', async () => {
+    it('[TM-A15] Admin gỡ chế tài: lịch sử được giữ, khóa ứng tuyển được nhả, gỡ lần hai bị từ chối', async () => {
       const res = await api()
         .post(`/api/v1/sanctions/${sanctionId}/lift`)
         .set(bearer(admin.token))
         .send({ reason: 'Khiếu nại thành công' })
         .expect(200);
       expect(res.body.status).toBe('LIFTED');
-      expect(res.body.events.map((e: any) => e.action)).toEqual(['APPLIED', 'LIFTED']);
+      expect(res.body.events.map((e: { action: string }) => e.action)).toEqual(['APPLIED', 'LIFTED']);
 
       const query = app.get<ISanctionQuery>(SANCTION_QUERY_TOKEN, { strict: false });
       expect((await query.getApplicationLock(target.id)).locked).toBe(false);
@@ -431,7 +465,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect(await prisma.auditLog.count({ where: { entityId: sanctionId, action: 'SANCTION_LIFTED' } })).toBe(1);
     });
 
-    it('sau khi báo cáo cũ đã phán quyết, người báo cáo được gửi báo cáo mới về cùng đối tượng', async () => {
+    it('[TM-A16] sau khi báo cáo cũ đã phán quyết, người báo cáo được gửi báo cáo mới về cùng đối tượng', async () => {
       await fileReport(reporter, 'STUDENT', target.id).expect(201);
     });
   });
@@ -440,7 +474,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
   describe('B. Chống quyết định và thông báo trùng khi thao tác đồng thời', () => {
     beforeAll(() => emailSender.reset());
 
-    it('hai Kiểm duyệt viên quyết định cùng lúc một mục: chỉ một quyết định được ghi', async () => {
+    it('[TM-B1] hai Kiểm duyệt viên quyết định cùng lúc một mục: chỉ một quyết định được ghi', async () => {
       const reporter = await newUser('b1-employer', UserRole.EMPLOYER, true);
       const target = await newUser('b1-student', UserRole.STUDENT);
       const created = await fileReport(reporter, 'STUDENT', target.id).expect(201);
@@ -455,7 +489,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect(await prisma.moderationDecision.count({ where: { itemId: item.id } })).toBe(1);
     });
 
-    it('hai Admin áp chế tài cùng lúc cho một báo cáo: một chế tài, mỗi bên nhận đúng một thông báo', async () => {
+    it('[TM-B2] hai Admin áp chế tài cùng lúc cho một báo cáo: một chế tài, mỗi bên nhận đúng một thông báo', async () => {
       const reporter = await newUser('b2-employer', UserRole.EMPLOYER, true);
       const target = await newUser('b2-student', UserRole.STUDENT);
       const reportId = await substantiatedReport(reporter, 'STUDENT', target.id);
@@ -470,7 +504,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect(emailSender.to(target.email)).toHaveLength(1);
     });
 
-    it('phát lại cùng một sự kiện (cùng dedupeKey) chỉ lưu và gửi email một lần', async () => {
+    it('[TM-B3] phát lại cùng một sự kiện (cùng dedupeKey) chỉ lưu và gửi email một lần', async () => {
       const recipient = await newUser('b3-student', UserRole.STUDENT);
       const publisher = app.get<INotificationPublisher>(NOTIFICATION_PUBLISHER_TOKEN, { strict: false });
       const event = {
@@ -492,7 +526,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
   describe('C. Báo cáo bị bác bỏ hoặc đóng không xử phạt', () => {
     beforeAll(() => emailSender.reset());
 
-    it('báo cáo bị bác bỏ thì không thể áp chế tài, người báo cáo có thể gửi lại', async () => {
+    it('[TM-C1] báo cáo bị bác bỏ thì không thể áp chế tài, người báo cáo có thể gửi lại', async () => {
       const reporter = await newUser('c1-employer', UserRole.EMPLOYER, true);
       const target = await newUser('c1-student', UserRole.STUDENT);
       const created = await fileReport(reporter, 'STUDENT', target.id).expect(201);
@@ -509,7 +543,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       await fileReport(reporter, 'STUDENT', target.id).expect(201);
     });
 
-    it('Admin đóng báo cáo không xử phạt: chỉ người báo cáo được thông báo, đối tượng không nhận gì', async () => {
+    it('[TM-C2] Admin đóng báo cáo không xử phạt: chỉ người báo cáo được thông báo, đối tượng không nhận gì', async () => {
       const reporter = await newUser('c2-employer', UserRole.EMPLOYER, true);
       const target = await newUser('c2-student', UserRole.STUDENT);
       const reportId = await substantiatedReport(reporter, 'STUDENT', target.id);
@@ -523,6 +557,9 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect((await prisma.violationReport.findUniqueOrThrow({ where: { id: reportId } })).status).toBe('RESOLVED');
       expect(await prisma.sanction.count({ where: { reportId } })).toBe(0);
       expect(await countNotifications(reporter.id, NotificationEventType.REPORT_RESOLVED)).toBe(1);
+      const closedPayload = await payloadOf(reporter.id, NotificationEventType.REPORT_RESOLVED);
+      expect(closedPayload.reportId).toBe(reportId);
+      expect(closedPayload.outcome).toBe('CLOSED_WITHOUT_SANCTION');
       expect(await countNotifications(target.id)).toBe(0);
       expect(emailSender.to(target.email)).toHaveLength(0);
 
@@ -538,7 +575,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
 
   // =====================================================================================
   describe('D. Ngưỡng cảnh cáo và không chồng chế tài', () => {
-    it('đủ ngưỡng cảnh cáo thì buộc khóa ứng tuyển; đang bị khóa thì không khóa chồng', async () => {
+    it('[TM-D1] đủ ngưỡng cảnh cáo thì buộc khóa ứng tuyển; đang bị khóa thì không khóa chồng', async () => {
       const reporter = await newUser('d-employer', UserRole.EMPLOYER, true);
       const target = await newUser('d-student', UserRole.STUDENT);
 
@@ -568,7 +605,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect(warning.body.code).toBe('SANCTION_ESCALATION_REQUIRED');
     });
 
-    it('thời hạn khóa ngoài khoảng cho phép bị từ chối và không ghi gì', async () => {
+    it('[TM-D2] thời hạn khóa ngoài khoảng cho phép bị từ chối và không ghi gì', async () => {
       const reporter = await newUser('d2-employer', UserRole.EMPLOYER, true);
       const target = await newUser('d2-student', UserRole.STUDENT);
       const reportId = await substantiatedReport(reporter, 'STUDENT', target.id);
@@ -581,7 +618,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
 
   // =====================================================================================
   describe('E. Email lỗi không làm mất sự kiện', () => {
-    it('chế tài vẫn được lưu và thông báo trong ứng dụng vẫn có; email gửi lại thành công sau đó', async () => {
+    it('[TM-E1] chế tài vẫn được lưu và thông báo trong ứng dụng vẫn có; email gửi lại thành công sau đó', async () => {
       emailSender.reset();
       const reporter = await newUser('e-employer', UserRole.EMPLOYER, true);
       const target = await newUser('e-student', UserRole.STUDENT);
@@ -658,7 +695,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
     const review = (token: string, body: Record<string, unknown>) =>
       api().post('/api/v1/reviews').set(bearer(token)).send(body);
 
-    it('chỉ hồ sơ đã có kết quả cuối mới được đánh giá, mỗi hồ sơ một đánh giá, và chỉ chủ hồ sơ mới đánh giá được', async () => {
+    it('[TM-F1] chỉ hồ sơ đã có kết quả cuối mới được đánh giá, mỗi hồ sơ một đánh giá, và chỉ chủ hồ sơ mới đánh giá được', async () => {
       const early = await review(student.token, { applicationId, rating: 4 }).expect(409);
       expect(early.body.code).toBe('REVIEW_NOT_ELIGIBLE');
 
@@ -674,7 +711,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect(await prisma.review.count({ where: { companyId } })).toBe(1);
     });
 
-    it('danh sách công khai ẩn danh người viết và có thống kê', async () => {
+    it('[TM-F2] danh sách công khai ẩn danh người viết và có thống kê', async () => {
       const res = await api().get(`/api/v1/reviews/company/${companyId}`).expect(200);
       expect(res.body.summary.totalReviews).toBe(1);
       expect(res.body.summary.averageRating).toBe(4);
@@ -683,7 +720,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect(JSON.stringify(res.body)).not.toContain('studentId');
     });
 
-    it('doanh nghiệp phản hồi đúng một lần; nhà tuyển dụng khác không phản hồi được', async () => {
+    it('[TM-F3] doanh nghiệp phản hồi đúng một lần; nhà tuyển dụng khác không phản hồi được', async () => {
       await api()
         .post(`/api/v1/reviews/${reviewId}/reply`)
         .set(bearer(otherEmployer.token))
@@ -705,7 +742,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect(again.body.code).toBe('REVIEW_ALREADY_REPLIED');
     });
 
-    it('báo cáo một đánh giá đưa cả mục báo cáo lẫn mục đánh giá vào hàng đợi kiểm duyệt', async () => {
+    it('[TM-F4] báo cáo một đánh giá đưa cả mục báo cáo lẫn mục đánh giá vào hàng đợi kiểm duyệt', async () => {
       await fileReport(reporter, 'REVIEW', reviewId, { reason: 'INAPPROPRIATE_CONTENT' }).expect(201);
 
       const reviewItem = await latestItem(ModerationTargetType.REVIEW, reviewId);
@@ -718,7 +755,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect(queued).toBeDefined();
     });
 
-    it('ẩn đánh giá: biến mất khỏi danh sách công khai và của nhà tuyển dụng, tác giả vẫn thấy trạng thái ẩn', async () => {
+    it('[TM-F5] ẩn đánh giá: biến mất khỏi danh sách công khai và của nhà tuyển dụng, tác giả vẫn thấy trạng thái ẩn', async () => {
       const item = await latestItem(ModerationTargetType.REVIEW, reviewId);
       const res = await decide(mod1, item.id, { decision: 'HIDE', reason: 'Ngôn từ không phù hợp' }).expect(200);
       expect(res.body.decision.targetSynced).toBe(true);
@@ -734,7 +771,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect(mine.body.data[0].visibility).toBe('HIDDEN');
     });
 
-    it('duyệt lại: đưa vào hàng đợi lần nữa không tạo trùng, khôi phục thì hiển thị lại', async () => {
+    it('[TM-F6] duyệt lại: đưa vào hàng đợi lần nữa không tạo trùng, khôi phục thì hiển thị lại', async () => {
       const queue = app.get<IModerationQueue>(MODERATION_QUEUE_TOKEN, { strict: false });
 
       const first = await queue.enqueue({ targetType: ModerationTargetType.REVIEW, targetId: reviewId });
@@ -770,7 +807,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       app.get(ModerationTargetHandlerRegistry, { strict: false }).register(ModerationTargetType.JOB, handler);
     });
 
-    it('đưa tin vào hàng đợi hai lần chỉ có một mục; duyệt tin → handler áp một lần, nhà tuyển dụng nhận đúng 1 thông báo', async () => {
+    it('[TM-G1] đưa tin vào hàng đợi hai lần chỉ có một mục; duyệt tin → handler áp một lần, nhà tuyển dụng nhận đúng 1 thông báo', async () => {
       const jobId = randomUUID();
       jobIds.push(jobId);
       const queue = app.get<IModerationQueue>(MODERATION_QUEUE_TOKEN, { strict: false });
@@ -792,6 +829,9 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
 
       expect(await countNotifications(employer.id, NotificationEventType.JOB_APPROVED)).toBe(1);
       expect(emailSender.to(employer.email)).toHaveLength(1);
+      const approvedPayload = await payloadOf(employer.id, NotificationEventType.JOB_APPROVED);
+      expect(approvedPayload.jobId).toBe(jobId);
+      expect(approvedPayload.moderationItemId).toBe(first.itemId);
 
       const dup = await decide(mod2, first.itemId, { decision: 'APPROVE' }).expect(409);
       expect(dup.body.code).toBe('MODERATION_ALREADY_DECIDED');
@@ -799,7 +839,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect(await countNotifications(employer.id, NotificationEventType.JOB_APPROVED)).toBe(1);
     });
 
-    it('duyệt lại sau khi sửa tin: từ chối bắt buộc có lý do, và lý do được gửi tới nhà tuyển dụng', async () => {
+    it('[TM-G2] duyệt lại sau khi sửa tin: từ chối bắt buộc có lý do, và lý do được gửi tới nhà tuyển dụng', async () => {
       const jobId = randomUUID();
       jobIds.push(jobId);
       const queue = app.get<IModerationQueue>(MODERATION_QUEUE_TOKEN, { strict: false });
@@ -826,7 +866,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect(resubmitted.round).toBe(2);
     });
 
-    it('module đích lỗi: quyết định vẫn được lưu (chưa đồng bộ) và được áp lại khi module đích phục hồi', async () => {
+    it('[TM-G3] module đích lỗi: quyết định vẫn được lưu (chưa đồng bộ) và được áp lại khi module đích phục hồi', async () => {
       const jobId = randomUUID();
       jobIds.push(jobId);
       const queue = app.get<IModerationQueue>(MODERATION_QUEUE_TOKEN, { strict: false });
@@ -877,7 +917,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       });
     });
 
-    it('sinh viên báo cáo doanh nghiệp → kiểm duyệt → Admin đình chỉ: handler gọi đúng một lần, chủ doanh nghiệp được thông báo', async () => {
+    it('[TM-H1] sinh viên báo cáo doanh nghiệp → kiểm duyệt → Admin đình chỉ: handler gọi đúng một lần, chủ doanh nghiệp được thông báo', async () => {
       const reportId = await substantiatedReport(reporter, 'COMPANY', companyId);
 
       const res = await sanction(admin, {
@@ -899,7 +939,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       expect(calls.filter((c) => c.type === 'unsuspend')).toEqual([{ type: 'unsuspend', companyId, sanctionId }]);
     });
 
-    it('loại chế tài không phù hợp với đối tượng báo cáo bị từ chối', async () => {
+    it('[TM-H2] loại chế tài không phù hợp với đối tượng báo cáo bị từ chối', async () => {
       const reportId = await substantiatedReport(reporter, 'COMPANY', companyId);
       const res = await sanction(admin, { reportId, type: 'APPLICATION_LOCK', reason: 'Sai loại', durationDays: 7 }).expect(400);
       expect(res.body.code).toBe('SANCTION_TYPE_NOT_ALLOWED');

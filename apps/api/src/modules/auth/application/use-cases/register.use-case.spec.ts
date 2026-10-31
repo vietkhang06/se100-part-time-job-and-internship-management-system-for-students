@@ -18,7 +18,9 @@ describe('RegisterUseCase', () => {
       create: jest.fn(),
       createWithVerificationToken: jest.fn(),
       updateStatus: jest.fn(),
-    } as any;
+      updatePassword: jest.fn(),
+      changePasswordAndRevokeSessions: jest.fn(),
+    };
 
     mailService = {
       sendMail: jest.fn(),
@@ -57,8 +59,8 @@ describe('RegisterUseCase', () => {
     expect(result.user.email).toBe('student@example.com');
     expect(result.user.role).toBe(UserRole.STUDENT);
     expect(result.user.emailVerified).toBe(false);
-    expect((result.user as any).passwordHash).toBeUndefined();
-    expect((result as any).token).toBeUndefined();
+    expect('passwordHash' in result.user).toBe(false);
+    expect('token' in result).toBe(false);
 
     expect(userRepository.findByEmail).toHaveBeenCalledWith('student@example.com');
     expect(userRepository.createWithVerificationToken).toHaveBeenCalled();
@@ -94,23 +96,23 @@ describe('RegisterUseCase', () => {
   });
 
   it('should reject registration with ADMIN or MODERATOR role', async () => {
-    await expect(
-      useCase.execute({
+    const adminRegistration: Parameters<RegisterUseCase['execute']>[0] = {
         email: 'admin@campusjob.local',
         fullName: 'Fake Admin',
         password: 'StrongPassword123!',
-        role: UserRole.ADMIN as any,
-      }),
-    ).rejects.toThrow(BadRequestException);
+        role: UserRole.STUDENT,
+      };
+    Object.assign(adminRegistration, { role: UserRole.ADMIN });
+    await expect(useCase.execute(adminRegistration)).rejects.toThrow(BadRequestException);
 
-    await expect(
-      useCase.execute({
+    const moderatorRegistration: Parameters<RegisterUseCase['execute']>[0] = {
         email: 'mod@campusjob.local',
         fullName: 'Fake Mod',
         password: 'StrongPassword123!',
-        role: UserRole.MODERATOR as any,
-      }),
-    ).rejects.toThrow(BadRequestException);
+        role: UserRole.STUDENT,
+      };
+    Object.assign(moderatorRegistration, { role: UserRole.MODERATOR });
+    await expect(useCase.execute(moderatorRegistration)).rejects.toThrow(BadRequestException);
 
     expect(userRepository.createWithVerificationToken).not.toHaveBeenCalled();
   });

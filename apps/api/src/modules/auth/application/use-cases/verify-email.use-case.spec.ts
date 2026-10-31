@@ -27,7 +27,9 @@ describe('VerifyEmailUseCase', () => {
       create: jest.fn(),
       createWithVerificationToken: jest.fn(),
       updateStatus: jest.fn(),
-    } as any;
+      updatePassword: jest.fn(),
+      changePasswordAndRevokeSessions: jest.fn(),
+    };
 
     useCase = new VerifyEmailUseCase(tokenRepository, userRepository);
   });

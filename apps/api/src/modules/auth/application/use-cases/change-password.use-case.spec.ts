@@ -98,10 +98,12 @@ describe('ChangePasswordUseCase', () => {
         newPassword: 'BrandNewSecurePass456!',
       });
       fail('Expected BadRequestException');
-    } catch (err: any) {
-      expect(err).toBeInstanceOf(BadRequestException);
-      expect(err.getResponse().code).toBe(AuthErrorCode.INVALID_CREDENTIALS);
-      expect(err.getResponse().message).toContain('Current password is incorrect');
+    } catch (err: unknown) {
+      if (!(err instanceof BadRequestException)) throw err;
+      expect(err.getResponse()).toMatchObject({
+        code: AuthErrorCode.INVALID_CREDENTIALS,
+        message: expect.stringContaining('Current password is incorrect'),
+      });
     }
   });
 
@@ -126,10 +128,12 @@ describe('ChangePasswordUseCase', () => {
         newPassword: password,
       });
       fail('Expected BadRequestException');
-    } catch (err: any) {
-      expect(err).toBeInstanceOf(BadRequestException);
-      expect(err.getResponse().code).toBe(AuthErrorCode.VALIDATION_ERROR);
-      expect(err.getResponse().message).toContain('must be different');
+    } catch (err: unknown) {
+      if (!(err instanceof BadRequestException)) throw err;
+      expect(err.getResponse()).toMatchObject({
+        code: AuthErrorCode.VALIDATION_ERROR,
+        message: expect.stringContaining('must be different'),
+      });
     }
   });
 
@@ -154,9 +158,9 @@ describe('ChangePasswordUseCase', () => {
         newPassword: 'weak',
       });
       fail('Expected BadRequestException');
-    } catch (err: any) {
-      expect(err).toBeInstanceOf(BadRequestException);
-      expect(err.getResponse().code).toBe(AuthErrorCode.WEAK_PASSWORD);
+    } catch (err: unknown) {
+      if (!(err instanceof BadRequestException)) throw err;
+      expect(err.getResponse()).toMatchObject({ code: AuthErrorCode.WEAK_PASSWORD });
     }
   });
 });

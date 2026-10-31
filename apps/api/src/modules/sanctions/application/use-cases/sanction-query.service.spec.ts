@@ -1,6 +1,7 @@
 import { SanctionStatus, SanctionTargetType, SanctionType } from '@campusjob/contracts';
 import { SanctionQueryService } from './sanction-query.service';
 import { SanctionEntity } from '../../domain/entities/sanction.entity';
+import { ISanctionRepository } from '../../domain/repositories/sanction.repository.interface';
 
 describe('SanctionQueryService', () => {
   const until = new Date('2026-12-01T00:00:00Z');
@@ -11,8 +12,12 @@ describe('SanctionQueryService', () => {
   });
 
   it('reports a student as locked while an application lock is active', async () => {
-    const repo = { findActiveByTarget: jest.fn().mockResolvedValue(lock) };
-    const state = await new SanctionQueryService(repo as any).getApplicationLock('stu1');
+    const repo: jest.Mocked<ISanctionRepository> = {
+      create: jest.fn(), findById: jest.fn(), list: jest.fn(), listByTarget: jest.fn(),
+      countRecentWarnings: jest.fn(), findActiveByTarget: jest.fn().mockResolvedValue(lock),
+      lift: jest.fn(), recordAudit: jest.fn(),
+    };
+    const state = await new SanctionQueryService(repo).getApplicationLock('stu1');
     expect(state).toEqual({ locked: true, until });
     expect(repo.findActiveByTarget).toHaveBeenCalledWith(
       SanctionTargetType.STUDENT, 'stu1', SanctionType.APPLICATION_LOCK, expect.any(Date),
@@ -20,7 +25,11 @@ describe('SanctionQueryService', () => {
   });
 
   it('reports not locked otherwise', async () => {
-    const repo = { findActiveByTarget: jest.fn().mockResolvedValue(null) };
-    expect(await new SanctionQueryService(repo as any).getApplicationLock('stu1')).toEqual({ locked: false, until: null });
+    const repo: jest.Mocked<ISanctionRepository> = {
+      create: jest.fn(), findById: jest.fn(), list: jest.fn(), listByTarget: jest.fn(),
+      countRecentWarnings: jest.fn(), findActiveByTarget: jest.fn().mockResolvedValue(null),
+      lift: jest.fn(), recordAudit: jest.fn(),
+    };
+    expect(await new SanctionQueryService(repo).getApplicationLock('stu1')).toEqual({ locked: false, until: null });
   });
 });

@@ -64,13 +64,21 @@ function psql(db: string, sql: string, extraArgs: string[] = []): string {
 }
 
 // Helper to run psql query and return parsed JSON
-function psqlJson<T = any>(db: string, sql: string): T {
+function psqlJson(db: string, sql: string): Record<string, unknown>[] {
   const wrapped = `SELECT json_agg(t) FROM (${sql}) t;`;
   const raw = psql(db, wrapped, ['-t', '-A']);
   if (!raw || raw.trim() === '' || raw.trim() === 'null') {
-    return [] as unknown as T;
+    return [];
   }
-  return JSON.parse(raw);
+  const parsed: unknown = JSON.parse(raw);
+  if (!Array.isArray(parsed) || !parsed.every(isRecord)) {
+    throw new Error('psql JSON query did not return an array of records');
+  }
+  return parsed;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 // Helper to run psql file inside the container
@@ -107,15 +115,15 @@ function psqlFile(db: string, hostFilePath: string, inTransaction = true): strin
 interface AssertionRecord {
   category: string;
   testCase: string;
-  expected: any;
-  actual: any;
+  expected: unknown;
+  actual: unknown;
   passed: boolean;
   notes?: string;
 }
 
 const assertions: AssertionRecord[] = [];
 
-function assert(category: string, testCase: string, actual: any, expected: any, notes?: string): void {
+function assert(category: string, testCase: string, actual: unknown, expected: unknown, notes?: string): void {
   const passed = JSON.stringify(actual) === JSON.stringify(expected);
   assertions.push({ category, testCase, expected, actual, passed, notes });
   const status = passed ? 'PASS' : 'FAIL';
@@ -261,7 +269,7 @@ async function runVerification() {
     psql(POSTGRES_DB, seedProfilesSql);
 
     // Record pre-migration snapshot of profiles
-    const preMigrationProfiles = psqlJson<Array<any>>(
+    const preMigrationProfiles = psqlJson(
       POSTGRES_DB,
       `SELECT "id", "userId", "university", "major", "graduationYear", "jobSeekingStatus", "bio", "skills", "createdAt", "updatedAt"
        FROM "StudentProfile" ORDER BY "id"`
@@ -302,13 +310,13 @@ async function runVerification() {
     assert('Rollback Safety', 'Migration aborts on execution error', rollbackSucceeded, true);
 
     // Verify rollback preserved pre-migration state on rollback db
-    const rollbackColInfo = psqlJson<any[]>(
+    const rollbackColInfo = psqlJson(
       'campusjob_rollback_test',
       `SELECT column_name FROM information_schema.columns WHERE table_name = 'StudentProfile' AND column_name = 'skills'`
     );
     assert('Rollback Safety', 'StudentProfile.skills retained after failed transaction', rollbackColInfo.length, 1);
 
-    const rollbackSkillTable = psqlJson<any[]>(
+    const rollbackSkillTable = psqlJson(
       'campusjob_rollback_test',
       `SELECT table_name FROM information_schema.tables WHERE table_name = 'Skill'`
     );
@@ -425,7 +433,7 @@ async function runVerification() {
     assert('Student Associations', 'sp-legacy-6 associations (deduplicated Docker + K8s + Go)', studentSkillMap['sp-legacy-6']?.sort(), ['docker', 'go', 'kubernetes'].sort());
 
     // C. Data Preservation Assertions
-    const postMigrationProfiles = psqlJson<Array<any>>(
+    const postMigrationProfiles = psqlJson(
       POSTGRES_DB,
       `SELECT "id", "userId", "university", "major", "graduationYear", "jobSeekingStatus", "bio", "createdAt", "updatedAt"
        FROM "StudentProfile" ORDER BY "id"`
@@ -456,14 +464,14 @@ async function runVerification() {
     }
 
     // Verify column StudentProfile.skills is dropped
-    const postColInfo = psqlJson<any[]>(
+    const postColInfo = psqlJson(
       POSTGRES_DB,
       `SELECT column_name FROM information_schema.columns WHERE table_name = 'StudentProfile' AND column_name = 'skills'`
     );
     assert('Data Preservation', 'Legacy column StudentProfile.skills is dropped', postColInfo.length, 0);
 
     // Verify referential integrity: no orphaned foreign keys in StudentSkill
-    const orphanCount = psqlJson<any[]>(
+    const orphanCount = psqlJson(
       POSTGRES_DB,
       `SELECT ss.id FROM "StudentSkill" ss
        LEFT JOIN "StudentProfile" sp ON sp.id = ss."studentProfileId"

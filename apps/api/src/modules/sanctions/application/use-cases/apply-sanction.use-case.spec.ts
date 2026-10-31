@@ -11,6 +11,7 @@ import {
   SanctionTargetType,
   SanctionType as S,
   UserRole,
+  UserStatus,
   ViolationReason,
   ViolationReportStatus as RS,
   ViolationTargetType as V,
@@ -20,6 +21,12 @@ import { CompanySanctionHandlerRegistry } from '../ports/company-sanction-handle
 import { SanctionEntity } from '../../domain/entities/sanction.entity';
 import { ViolationReportEntity } from '../../../reports/domain/entities/violation-report.entity';
 import { WARNING_ESCALATION_THRESHOLD } from '../../domain/policies/sanction-rules.policy';
+import { ISanctionRepository, CreateSanctionData } from '../../domain/repositories/sanction.repository.interface';
+import { IReportAdmin } from '../../../reports/application/ports/report-admin.port';
+import { IUserRepository } from '../../../users/domain/repositories/user.repository.interface';
+import { INotificationPublisher } from '../../../notifications/application/ports/notification-publisher.port';
+import { ApplySanctionDto } from '../dto/sanction.dto';
+import { UserEntity } from '../../../users/domain/entities/user.entity';
 
 const report = (over: Partial<ConstructorParameters<typeof ViolationReportEntity>[0]> = {}) =>
   new ViolationReportEntity({
@@ -38,28 +45,33 @@ const saved = (type: S, endsAt: Date | null) =>
 describe('ApplySanctionUseCase', () => {
   const admin = { id: 'adm1' };
   const now = new Date('2026-10-15T00:00:00.000Z');
-  let repo: any;
-  let reports: { findById: jest.Mock; markResolved: jest.Mock };
-  let users: { findById: jest.Mock };
-  let notifications: { publish: jest.Mock };
+  let repo: jest.Mocked<ISanctionRepository>;
+  let reports: jest.Mocked<IReportAdmin>;
+  let users: jest.Mocked<IUserRepository>;
+  let notifications: jest.Mocked<INotificationPublisher>;
   let handlers: CompanySanctionHandlerRegistry;
   let useCase: ApplySanctionUseCase;
 
   beforeEach(() => {
     repo = {
+      list: jest.fn(), listByTarget: jest.fn(), lift: jest.fn(), recordAudit: jest.fn(),
       findActiveByTarget: jest.fn().mockResolvedValue(null),
       countRecentWarnings: jest.fn().mockResolvedValue(0),
-      create: jest.fn().mockImplementation(async (d: any) => ({ sanction: saved(d.type, d.endsAt), duplicate: false })),
+      create: jest.fn().mockImplementation(async (d: CreateSanctionData) => ({ sanction: saved(d.type, d.endsAt), duplicate: false })),
       findById: jest.fn().mockResolvedValue({ sanction: saved(S.WARNING, null), events: [] }),
     };
-    reports = { findById: jest.fn().mockResolvedValue(report()), markResolved: jest.fn().mockResolvedValue(true) };
-    users = { findById: jest.fn().mockResolvedValue({ id: 'stu1', role: UserRole.STUDENT }) };
-    notifications = { publish: jest.fn().mockResolvedValue({ outcome: 'CREATED' }) };
+    reports = { findById: jest.fn().mockResolvedValue(report()), listByStatus: jest.fn(), markResolved: jest.fn().mockResolvedValue(true) };
+    users = {
+      findById: jest.fn().mockResolvedValue({ id: 'stu1', role: UserRole.STUDENT }), findByEmail: jest.fn(),
+      create: jest.fn(), createWithVerificationToken: jest.fn(), updateStatus: jest.fn(), updatePassword: jest.fn(),
+      changePasswordAndRevokeSessions: jest.fn(),
+    };
+    notifications = { publish: jest.fn().mockResolvedValue({ outcome: 'CREATED' }), publishMany: jest.fn() };
     handlers = new CompanySanctionHandlerRegistry();
-    useCase = new ApplySanctionUseCase(repo, reports as any, users as any, notifications as any, handlers);
+    useCase = new ApplySanctionUseCase(repo, reports, users, notifications, handlers);
   });
 
-  const input = (over: any = {}) => ({ reportId: 'r1', type: S.WARNING, reason: '  Gian lận  ', ...over });
+  const input = (over: Partial<ApplySanctionDto> = {}): ApplySanctionDto => ({ reportId: 'r1', type: S.WARNING, reason: '  Gian lận  ', ...over });
 
   it('applies a warning, closes the report and notifies both sides', async () => {
     await useCase.execute(admin, input(), now);
@@ -71,10 +83,24 @@ describe('ApplySanctionUseCase', () => {
       }),
     );
     expect(reports.markResolved).toHaveBeenCalledWith('r1', now);
-    const events = notifications.publish.mock.calls.map((c: any[]) => c[0].eventType);
+    const events = notifications.publish.mock.calls.map(([notification]) => notification.eventType);
     expect(events).toEqual([NotificationEventType.SANCTION_APPLIED, NotificationEventType.REPORT_RESOLVED]);
     expect(notifications.publish.mock.calls[0][0].recipientId).toBe('stu1');
     expect(notifications.publish.mock.calls[1][0].recipientId).toBe('rep1');
+  });
+
+  it('links each notification to the right objects (report and sanction ids)', async () => {
+    await useCase.execute(admin, input(), now);
+
+    const toTarget = notifications.publish.mock.calls[0][0];
+    const toReporter = notifications.publish.mock.calls[1][0];
+    expect(toTarget.payload).toHaveProperty('sanctionId');
+    expect(toTarget.payload).toEqual(
+      expect.objectContaining({ reportId: 'r1', sanctionId: expect.any(String), sanctionTypeCode: S.WARNING }),
+    );
+    expect(toReporter.payload).toEqual(
+      expect.objectContaining({ reportId: 'r1', sanctionId: toTarget.payload?.sanctionId, outcome: 'SANCTIONED' }),
+    );
   });
 
   it('applies a time-limited application lock', async () => {
@@ -124,7 +150,9 @@ describe('ApplySanctionUseCase', () => {
   it('returns 404 when the sanctioned student no longer exists or is not a student', async () => {
     users.findById.mockResolvedValue(null);
     await expect(useCase.execute(admin, input(), now)).rejects.toBeInstanceOf(NotFoundException);
-    users.findById.mockResolvedValue({ id: 'stu1', role: UserRole.EMPLOYER });
+    users.findById.mockResolvedValue(new UserEntity(
+      'stu1', 'employer@example.com', 'hash', 'Employer', UserRole.EMPLOYER, UserStatus.ACTIVE,
+    ));
     await expect(useCase.execute(admin, input(), now)).rejects.toBeInstanceOf(NotFoundException);
   });
 

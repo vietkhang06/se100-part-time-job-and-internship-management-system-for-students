@@ -1,5 +1,6 @@
 import { CvSnapshotSource, JobAccessSource, M04Repository, M04WorkflowError, ApplicationRecord, InterviewRecord } from './m04-ports';
 import { ApplicationStatus, nextApplicationStatus } from '../domain/application-state';
+import { ApplicationSubmissionPolicyError, assertCanSubmitApplication } from '../domain/application-submission-policy';
 import { UserRole } from '@campusjob/contracts';
 import { InterviewMode, assertCanDecideReschedule, assertCanRecordInterviewResult, assertCanRequestReschedule, assertValidInterviewSchedule } from '../../interviews/domain/interview-rules';
 
@@ -17,6 +18,23 @@ export class M04Workflow {
     const cvSnapshot = await this.cvs.getOwnedSnapshot(studentId, cvId);
     if (cvSnapshot.studentId !== studentId || cvSnapshot.originalCvId !== cvId) {
       throw new M04WorkflowError('FORBIDDEN');
+    }
+    const priorApplications = await this.repository.listStudentApplications(studentId);
+    try {
+      assertCanSubmitApplication(
+        jobId,
+        priorApplications.map((app) => ({ jobId: app.jobId, status: app.status })),
+      );
+    } catch (error) {
+      if (error instanceof ApplicationSubmissionPolicyError) {
+        if (error.code === 'APPLICATION_QUOTA_EXCEEDED') {
+          throw new M04WorkflowError('QUOTA_EXCEEDED');
+        }
+        if (error.code === 'APPLICATION_ALREADY_EXISTS_FOR_JOB') {
+          throw new M04WorkflowError('DUPLICATE_APPLICATION');
+        }
+      }
+      throw error;
     }
     return this.repository.createApplication({
       studentId, jobId, cvId, cvSnapshot, coverLetter: coverLetter?.trim() || null,
@@ -58,9 +76,9 @@ export class M04Workflow {
   }
 
   async reject(employerId: string, id: string, reason: string): Promise<ApplicationRecord> {
-    if (!reason.trim()) throw new M04WorkflowError('INVALID_INPUT');
+    if (!reason?.trim()) throw new M04WorkflowError('INVALID_INPUT');
     const application = await this.getCandidate(employerId, id);
-    const next = nextApplicationStatus(application.status, 'REJECT', UserRole.EMPLOYER);
+    const next = nextApplicationStatus(application.status, 'REJECT', UserRole.EMPLOYER, reason.trim());
     return this.repository.changeApplicationStatus({ id, expected: application.status, next, actorId: employerId, reason: reason.trim() });
   }
 
@@ -119,7 +137,7 @@ export class M04Workflow {
     assertCanRecordInterviewResult(application.status, interview.scheduledAt, this.now());
     if (interview.result) throw new M04WorkflowError('INVALID_STATE');
     if (result === 'REJECTED' && !reason?.trim()) throw new M04WorkflowError('INVALID_INPUT');
-    nextApplicationStatus(application.status, result === 'ACCEPTED' ? 'ACCEPT_AFTER_INTERVIEW' : 'REJECT_AFTER_INTERVIEW', UserRole.EMPLOYER);
+    nextApplicationStatus(application.status, result === 'ACCEPTED' ? 'ACCEPT_AFTER_INTERVIEW' : 'REJECT_AFTER_INTERVIEW', UserRole.EMPLOYER, reason?.trim());
     return this.repository.recordInterviewResult({ interviewId, result, actorId: employerId, at: this.now(), reason: reason?.trim() });
   }
 

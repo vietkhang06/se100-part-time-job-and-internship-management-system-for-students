@@ -15,6 +15,7 @@ import { StorageModule } from './shared/storage/storage.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SanctionsModule } from './modules/sanctions/sanctions.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
+import {AdminOverviewModule} from "./modules/admin-overview/admin-overview.module";
 import { CompaniesModule } from './modules/companies/companies.module';
 import {
   M04Module,
@@ -44,6 +45,7 @@ import { JobAccessSourceAdapter } from './modules/companies/infrastructure/adapt
     ReportsModule,
     SanctionsModule,
     ReviewsModule,
+    AdminOverviewModule,
     CompaniesModule,
     M04Module.register(
       {

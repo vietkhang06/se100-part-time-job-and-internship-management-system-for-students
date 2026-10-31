@@ -1,0 +1,11 @@
+{
+  "rootDir": "../../web",
+  "testMatch": ["<rootDir>/src/**/*.spec.ts", "<rootDir>/src/**/*.spec.tsx"],
+  "moduleFileExtensions": ["js", "json", "ts", "tsx"],
+  "transform": { "^.+\\.(t|j)sx?$": "ts-jest" },
+  "testEnvironment": "node",
+  "moduleNameMapper": {
+    "^@/(.*)$": "<rootDir>/src/$1",
+    "^@campusjob/contracts$": "<rootDir>/../../packages/contracts/src/index.ts"
+  }
+}

@@ -121,8 +121,8 @@ async function run() {
 
       console.log(`Admin account ${email} created successfully (ID: ${newUser.id}).`);
     }
-  } catch (err: any) {
-    console.error('Failed to create admin:', err.message);
+  } catch (err: unknown) {
+    console.error('Failed to create admin:', err instanceof Error ? err.message : String(err));
     process.exit(1);
   } finally {
     await prisma.$disconnect();

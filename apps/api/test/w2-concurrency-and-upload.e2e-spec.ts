@@ -6,8 +6,10 @@ import { PrismaService } from '../src/shared/database/prisma.service';
 import { FileAssetService, FileAssetStatus } from '../src/shared/storage/file-asset.service';
 import { IStorageService, STORAGE_SERVICE_TOKEN } from '../src/shared/storage/storage.interface';
 import { PrismaCvRepository } from '../src/modules/students/infrastructure/persistence/prisma-cv.repository';
+import { UploadCvFileUseCase } from '../src/modules/students/application/use-cases/upload-cv-file.use-case';
+import type { StudentProfile, User } from '@prisma/client';
 
-const request = (typeof supertest === 'function' ? supertest : (supertest as any).default) as typeof supertest;
+const request = supertest;
 
 describe('W2 Real Concurrency & HTTP Upload Verification (e2e)', () => {
   let app: INestApplication;
@@ -17,8 +19,8 @@ describe('W2 Real Concurrency & HTTP Upload Verification (e2e)', () => {
   let cvRepository: PrismaCvRepository;
 
   // Test entities
-  let testStudentUser: any;
-  let testStudentProfile: any;
+  let testStudentUser: User;
+  let testStudentProfile: StudentProfile;
 
   const originalDatabaseUrl = process.env.DATABASE_URL;
   const originalStorageDriver = process.env.STORAGE_DRIVER;
@@ -114,7 +116,7 @@ describe('W2 Real Concurrency & HTTP Upload Verification (e2e)', () => {
 
       let deletionLockAcquired = false;
       let attachmentAttemptStarted = false;
-      let attachmentError: any = null;
+      let attachmentError: unknown = null;
 
       // Synchronization deferred promises
       let releaseDeletion: () => void;
@@ -156,7 +158,7 @@ describe('W2 Real Concurrency & HTTP Upload Verification (e2e)', () => {
             fileAssetId: asset.id,
             skills: ['TypeScript'],
           });
-        } catch (err: any) {
+        } catch (err: unknown) {
           attachmentError = err;
         }
       })();
@@ -200,7 +202,7 @@ describe('W2 Real Concurrency & HTTP Upload Verification (e2e)', () => {
 
       let attachmentLockAcquired = false;
       let deletionAttemptStarted = false;
-      let deletionResult: any = null;
+      let deletionResult: Awaited<ReturnType<FileAssetService['deleteFileAsset']>> | null = null;
 
       // Synchronization deferred promise
       let releaseAttachment: () => void;
@@ -285,12 +287,12 @@ describe('W2 Real Concurrency & HTTP Upload Verification (e2e)', () => {
     });
 
     it('should reject missing file payload when invoked directly on use case with 400', async () => {
-      const uploadUseCase = app.get(require('../src/modules/students/application/use-cases/upload-cv-file.use-case').UploadCvFileUseCase);
-      await expect(uploadUseCase.execute(testStudentUser.id, null as any)).rejects.toThrow('Vui lòng chọn tệp');
+      const uploadUseCase = app.get(UploadCvFileUseCase);
+      await expect(uploadUseCase.execute(testStudentUser.id, null)).rejects.toThrow('Vui lòng chọn tệp');
     });
 
     it('should reject spoofed binary (e.g. Windows PE disguised as PDF) with 400', async () => {
-      const uploadUseCase = app.get(require('../src/modules/students/application/use-cases/upload-cv-file.use-case').UploadCvFileUseCase);
+      const uploadUseCase = app.get(UploadCvFileUseCase);
       const spoofedPayload = {
         buffer: Buffer.from('MZ\x90\x00\x03\x00\x00\x00Malicious PE Binary Content'),
         originalname: 'innocent_looking_resume.pdf',
@@ -303,7 +305,7 @@ describe('W2 Real Concurrency & HTTP Upload Verification (e2e)', () => {
     });
 
     it('should successfully store genuine PDF and return FileAssetDto with PENDING_UPLOAD status', async () => {
-      const uploadUseCase = app.get(require('../src/modules/students/application/use-cases/upload-cv-file.use-case').UploadCvFileUseCase);
+      const uploadUseCase = app.get(UploadCvFileUseCase);
       const validPdfPayload = {
         buffer: Buffer.from('%PDF-1.7\n%Genuine PDF Content Header\nBody of Document'),
         originalname: 'my_authentic_resume.pdf',

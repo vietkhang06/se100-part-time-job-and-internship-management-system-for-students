@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { CompanyMember } from '@prisma/client';
 import {
   CompanyMemberRole,
   CompanyMemberStatus,
@@ -14,7 +15,7 @@ export class PrismaCompanyMemberRepository
 {
   constructor(private readonly prisma: PrismaService) {}
 
-  private toDomain(raw: any): CompanyMemberEntity {
+  private toDomain(raw: CompanyMember): CompanyMemberEntity {
     return new CompanyMemberEntity({
       id: raw.id,
       companyId: raw.companyId,
