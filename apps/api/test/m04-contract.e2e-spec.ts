@@ -21,8 +21,8 @@ class FixtureJwtGuard implements CanActivate {
 describe('M04 API contract with fixture adapters', () => {
   let app: INestApplication;
   const workflow = {
-    submit: jest.fn(), getMine: jest.fn(), markViewed: jest.fn(),
-    getCandidate: jest.fn(), invite: jest.fn(),
+    submit: jest.fn(), getMineDetail: jest.fn(), markViewed: jest.fn(), listCandidates: jest.fn(),
+    getCandidateDetail: jest.fn(), invite: jest.fn(),
   };
 
   beforeAll(async () => {
@@ -62,11 +62,11 @@ describe('M04 API contract with fixture adapters', () => {
   });
 
   it('maps resource ownership errors to 404/403 without leaking application data', async () => {
-    workflow.getMine.mockRejectedValue(new M04WorkflowError('NOT_FOUND'));
+    workflow.getMineDetail.mockRejectedValue(new M04WorkflowError('NOT_FOUND'));
     await request(app.getHttpServer()).get('/api/v1/applications/me/app-foreign')
       .set('x-test-user', 'student-a').set('x-test-role', 'STUDENT')
       .expect(404);
-    workflow.getCandidate.mockRejectedValue(new M04WorkflowError('FORBIDDEN'));
+    workflow.getCandidateDetail.mockRejectedValue(new M04WorkflowError('FORBIDDEN'));
     await request(app.getHttpServer()).get('/api/v1/employer/applications/app-foreign')
       .set('x-test-user', 'employer-a').set('x-test-role', 'EMPLOYER')
       .expect(403);
