@@ -4,7 +4,7 @@
  * Inputs below exercise the persistence boundary, not CV/job eligibility.
  */
 import { randomUUID } from 'crypto';
-import { CvSnapshotDto } from '@campusjob/contracts';
+import { CvSnapshotDto, NotificationEventType } from '@campusjob/contracts';
 import { PrismaService } from '../src/shared/database/prisma.service';
 import { PrismaM04Repository } from '../src/modules/applications/infrastructure/prisma-m04.repository';
 import { ApplicationStatus as S } from '../src/modules/applications/domain/application-state';
@@ -33,6 +33,11 @@ describe('S3-M04-01 PostgreSQL persistence regression (not full integration)', (
   });
   afterEach(async () => {
     // Delete only records owned by this case; child rows cascade.
+    if (prisma && studentId) {
+      await prisma.m04EventOutbox.deleteMany({
+        where: { OR: [{ actorId: studentId }, { recipientId: studentId }] },
+      });
+    }
     if (prisma && studentId) await prisma.application.deleteMany({ where: { studentId } });
   });
   afterAll(async () => { if (prisma) await prisma.$disconnect(); });
@@ -195,5 +200,35 @@ describe('S3-M04-01 PostgreSQL persistence regression (not full integration)', (
       expect(stored.rejectionReason).toBe('Not selected');
       expect(history[0].reason).toBe('Not selected');
     }
+  });
+
+  it('DB11 stores mixed result-event entity IDs with the same business transaction', async () => {
+    const { application, interview } = await invited();
+    await repository.recordInterviewResult(
+      { interviewId: interview.id, result: 'ACCEPTED', actorId: studentId, at: afterInterview },
+      [
+        {
+          eventType: NotificationEventType.INTERVIEW_RESULT_RECORDED,
+          entityType: 'INTERVIEW', actorId: studentId, recipientId: studentId, payload: { result: 'ACCEPTED' },
+        },
+        {
+          eventType: NotificationEventType.APPLICATION_STATUS_CHANGED,
+          entityType: 'APPLICATION', actorId: studentId, recipientId: studentId, payload: { status: 'ACCEPTED' },
+        },
+        {
+          eventType: 'JOB_CLOSE_SUGGESTED', entityType: 'APPLICATION',
+          actorId: studentId, recipientId: studentId, payload: { jobId, targetCount: 1 },
+        },
+      ],
+    );
+
+    const events = await prisma.m04EventOutbox.findMany({ where: { actorId: studentId } });
+    expect(events).toHaveLength(3);
+    expect(events.find((event) => event.entityType === 'INTERVIEW')?.entityId).toBe(interview.id);
+    expect(events.filter((event) => event.entityType === 'APPLICATION'))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ entityId: application.id }),
+        expect.objectContaining({ entityId: application.id }),
+      ]));
   });
 });

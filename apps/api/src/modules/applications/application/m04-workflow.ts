@@ -23,6 +23,7 @@ export class M04Workflow {
 
   async submit(studentId: string, jobId: string, cvId: string, coverLetter?: string): Promise<ApplicationRecord> {
     await this.jobs.assertAcceptingApplications(jobId);
+    const job = await this.jobs.getApplicationContext(jobId);
     const cvSnapshot = await this.cvs.getOwnedSnapshot(studentId, cvId);
     if (cvSnapshot.studentId !== studentId || cvSnapshot.originalCvId !== cvId) {
       throw new M04WorkflowError('FORBIDDEN');
@@ -44,9 +45,14 @@ export class M04Workflow {
       }
       throw error;
     }
-    return this.repository.createApplication({
+    const application = await this.repository.createApplication({
       studentId, jobId, cvId, cvSnapshot, coverLetter: coverLetter?.trim() || null,
-    });
+    }, job.managerUserIds.map((recipientId) => this.event(
+      NotificationEventType.APPLICATION_SUBMITTED, 'APPLICATION', studentId, recipientId,
+      { jobId, jobTitle: job.title, companyId: job.companyId, companyName: job.companyName, studentName: cvSnapshot.fullName },
+    )));
+    await this.dispatchEvents();
+    return application;
   }
 
   listMine(studentId: string): Promise<ApplicationRecord[]> {
@@ -66,8 +72,14 @@ export class M04Workflow {
 
   async withdraw(studentId: string, id: string): Promise<ApplicationRecord> {
     const application = await this.getMine(studentId, id);
+    const job = await this.jobs.getApplicationContext(application.jobId);
     const next = nextApplicationStatus(application.status, 'WITHDRAW', UserRole.STUDENT);
-    return this.repository.changeApplicationStatus({ id, expected: application.status, next, actorId: studentId });
+    const changed = await this.repository.changeApplicationStatus(
+      { id, expected: application.status, next, actorId: studentId },
+      job.managerUserIds.map((recipientId) => this.statusEvent(application, job.title, studentId, recipientId, next)),
+    );
+    await this.dispatchEvents();
+    return changed;
   }
 
   async listCandidates(
@@ -117,27 +129,46 @@ export class M04Workflow {
 
   async markViewed(employerId: string, id: string): Promise<ApplicationRecord> {
     const application = await this.getCandidate(employerId, id);
+    const job = await this.jobs.getApplicationContext(application.jobId);
     const next = nextApplicationStatus(application.status, 'MARK_VIEWED', UserRole.EMPLOYER);
-    return this.repository.changeApplicationStatus({ id, expected: application.status, next, actorId: employerId });
+    const changed = await this.repository.changeApplicationStatus(
+      { id, expected: application.status, next, actorId: employerId },
+      [this.statusEvent(application, job.title, employerId, application.studentId, next)],
+    );
+    await this.dispatchEvents();
+    return changed;
   }
 
   async reject(employerId: string, id: string, reason: string): Promise<ApplicationRecord> {
     if (!reason?.trim()) throw new M04WorkflowError('INVALID_INPUT');
     const application = await this.getCandidate(employerId, id);
+    const job = await this.jobs.getApplicationContext(application.jobId);
     const next = nextApplicationStatus(application.status, 'REJECT', UserRole.EMPLOYER, reason.trim());
-    return this.repository.changeApplicationStatus({ id, expected: application.status, next, actorId: employerId, reason: reason.trim() });
+    const changed = await this.repository.changeApplicationStatus(
+      { id, expected: application.status, next, actorId: employerId, reason: reason.trim() },
+      [this.statusEvent(application, job.title, employerId, application.studentId, next, reason.trim())],
+    );
+    await this.dispatchEvents();
+    return changed;
   }
 
   async invite(employerId: string, id: string, input: {
     scheduledAt: Date; mode: InterviewMode; locationOrLink: string; message?: string;
   }): Promise<InterviewRecord> {
     const application = await this.getCandidate(employerId, id);
+    const job = await this.jobs.getApplicationContext(application.jobId);
     nextApplicationStatus(application.status, 'SCHEDULE_INTERVIEW', UserRole.EMPLOYER);
     assertValidInterviewSchedule(input.scheduledAt, input.mode, input.locationOrLink, this.now());
-    return this.repository.createInterview({
+    const interview = await this.repository.createInterview({
       applicationId: id, actorId: employerId, scheduledAt: input.scheduledAt,
       mode: input.mode, locationOrLink: input.locationOrLink.trim(), message: input.message?.trim() || null,
-    });
+    }, [this.event(
+      NotificationEventType.INTERVIEW_INVITED, 'INTERVIEW', employerId, application.studentId,
+      { jobId: application.jobId, jobTitle: job.title, companyId: job.companyId, companyName: job.companyName,
+        scheduledAt: input.scheduledAt.toISOString(), mode: input.mode, locationOrLink: input.locationOrLink.trim() },
+    )]);
+    await this.dispatchEvents();
+    return interview;
   }
 
   listMyInterviews(studentId: string): Promise<InterviewRecord[]> {
@@ -145,11 +176,21 @@ export class M04Workflow {
   }
 
   async confirmInterview(studentId: string, interviewId: string): Promise<InterviewRecord> {
-    const { interview } = await this.getMyInterview(studentId, interviewId);
+    const { interview, application } = await this.getMyInterview(studentId, interviewId);
     if (interview.confirmedAt || interview.result || interview.scheduledAt.getTime() <= this.now().getTime()) {
       throw new M04WorkflowError('INVALID_STATE');
     }
-    return this.repository.confirmInterview(interviewId, this.now());
+    const job = await this.jobs.getApplicationContext(application.jobId);
+    const confirmed = await this.repository.confirmInterview(
+      interviewId,
+      this.now(),
+      job.managerUserIds.map((recipientId) => this.event(
+        NotificationEventType.INTERVIEW_CONFIRMED, 'INTERVIEW', studentId, recipientId,
+        { jobId: application.jobId, jobTitle: job.title, scheduledAt: interview.scheduledAt.toISOString() },
+      )),
+    );
+    await this.dispatchEvents();
+    return confirmed;
   }
 
   async requestReschedule(studentId: string, interviewId: string, proposedAt: Date, message?: string) {
@@ -159,7 +200,16 @@ export class M04Workflow {
     }
     const existing = await this.repository.getChangeRequest(interviewId);
     assertCanRequestReschedule(existing ? 1 : 0, interview.scheduledAt, proposedAt, this.now());
-    return this.repository.createChangeRequest({ interviewId, proposedAt, message: message?.trim() || null });
+    const job = await this.jobs.getApplicationContext(application.jobId);
+    const request = await this.repository.createChangeRequest(
+      { interviewId, proposedAt, message: message?.trim() || null },
+      job.managerUserIds.map((recipientId) => this.event(
+        NotificationEventType.INTERVIEW_RESCHEDULE_REQUESTED, 'INTERVIEW_CHANGE_REQUEST', studentId, recipientId,
+        { jobId: application.jobId, jobTitle: job.title, proposedAt: proposedAt.toISOString(), reason: message?.trim() },
+      )),
+    );
+    await this.dispatchEvents();
+    return request;
   }
 
   async decideReschedule(employerId: string, interviewId: string, decision: 'APPROVED' | 'REJECTED') {
@@ -174,7 +224,17 @@ export class M04Workflow {
     if (decision === 'APPROVED' && request.proposedAt.getTime() <= this.now().getTime()) {
       throw new M04WorkflowError('INVALID_STATE');
     }
-    return this.repository.decideChangeRequest({ interviewId, decision, decidedBy: employerId, at: this.now() });
+    const job = await this.jobs.getApplicationContext(application.jobId);
+    const changed = await this.repository.decideChangeRequest(
+      { interviewId, decision, decidedBy: employerId, at: this.now() },
+      [this.event(
+        NotificationEventType.INTERVIEW_RESCHEDULE_RESOLVED, 'INTERVIEW_CHANGE_REQUEST', employerId,
+        application.studentId, { jobId: application.jobId, jobTitle: job.title, result: decision,
+          proposedAt: request.proposedAt.toISOString() },
+      )],
+    );
+    await this.dispatchEvents();
+    return changed;
   }
 
   async recordResult(employerId: string, interviewId: string, result: 'ACCEPTED' | 'REJECTED', reason?: string): Promise<InterviewRecord> {

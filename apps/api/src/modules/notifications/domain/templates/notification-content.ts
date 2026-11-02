@@ -108,6 +108,15 @@ export function buildNotificationContent(
         )}.`,
         sendEmail: true,
       };
+    case NotificationEventType.INTERVIEW_RESULT_RECORDED:
+      return {
+        title: 'Kết quả tuyển dụng đã được cập nhật',
+        body: withReason(
+          `Kết quả cho hồ sơ ứng tuyển "${job}": ${str(payload, 'result', 'đã xử lý')}.`,
+          payload,
+        ),
+        sendEmail: true,
+      };
     case NotificationEventType.REPORT_RECEIVED:
       return {
         title: 'Đã nhận báo cáo vi phạm',

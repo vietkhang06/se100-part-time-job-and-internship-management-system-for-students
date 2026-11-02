@@ -83,7 +83,7 @@ export interface M04Repository {
     cvId: string;
     cvSnapshot: CvSnapshotDto;
     coverLetter: string | null;
-  }): Promise<ApplicationRecord>;
+  }, events?: readonly M04EventDraft[]): Promise<ApplicationRecord>;
   getApplication(id: string): Promise<ApplicationRecord | null>;
   getApplicationHistory(id: string): Promise<ApplicationHistoryRecord[]>;
   listStudentApplications(studentId: string): Promise<ApplicationRecord[]>;
@@ -94,7 +94,7 @@ export interface M04Repository {
     next: ApplicationStatus;
     actorId: string;
     reason?: string;
-  }): Promise<ApplicationRecord>;
+  }, events?: readonly M04EventDraft[]): Promise<ApplicationRecord>;
   createInterview(input: {
     applicationId: string;
     actorId: string;
@@ -102,22 +102,22 @@ export interface M04Repository {
     mode: InterviewMode;
     locationOrLink: string;
     message: string | null;
-  }): Promise<InterviewRecord>;
+  }, events?: readonly M04EventDraft[]): Promise<InterviewRecord>;
   getInterview(id: string): Promise<InterviewRecord | null>;
   listStudentInterviews(studentId: string): Promise<InterviewRecord[]>;
-  confirmInterview(id: string, at: Date): Promise<InterviewRecord>;
+  confirmInterview(id: string, at: Date, events?: readonly M04EventDraft[]): Promise<InterviewRecord>;
   getChangeRequest(interviewId: string): Promise<ChangeRequestRecord | null>;
   createChangeRequest(input: {
     interviewId: string;
     proposedAt: Date;
     message: string | null;
-  }): Promise<ChangeRequestRecord>;
+  }, events?: readonly M04EventDraft[]): Promise<ChangeRequestRecord>;
   decideChangeRequest(input: {
     interviewId: string;
     decision: 'APPROVED' | 'REJECTED';
     decidedBy: string;
     at: Date;
-  }): Promise<ChangeRequestRecord>;
+  }, events?: readonly M04EventDraft[]): Promise<ChangeRequestRecord>;
   recordInterviewResult(input: {
     interviewId: string;
     result: 'ACCEPTED' | 'REJECTED';

@@ -257,6 +257,27 @@ model InterviewChangeRequest {
   createdAt   DateTime                @default(now())
 }
 
+/// Transactional outbox owned by M04. Business writes and their notification
+/// events are committed together; M05 delivery can then be retried safely.
+model M04EventOutbox {
+  id           String    @id @default(uuid())
+  eventType    String
+  entityType   String
+  entityId     String
+  actorId      String
+  recipientId  String
+  payload      Json
+  dedupeKey    String    @unique
+  attemptCount Int       @default(0)
+  availableAt  DateTime  @default(now())
+  publishedAt  DateTime?
+  lastError    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([publishedAt, availableAt, createdAt])
+}
+
 // ============================================================================
 // M02 · CV & Resume
 // ============================================================================
