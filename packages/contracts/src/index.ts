@@ -55,6 +55,22 @@ export enum CompanyErrorCode {
   CROSS_COMPANY_BRANCH_FORBIDDEN = 'CROSS_COMPANY_BRANCH_FORBIDDEN',
 }
 
+export enum JobErrorCode {
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  JOB_NOT_FOUND = 'JOB_NOT_FOUND',
+  JOB_NOT_OWNED = 'JOB_NOT_OWNED',
+  JOB_INVALID_STATE_TRANSITION = 'JOB_INVALID_STATE_TRANSITION',
+  JOB_EXPIRED_CANNOT_ACTIVATE = 'JOB_EXPIRED_CANNOT_ACTIVATE',
+  JOB_COMPANY_NOT_ACTIVE = 'JOB_COMPANY_NOT_ACTIVE',
+  JOB_REJECTION_REASON_REQUIRED = 'JOB_REJECTION_REASON_REQUIRED',
+  JOB_BRANCH_NOT_OWNED = 'JOB_BRANCH_NOT_OWNED',
+  JOB_HIDDEN_BY_MODERATION = 'JOB_HIDDEN_BY_MODERATION',
+  MODERATION_SERVICE_UNAVAILABLE = 'MODERATION_SERVICE_UNAVAILABLE',
+  UNAUTHORIZED = 'UNAUTHORIZED',
+  FORBIDDEN = 'FORBIDDEN',
+}
+
+
 export enum CvErrorCode {
   VALIDATION_ERROR = 'VALIDATION_ERROR',
   CV_NOT_FOUND = 'CV_NOT_FOUND',
@@ -69,7 +85,7 @@ export interface ApiErrorResponse {
   statusCode: number;
   message: string | string[];
   error: string;
-  code?: AuthErrorCode | StudentProfileErrorCode | CvErrorCode | CompanyErrorCode | (string & {});
+  code?: AuthErrorCode | StudentProfileErrorCode | CvErrorCode | CompanyErrorCode | JobErrorCode | (string & {});
   timestamp: string;
   path: string;
   correlationId?: string;
@@ -226,8 +242,7 @@ export interface JwtPayload {
   sessionId?: string;
 }
 
-// ============================================================================
-// M05 · Notification (C-20 — DRAFT, chờ Lead/Owner M03-M04 chốt payload)
+// =====================================================================// M05 · Notification (C-20 — DRAFT, chờ Lead/Owner M03-M04 chốt payload)
 // ============================================================================
 
 export enum NotificationEventType {
@@ -745,6 +760,10 @@ export interface JobPostingDto {
   deadline: string;
   status: JobStatus;
   viewCount: number;
+  saveCount?: number;
+  rejectionReason?: string | null;
+  rejectedAt?: string | null;
+  hiddenByModeration?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -756,6 +775,115 @@ export interface SavedJobDto {
   createdAt: string;
   job?: JobPostingDto | null;
 }
+
+export interface SavedJobItemDto {
+  id: string;
+  studentId: string;
+  jobId: string;
+  createdAt: string;
+  isAvailable: boolean;
+  job: {
+    id: string;
+    title: string;
+    companyId: string;
+    companyName: string;
+    companyLogoUrl?: string | null;
+    branchId: string;
+    branchCity: string;
+    branchName: string;
+    type: JobType;
+    industry: string;
+    salary?: string | null;
+    salaryMin?: number | null;
+    salaryMax?: number | null;
+    isSalaryNegotiable?: boolean;
+    schedule?: string | null;
+    benefits?: string | null;
+    deadline: string;
+    status: JobStatus;
+  } | null;
+}
+
+export interface SavedJobListResponseDto {
+  savedJobs: SavedJobItemDto[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface SavedJobIdsResponseDto {
+  jobIds: string[];
+}
+
+export interface SaveJobResponseDto {
+  message: string;
+  saved: boolean;
+  savedJobId?: string;
+}
+
+export interface JobMetricsDto {
+  jobId: string;
+  title: string;
+  companyId: string;
+  companyName?: string;
+  status: JobStatus;
+  viewCount: number;
+  saveCount: number;
+}
+
+export interface AdminJobMetricsResponseDto {
+  totalJobs: number;
+  totalViews: number;
+  totalSaves: number;
+  jobs: JobMetricsDto[];
+}
+
+export interface CreateJobPostingRequestDto {
+  branchId: string;
+  title: string;
+  description: string;
+  industry: string;
+  type: JobType;
+  skills: string[];
+  quantity: number;
+  salary?: string | null;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  isSalaryNegotiable?: boolean;
+  schedule?: string | null;
+  benefits?: string | null;
+  deadline: string;
+}
+
+export interface UpdateJobPostingRequestDto {
+  branchId?: string;
+  title?: string;
+  description?: string;
+  industry?: string;
+  type?: JobType;
+  skills?: string[];
+  quantity?: number;
+  salary?: string | null;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  isSalaryNegotiable?: boolean;
+  schedule?: string | null;
+  benefits?: string | null;
+  deadline?: string;
+}
+
+export interface JobPostingResponseDto {
+  job: JobPostingDto;
+}
+
+export interface JobPostingListResponseDto {
+  jobs: JobPostingDto[];
+  total: number;
+  page?: number;
+  limit?: number;
+}
+
 
 // ============================================================================
 // M05 · Moderation (C-16)
@@ -971,6 +1099,110 @@ export interface CompanyReviewListDto {
 }
 
 // ============================================================================
+// M03 ? PUBLIC DIRECTORY & SEARCH CONTRACTS (C-06, C-07, C-08 / UC15, UC16, UC22, UC23)
+//
+
+
+export interface PublicCompanyDto {
+  id: string;
+  name: string;
+  legalName?: string | null;
+  representativeName?: string | null;
+  website?: string | null;
+  industry?: string | null;
+  companySize?: string | null;
+  description?: string | null;
+  logoUrl?: string | null;
+  address?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublicCompanyBranchDto {
+  id: string;
+  companyId: string;
+  branchName: string;
+  addressLine: string;
+  ward?: string | null;
+  district?: string | null;
+  city: string;
+  country?: string;
+  phone?: string | null;
+  isHeadquarter: boolean;
+}
+
+export interface PublicJobPostingDto {
+  id: string;
+  companyId: string;
+  branchId: string;
+  title: string;
+  description: string;
+  industry: string;
+  type: JobType;
+  skills: string[];
+  quantity: number;
+  salary?: string | null;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  isSalaryNegotiable: boolean;
+  schedule?: string | null;
+  benefits?: string | null;
+  deadline: string;
+  status: JobStatus;
+  createdAt: string;
+  updatedAt: string;
+  companyName?: string;
+  companyLogoUrl?: string | null;
+  branchCity?: string;
+  branchName?: string;
+}
+
+export interface PublicCompanyDetailDto extends PublicCompanyDto {
+  branches: PublicCompanyBranchDto[];
+  activeJobs: PublicJobPostingDto[];
+  reviewSummary?: ReviewSummaryDto | null;
+}
+
+export interface PublicCompanyResponseDto {
+  company: PublicCompanyDetailDto;
+}
+
+export interface PublicCompanyListResponseDto {
+  companies: PublicCompanyDto[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface PublicJobPostingResponseDto {
+  job: PublicJobPostingDto;
+}
+
+export interface PublicJobPostingListResponseDto {
+  jobs: PublicJobPostingDto[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+// ============================================================================
+// M03 ? JOB?APPLICATION CONTRACT FOR M04 (C-07 / S2-M03-06)
+// ============================================================================
+
+export interface JobApplicationEligibilityDto {
+  jobId: string;
+  companyId: string;
+  companyName: string;
+  branchId: string;
+  title: string;
+  status: JobStatus;
+  deadline: string;
+  quantity: number;
+  acceptingApplications: boolean;
+}
+
 // M05 · Admin Overview (UC54)
 // ============================================================================
 export enum OverviewGroupKey {
