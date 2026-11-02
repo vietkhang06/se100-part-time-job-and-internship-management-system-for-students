@@ -14,13 +14,7 @@ export class PrismaM04Repository implements M04Repository {
   }): Promise<ApplicationRecord> {
     try {
       const row = await this.prisma.$transaction(async (tx) => {
-        if (typeof tx.$executeRaw === 'function') {
-          try {
-            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.studentId}))`;
-          } catch {
-            // Safe fallback if raw advisory lock is unsupported by driver/mock
-          }
-        }
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.studentId}))`;
 
         const activeCount = await tx.application.count({
           where: {

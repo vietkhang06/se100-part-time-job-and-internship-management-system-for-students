@@ -88,6 +88,25 @@ describe('S3-M04-01 PostgreSQL persistence regression (not full integration)', (
     expect(await prisma.applicationStatusHistory.count({ where: { application: { studentId } } })).toBe(1);
   });
 
+  it('DB02b concurrent submissions at the quota boundary persist exactly five active applications', async () => {
+    for (let index = 0; index < 4; index += 1) {
+      jobId = randomUUID();
+      await repository.createApplication(create().input);
+    }
+    jobId = randomUUID();
+    const first = create().input;
+    jobId = randomUUID();
+    const second = create().input;
+
+    expectSingleWinner(await Promise.allSettled([
+      repository.createApplication(first), repository.createApplication(second),
+    ]));
+    expect(await prisma.application.count({
+      where: { studentId, status: { in: [S.SUBMITTED, S.REVIEWING, S.INTERVIEW_SCHEDULED] } },
+    })).toBe(5);
+    expect(await prisma.applicationStatusHistory.count({ where: { application: { studentId } } })).toBe(5);
+  });
+
   it('DB03 stale status writes roll back without adding history', async () => {
     const application = await reviewing();
     await expect(repository.changeApplicationStatus({
