@@ -118,16 +118,16 @@ describe('GetCvSnapshotUseCase – Contract C-03 (UC37–UC38)', () => {
 
   describe('Tiêu chí nghiệm thu 1: M04 nhận đúng CV của sinh viên (UC38 Happy Path)', () => {
     it('phải trích xuất đầy đủ thông tin snapshot CV của sinh viên khi studentId và cvId hợp lệ', async () => {
-      mockProfileRepo.findById.mockResolvedValue(studentA);
+      mockProfileRepo.findByUserId.mockResolvedValue(studentA);
 
-      const snapshot = await useCase.execute(studentA.id, cvOfStudentA.id);
+      const snapshot = await useCase.execute(studentA.userId, cvOfStudentA.id);
 
       // Xác minh định danh và liên kết
       expect(snapshot).toBeDefined();
       expect(snapshot.snapshotId).toBeDefined();
       expect(typeof snapshot.snapshotId).toBe('string');
       expect(snapshot.originalCvId).toBe(cvOfStudentA.id);
-      expect(snapshot.studentId).toBe(studentA.id);
+      expect(snapshot.studentId).toBe(studentA.userId);
 
       // Xác minh thông tin liên hệ được lấy chính xác từ tài khoản sinh viên
       expect(snapshot.fullName).toBe('Nguyễn Văn A');
@@ -156,12 +156,12 @@ describe('GetCvSnapshotUseCase – Contract C-03 (UC37–UC38)', () => {
     });
 
     it('CvSnapshotSourceAdapter phải chuyển tiếp thành công đến use case khi M04 gọi', async () => {
-      mockProfileRepo.findById.mockResolvedValue(studentA);
+      mockProfileRepo.findByUserId.mockResolvedValue(studentA);
 
-      const snapshot = await adapter.getOwnedSnapshot(studentA.id, cvOfStudentA.id);
+      const snapshot = await adapter.getOwnedSnapshot(studentA.userId, cvOfStudentA.id);
 
       expect(snapshot).toBeDefined();
-      expect(snapshot.studentId).toBe(studentA.id);
+      expect(snapshot.studentId).toBe(studentA.userId);
       expect(snapshot.originalCvId).toBe(cvOfStudentA.id);
     });
   });
@@ -169,15 +169,15 @@ describe('GetCvSnapshotUseCase – Contract C-03 (UC37–UC38)', () => {
   describe('Tiêu chí nghiệm thu 2: Không truy cập CV người khác (Anti-IDOR Security)', () => {
     it('phải từ chối và ném lỗi 404 CV_NOT_FOUND khi sinh viên A cố tình nộp cvId của sinh viên B', async () => {
       // Giả sử sinh viên A đang đăng nhập (student-profile-id-1)
-      mockProfileRepo.findById.mockResolvedValue(studentA);
+      mockProfileRepo.findByUserId.mockResolvedValue(studentA);
 
       // Nhưng cố tình truyền cv-id-200 (thuộc về sinh viên B: student-profile-id-2)
       await expect(
-        useCase.execute(studentA.id, cvOfStudentB.id),
+        useCase.execute(studentA.userId, cvOfStudentB.id),
       ).rejects.toThrow(NotFoundException);
 
       try {
-        await useCase.execute(studentA.id, cvOfStudentB.id);
+        await useCase.execute(studentA.userId, cvOfStudentB.id);
       } catch (error: unknown) {
         if (!(error instanceof NotFoundException)) throw error;
         expect(error.getResponse()).toMatchObject({
@@ -189,15 +189,15 @@ describe('GetCvSnapshotUseCase – Contract C-03 (UC37–UC38)', () => {
     });
 
     it('phải từ chối và ném lỗi 404 khi cvId không hề tồn tại trên hệ thống', async () => {
-      mockProfileRepo.findById.mockResolvedValue(studentA);
+      mockProfileRepo.findByUserId.mockResolvedValue(studentA);
 
       await expect(
-        useCase.execute(studentA.id, 'non-existent-cv-id'),
+        useCase.execute(studentA.userId, 'non-existent-cv-id'),
       ).rejects.toThrow(NotFoundException);
     });
 
     it('phải từ chối và ném lỗi 404 STUDENT_PROFILE_NOT_FOUND khi studentId không tồn tại', async () => {
-      mockProfileRepo.findById.mockResolvedValue(null);
+      mockProfileRepo.findByUserId.mockResolvedValue(null);
 
       await expect(
         useCase.execute('invalid-student-id', cvOfStudentA.id),
@@ -216,10 +216,10 @@ describe('GetCvSnapshotUseCase – Contract C-03 (UC37–UC38)', () => {
 
   describe('Tiêu chí nghiệm thu 3: Không làm thay đổi CV đã dùng trong hồ sơ (Snapshot Immutability - UC37)', () => {
     it('bản chụp snapshot phải giữ nguyên giá trị ban đầu ngay cả khi CV gốc bị sửa đổi', async () => {
-      mockProfileRepo.findById.mockResolvedValue(studentA);
+      mockProfileRepo.findByUserId.mockResolvedValue(studentA);
 
       // 1. Chụp snapshot tại thời điểm nộp đơn (UC38)
-      const snapshotInitial = await useCase.execute(studentA.id, cvOfStudentA.id);
+      const snapshotInitial = await useCase.execute(studentA.userId, cvOfStudentA.id);
       expect(snapshotInitial.title).toBe('CV Lập trình viên Backend NestJS');
       expect(snapshotInitial.skills).toContain('NestJS');
 
@@ -251,10 +251,10 @@ describe('GetCvSnapshotUseCase – Contract C-03 (UC37–UC38)', () => {
     });
 
     it('bản chụp snapshot đã cấp cho M04 vẫn bảo toàn nguyên vẹn ngay cả khi CV gốc bị xóa khỏi M02 (UC35)', async () => {
-      mockProfileRepo.findById.mockResolvedValue(studentA);
+      mockProfileRepo.findByUserId.mockResolvedValue(studentA);
 
       // Chụp snapshot nộp đơn
-      const snapshotCaptured = await useCase.execute(studentA.id, cvOfStudentA.id);
+      const snapshotCaptured = await useCase.execute(studentA.userId, cvOfStudentA.id);
 
       // Sinh viên xóa CV khỏi danh sách
       cvRepo.clear();

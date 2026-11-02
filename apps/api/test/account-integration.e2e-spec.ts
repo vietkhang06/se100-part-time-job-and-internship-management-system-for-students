@@ -184,6 +184,17 @@ describe('S2-M01-06: Account Integration (E2E & Contract-Boundary)', () => {
       }
       throw new M04WorkflowError('FORBIDDEN');
     },
+    async getApplicationContext(jobId: string) {
+      if (jobId !== testJobIdA) throw new M04WorkflowError('NOT_FOUND');
+      return {
+        id: jobId, title: 'Account integration job', companyId: 'account-int-company',
+        companyName: 'Account Integration Company', requiredSkills: [], targetCount: 1,
+        managerUserIds: [accounts.employerA.id],
+      };
+    },
+    async suggestClosingWhenFilled(): Promise<boolean> {
+      return false;
+    },
   };
 
   async function loginAndGetToken(email: string): Promise<string> {

@@ -1,10 +1,13 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
+  CompanyMemberRole,
   CompanyMemberStatus,
   CompanyVerificationStatus,
   JobApplicationEligibilityDto,
   JobStatus,
 } from '@campusjob/contracts';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../../../shared/database/prisma.service';
 import {
   JobAccessSource,
   M04WorkflowError,
@@ -53,6 +56,8 @@ export class JobAccessSourceAdapter implements JobAccessSource {
     private readonly memberRepo: ICompanyMemberRepository,
     @Inject(COMPANY_BRANCH_REPOSITORY_TOKEN)
     private readonly branchRepo: ICompanyBranchRepository,
+    @Optional()
+    private readonly prisma?: PrismaService,
   ) {}
 
   async assertAcceptingApplications(jobId: string): Promise<void> {
@@ -99,8 +104,71 @@ export class JobAccessSourceAdapter implements JobAccessSource {
       job.companyId,
       employerUserId,
     );
-    if (!member || member.status !== CompanyMemberStatus.ACTIVE) {
+    const managerRoles = [
+      CompanyMemberRole.OWNER,
+      CompanyMemberRole.ADMIN,
+      CompanyMemberRole.HR_MANAGER,
+      CompanyMemberRole.RECRUITER,
+    ];
+    if (
+      !member || member.status !== CompanyMemberStatus.ACTIVE ||
+      !managerRoles.includes(member.role)
+    ) {
       throw new M04WorkflowError('FORBIDDEN');
+    }
+  }
+
+  async getApplicationContext(jobId: string) {
+    const job = await this.jobRepo.findById(jobId);
+    if (!job) throw new M04WorkflowError('NOT_FOUND');
+
+    const company = await this.companyRepo.findById(job.companyId);
+    if (!company) throw new M04WorkflowError('NOT_FOUND');
+    const members = await this.memberRepo.findActiveMembersByCompanyId(job.companyId);
+    const managerRoles = new Set<CompanyMemberRole>([
+      CompanyMemberRole.OWNER,
+      CompanyMemberRole.ADMIN,
+      CompanyMemberRole.HR_MANAGER,
+      CompanyMemberRole.RECRUITER,
+    ]);
+
+    return {
+      id: job.id,
+      title: job.title,
+      companyId: job.companyId,
+      companyName: company.name,
+      requiredSkills: job.skills,
+      targetCount: job.quantity,
+      managerUserIds: members
+        .filter(({ member }) => managerRoles.has(member.role))
+        .map(({ member }) => member.userId),
+    };
+  }
+
+  async suggestClosingWhenFilled(input: {
+    jobId: string;
+    applicationId: string;
+    acceptedCount: number;
+  }): Promise<boolean> {
+    const job = await this.jobRepo.findById(input.jobId);
+    if (!job || input.acceptedCount < job.quantity) return false;
+    if (!this.prisma) throw new Error('Job close suggestion persistence is unavailable.');
+
+    try {
+      await this.prisma.jobCloseSuggestion.create({
+        data: {
+          jobId: input.jobId,
+          applicationId: input.applicationId,
+          acceptedCount: input.acceptedCount,
+          targetCount: job.quantity,
+        },
+      });
+      return true;
+    } catch (error: unknown) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return false;
+      }
+      throw error;
     }
   }
 

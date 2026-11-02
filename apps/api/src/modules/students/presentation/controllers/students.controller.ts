@@ -122,7 +122,7 @@ export class StudentsController {
       this.cvRepo.ensureSampleForProfile(profileId);
     }
 
-    return this.getCvSnapshotUseCase.execute(profileId, cvId);
+    return this.getCvSnapshotUseCase.execute(userId, cvId);
   }
 }
 

@@ -65,9 +65,10 @@ export interface CvSnapshotSource {
 }
 
 /** M03 owns job eligibility and the real employer-to-job relationship. */
-export interface JobAccessSource {
-  assertAcceptingApplications(jobId: string): Promise<void>;
-  assertManagedBy(jobId: string, employerUserId: string): Promise<void>;
+export type JobAccessSource = ContractJobAccessSource;
+
+export interface M04EventDispatcher {
+  dispatchPending(): Promise<void>;
 }
 
 /**

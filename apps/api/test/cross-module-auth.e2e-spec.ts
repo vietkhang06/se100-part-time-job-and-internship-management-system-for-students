@@ -162,6 +162,17 @@ describe('S2-M01-05: Cross-Module Authorization (E2E & Contract Tests)', () => {
       }
       throw new M04WorkflowError('FORBIDDEN');
     },
+    async getApplicationContext(jobId: string) {
+      if (jobId !== testJobIdA) throw new M04WorkflowError('NOT_FOUND');
+      return {
+        id: jobId, title: 'Cross-module authorization job', companyId: 'cross-module-company',
+        companyName: 'Cross-module Company', requiredSkills: [], targetCount: 1,
+        managerUserIds: [accounts.employerA.id],
+      };
+    },
+    async suggestClosingWhenFilled(): Promise<boolean> {
+      return false;
+    },
   };
 
   async function loginAndGetToken(email: string): Promise<string> {

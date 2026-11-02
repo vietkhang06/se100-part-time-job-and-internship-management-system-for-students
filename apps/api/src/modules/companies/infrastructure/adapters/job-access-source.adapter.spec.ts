@@ -348,4 +348,52 @@ describe('JobAccessSourceAdapter (C-07 / S2-M03-06, S5-M03-02)', () => {
       expect(result.acceptingApplications).toBe(false);
     });
   });
+
+  describe('M04 production context and close suggestion', () => {
+    it('returns job context with only active manager recipients', async () => {
+      const job = await jobRepo.create({
+        companyId, branchId, title: 'Backend Intern', description: 'Build APIs',
+        industry: 'IT', type: JobType.INTERNSHIP, skills: ['NestJS'], quantity: 2,
+        deadline: futureDeadline, status: JobStatus.OPEN,
+      });
+      await memberRepo.create({
+        companyId, userId: 'ordinary-member', role: CompanyMemberRole.MEMBER,
+        status: CompanyMemberStatus.ACTIVE,
+      });
+
+      await expect(adapter.getApplicationContext(job.id)).resolves.toEqual({
+        id: job.id,
+        title: 'Backend Intern',
+        companyId,
+        companyName: 'Acme Corp',
+        requiredSkills: ['NestJS'],
+        targetCount: 2,
+        managerUserIds: [employerUserId],
+      });
+    });
+
+    it('persists a close suggestion only after the target is reached', async () => {
+      const job = await jobRepo.create({
+        companyId, branchId, title: 'Filled Job', description: 'Filled',
+        industry: 'IT', type: JobType.PART_TIME, skills: [], quantity: 2,
+        deadline: futureDeadline, status: JobStatus.OPEN,
+      });
+      const prisma = { jobCloseSuggestion: { create: jest.fn().mockResolvedValue({ id: 'suggestion-1' }) } };
+      const adapterWithPersistence = new JobAccessSourceAdapter(
+        jobRepo, companyRepo, memberRepo, branchRepo, prisma as never,
+      );
+
+      await expect(adapterWithPersistence.suggestClosingWhenFilled({
+        jobId: job.id, applicationId: 'application-1', acceptedCount: 1,
+      })).resolves.toBe(false);
+      expect(prisma.jobCloseSuggestion.create).not.toHaveBeenCalled();
+
+      await expect(adapterWithPersistence.suggestClosingWhenFilled({
+        jobId: job.id, applicationId: 'application-2', acceptedCount: 2,
+      })).resolves.toBe(true);
+      expect(prisma.jobCloseSuggestion.create).toHaveBeenCalledWith({ data: {
+        jobId: job.id, applicationId: 'application-2', acceptedCount: 2, targetCount: 2,
+      } });
+    });
+  });
 });

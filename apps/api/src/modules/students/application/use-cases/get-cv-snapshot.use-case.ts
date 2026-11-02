@@ -42,8 +42,9 @@ export class GetCvSnapshotUseCase implements CvSnapshotSource {
    * Thực thi trích xuất bản chụp CV
    */
   async execute(studentId: string, cvId: string): Promise<CvSnapshotDto> {
-    // 1. Kiểm tra hồ sơ sinh viên tồn tại
-    const profile = await this.profileRepo.findById(studentId);
+    // C-01 passes the authenticated User.id. Resolve the owning profile here;
+    // never assume User.id and StudentProfile.id share a namespace.
+    const profile = await this.profileRepo.findByUserId(studentId);
     if (!profile) {
       throw new NotFoundException({
         statusCode: 404,
@@ -70,7 +71,7 @@ export class GetCvSnapshotUseCase implements CvSnapshotSource {
     const snapshot: CvSnapshotDto = {
       snapshotId: randomUUID(),
       originalCvId: cv.id,
-      studentId: profile.id,
+      studentId,
       fullName: profile.fullName || 'Sinh viên CampusJob',
       email: profile.email || '',
       phone: profile.phone || null,
