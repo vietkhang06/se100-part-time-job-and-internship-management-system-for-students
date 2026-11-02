@@ -51,6 +51,11 @@ export class M04Workflow {
     return application;
   }
 
+  async getMineDetail(studentId: string, id: string) {
+    const application = await this.getMine(studentId, id);
+    return { ...application, history: await this.repository.getApplicationHistory(id) };
+  }
+
   async withdraw(studentId: string, id: string): Promise<ApplicationRecord> {
     const application = await this.getMine(studentId, id);
     const next = nextApplicationStatus(application.status, 'WITHDRAW', UserRole.STUDENT);

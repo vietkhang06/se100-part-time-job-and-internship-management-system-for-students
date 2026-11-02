@@ -30,7 +30,9 @@ export class M04Controller {
 
   @Get('applications/me/:id')
   @Roles(UserRole.STUDENT)
-  detail(@CurrentUser('id') studentId: string, @Param('id') id: string) { return this.workflow.getMine(studentId, id); }
+  detail(@CurrentUser('id') studentId: string, @Param('id') id: string) {
+    return this.workflow.getMineDetail(studentId, id);
+  }
 
   @Patch('applications/me/:id/withdraw')
   @Roles(UserRole.STUDENT)

@@ -1,6 +1,13 @@
-import { CvSnapshotDto } from '@campusjob/contracts';
+import {
+  ApplicationJobContextDto, CvSnapshotDto, JobAccessSource as ContractJobAccessSource,
+  NotificationEventType,
+} from '@campusjob/contracts';
 import { ApplicationStatus } from '../domain/application-state';
 import { InterviewMode } from '../../interviews/domain/interview-rules';
+
+export const M04_CV_SOURCE = Symbol('M04_CV_SOURCE');
+export const M04_JOB_SOURCE = Symbol('M04_JOB_SOURCE');
+export const M04_REPOSITORY = Symbol('M04_REPOSITORY');
 
 export type ApplicationRecord = Readonly<{
   id: string;
@@ -33,6 +40,25 @@ export type ChangeRequestRecord = Readonly<{
   decision: 'PENDING' | 'APPROVED' | 'REJECTED';
 }>;
 
+export type JobApplicationContext = Readonly<ApplicationJobContextDto>;
+
+export type M04EventDraft = Readonly<{
+  eventType: NotificationEventType | 'JOB_CLOSE_SUGGESTED';
+  entityType: 'APPLICATION' | 'INTERVIEW' | 'INTERVIEW_CHANGE_REQUEST';
+  actorId: string;
+  recipientId: string;
+  payload: Readonly<Record<string, unknown>>;
+}>;
+
+export type ApplicationHistoryRecord = Readonly<{
+  id: string;
+  actorId: string;
+  fromStatus: ApplicationStatus | null;
+  toStatus: ApplicationStatus;
+  reason: string | null;
+  createdAt: Date;
+}>;
+
 /** M02 must verify CV ownership and return an immutable snapshot. */
 export interface CvSnapshotSource {
   getOwnedSnapshot(studentId: string, cvId: string): Promise<CvSnapshotDto>;
@@ -58,6 +84,7 @@ export interface M04Repository {
     coverLetter: string | null;
   }): Promise<ApplicationRecord>;
   getApplication(id: string): Promise<ApplicationRecord | null>;
+  getApplicationHistory(id: string): Promise<ApplicationHistoryRecord[]>;
   listStudentApplications(studentId: string): Promise<ApplicationRecord[]>;
   listJobApplications(jobId: string): Promise<ApplicationRecord[]>;
   changeApplicationStatus(input: {

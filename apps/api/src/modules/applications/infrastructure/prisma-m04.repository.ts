@@ -1,9 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { Application, Interview, InterviewChangeRequest, Prisma } from '@prisma/client';
+import { Application, ApplicationStatusHistory, Interview, InterviewChangeRequest, Prisma } from '@prisma/client';
 import { CvSnapshotDto } from '@campusjob/contracts';
 import { PrismaService } from '../../../shared/database/prisma.service';
 import { ApplicationStatus } from '../domain/application-state';
-import { ApplicationRecord, ChangeRequestRecord, InterviewRecord, M04Repository, M04WorkflowError } from '../application/m04-ports';
+import {
+  ApplicationHistoryRecord, ApplicationRecord, ChangeRequestRecord, InterviewRecord,
+  M04EventDraft, M04Repository, M04WorkflowError,
+} from '../application/m04-ports';
 
 @Injectable()
 export class PrismaM04Repository implements M04Repository {
@@ -46,6 +49,13 @@ export class PrismaM04Repository implements M04Repository {
   async getApplication(id: string): Promise<ApplicationRecord | null> {
     const row = await this.prisma.application.findUnique({ where: { id } });
     return row ? this.application(row) : null;
+  }
+
+  async getApplicationHistory(id: string): Promise<ApplicationHistoryRecord[]> {
+    const rows = await this.prisma.applicationStatusHistory.findMany({
+      where: { applicationId: id }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => this.history(row));
   }
 
   async listStudentApplications(studentId: string): Promise<ApplicationRecord[]> {
@@ -192,6 +202,15 @@ export class PrismaM04Repository implements M04Repository {
       cvSnapshot: row.cvSnapshot as unknown as CvSnapshotDto,
       coverLetter: row.coverLetter, status: row.status as ApplicationStatus,
       rejectionReason: row.rejectionReason, createdAt: row.createdAt,
+    };
+  }
+
+  private history(row: ApplicationStatusHistory): ApplicationHistoryRecord {
+    return {
+      id: row.id, actorId: row.actorId,
+      fromStatus: row.fromStatus as ApplicationStatus | null,
+      toStatus: row.toStatus as ApplicationStatus,
+      reason: row.reason, createdAt: row.createdAt,
     };
   }
 

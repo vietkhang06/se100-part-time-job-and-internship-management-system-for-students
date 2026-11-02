@@ -42,6 +42,12 @@ class MemoryRepository implements M04Repository {
     return row;
   }
   async getApplication(id: string) { return this.applications.get(id) ?? null; }
+  async getApplicationHistory(id: string) {
+    return this.history.filter((item) => item.applicationId === id).map((item, index) => ({
+      id: `history-${index + 1}`, actorId: 'actor', fromStatus: item.from,
+      toStatus: item.to, reason: null, createdAt: new Date(index),
+    }));
+  }
   async listStudentApplications(studentId: string) {
     return [...this.applications.values()].filter((a) => a.studentId === studentId);
   }
