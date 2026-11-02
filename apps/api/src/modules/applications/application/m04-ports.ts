@@ -124,7 +124,7 @@ export interface M04Repository {
     actorId: string;
     at: Date;
     reason?: string;
-  }): Promise<InterviewRecord>;
+  }, events?: readonly M04EventDraft[]): Promise<InterviewRecord>;
 }
 
 export class M04WorkflowError extends Error {

@@ -755,11 +755,26 @@ model JobPosting {
   savedJobs          SavedJob[]
   viewLogs           JobViewLog[]
   expiryReminderLogs JobExpiryReminderLog[]
+  closeSuggestion    JobCloseSuggestion?
 
   @@index([companyId])
   @@index([branchId])
   @@index([status])
   @@index([deadline])
+}
+
+/// M04 may suggest that M03 close a filled job, but it never mutates the
+/// JobPosting status. The unique jobId makes the signal idempotent.
+model JobCloseSuggestion {
+  id            String     @id @default(uuid())
+  jobId         String     @unique
+  job           JobPosting @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  applicationId String
+  acceptedCount Int
+  targetCount   Int
+  createdAt     DateTime   @default(now())
+
+  @@index([createdAt])
 }
 
 model SavedJob {

@@ -169,7 +169,7 @@ export class PrismaM04Repository implements M04Repository {
 
   async recordInterviewResult(input: {
     interviewId: string; result: 'ACCEPTED' | 'REJECTED'; actorId: string; at: Date; reason?: string;
-  }): Promise<InterviewRecord> {
+  }, events: readonly M04EventDraft[] = []): Promise<InterviewRecord> {
     return this.prisma.$transaction(async (tx) => {
       const current = await tx.interview.findUnique({ where: { id: input.interviewId } });
       if (!current || current.result || current.scheduledAt.getTime() > input.at.getTime()) {
@@ -188,12 +188,51 @@ export class PrismaM04Repository implements M04Repository {
         applicationId: current.applicationId, actorId: input.actorId,
         fromStatus: 'INTERVIEW_SCHEDULED', toStatus: input.result, reason: input.reason,
       } });
+      await this.enqueueEvents(tx, events, input.interviewId, {
+        applicationId: current.applicationId, interviewId: input.interviewId,
+      });
       return this.interview(await tx.interview.findUniqueOrThrow({ where: { id: input.interviewId } }));
     });
   }
 
   private isUnique(error: unknown): boolean {
     return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+  }
+
+  private async enqueueEvents(
+    tx: Prisma.TransactionClient,
+    events: readonly M04EventDraft[],
+    entityId: string,
+    entityIds: Readonly<Record<string, string>>,
+  ): Promise<void> {
+    for (const event of events) {
+      const eventEntityId = event.entityType === 'APPLICATION'
+        ? entityIds['applicationId'] ?? entityId
+        : event.entityType === 'INTERVIEW'
+          ? entityIds['interviewId'] ?? entityId
+          : entityIds['changeRequestId'] ?? entityId;
+      const payload: Record<string, unknown> = { ...event.payload, ...entityIds,
+        actorId: event.actorId, recipientId: event.recipientId };
+      if (event.eventType === 'JOB_CLOSE_SUGGESTED') {
+        const jobId = payload['jobId'];
+        if (typeof jobId !== 'string') throw new TypeError('JOB_CLOSE_SUGGESTED requires jobId.');
+        payload['acceptedCount'] = await tx.application.count({
+          where: { jobId, status: ApplicationStatus.ACCEPTED },
+        });
+      }
+      const occurrence = event.payload['status'] ?? event.payload['result'] ??
+        event.payload['proposedAt'] ?? event.payload['scheduledAt'] ?? 'once';
+      const dedupeKey = `${event.eventType}:${eventEntityId}:${event.recipientId}:${String(occurrence)}`;
+      await tx.m04EventOutbox.create({ data: {
+        eventType: event.eventType,
+        entityType: event.entityType,
+        entityId: eventEntityId,
+        actorId: event.actorId,
+        recipientId: event.recipientId,
+        payload: payload as Prisma.InputJsonValue,
+        dedupeKey,
+      } });
+    }
   }
 
   private application(row: Application): ApplicationRecord {
