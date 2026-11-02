@@ -16,6 +16,7 @@ import { SanctionsModule } from './modules/sanctions/sanctions.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import {AdminOverviewModule} from "./modules/admin-overview/admin-overview.module";
 import { CompaniesModule } from './modules/companies/companies.module';
+import { validateEnvironment } from './shared/config/environment.validation';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { CompaniesModule } from './modules/companies/companies.module';
         path.resolve(process.cwd(), '.env'),
         path.resolve(__dirname, '../../../.env'),
       ],
+      validate: validateEnvironment,
     }),
     DatabaseModule,
     HealthModule,
