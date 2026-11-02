@@ -3,6 +3,7 @@ import { ApplicationStatus, nextApplicationStatus } from '../domain/application-
 import { ApplicationSubmissionPolicyError, assertCanSubmitApplication } from '../domain/application-submission-policy';
 import { UserRole } from '@campusjob/contracts';
 import { InterviewMode, assertCanDecideReschedule, assertCanRecordInterviewResult, assertCanRequestReschedule, assertValidInterviewSchedule } from '../../interviews/domain/interview-rules';
+import { assessMatchingScore } from '../domain/matching-score';
 
 /** M04 workflow. CV and Job decisions stay with the owning modules via ports. */
 export class M04Workflow {
@@ -62,16 +63,49 @@ export class M04Workflow {
     return this.repository.changeApplicationStatus({ id, expected: application.status, next, actorId: studentId });
   }
 
-  async listCandidates(employerId: string, jobId: string): Promise<ApplicationRecord[]> {
+  async listCandidates(
+    employerId: string,
+    jobId: string,
+    query: { sort?: 'asc' | 'desc'; page?: number; pageSize?: number } = {},
+  ) {
     await this.jobs.assertManagedBy(jobId, employerId);
+    const job = await this.jobs.getApplicationContext(jobId);
     const applications = await this.repository.listJobApplications(jobId);
-    return applications.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    const sort = query.sort ?? 'asc';
+    const page = Math.max(1, query.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 20));
+    const ordered = applications.sort((a, b) => {
+      const time = a.createdAt.getTime() - b.createdAt.getTime();
+      const stable = time === 0 ? a.id.localeCompare(b.id) : time;
+      return sort === 'asc' ? stable : -stable;
+    });
+    const data = ordered.slice((page - 1) * pageSize, page * pageSize).map((application) => ({
+      ...application,
+      matchingScore: assessMatchingScore({
+        cvSkills: application.cvSnapshot.skills,
+        requiredSkills: job.requiredSkills,
+      }),
+    }));
+    return { data, meta: { page, pageSize, total: ordered.length, totalPages: Math.ceil(ordered.length / pageSize) } };
   }
 
   async getCandidate(employerId: string, id: string): Promise<ApplicationRecord> {
     const application = await this.requireApplication(id);
     await this.jobs.assertManagedBy(application.jobId, employerId);
     return application;
+  }
+
+  async getCandidateDetail(employerId: string, id: string) {
+    const application = await this.getCandidate(employerId, id);
+    const job = await this.jobs.getApplicationContext(application.jobId);
+    return {
+      ...application,
+      history: await this.repository.getApplicationHistory(id),
+      matchingScore: assessMatchingScore({
+        cvSkills: application.cvSnapshot.skills,
+        requiredSkills: job.requiredSkills,
+      }),
+    };
   }
 
   async markViewed(employerId: string, id: string): Promise<ApplicationRecord> {

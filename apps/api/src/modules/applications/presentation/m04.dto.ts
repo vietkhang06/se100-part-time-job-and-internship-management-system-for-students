@@ -32,3 +32,9 @@ export class RecordInterviewResultDto {
   @IsIn(['ACCEPTED', 'REJECTED']) result!: 'ACCEPTED' | 'REJECTED';
   @IsOptional() @IsString() reason?: string;
 }
+
+export class CandidateListQueryDto {
+  @IsOptional() @IsIn(['asc', 'desc']) sort: 'asc' | 'desc' = 'asc';
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) page = 1;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize = 20;
+}

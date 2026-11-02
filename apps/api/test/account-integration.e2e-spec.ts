@@ -610,9 +610,10 @@ describe('S2-M01-06: Account Integration (E2E & Contract-Boundary)', () => {
         .set('Authorization', `Bearer ${accounts.employerA.token}`)
         .expect(200);
 
-      expect(Array.isArray(res.body)).toBe(true);
-      const appIds = res.body.map((a: { id: string }) => a.id);
+      expect(Array.isArray(res.body.data)).toBe(true);
+      const appIds = res.body.data.map((a: { id: string }) => a.id);
       expect(appIds).toContain(createdApplicationIdA);
+      expect(res.body.meta).toEqual(expect.objectContaining({ page: 1, pageSize: 20 }));
     });
   });
 });

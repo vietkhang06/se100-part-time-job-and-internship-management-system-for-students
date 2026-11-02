@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseFilters, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseFilters, UseGuards } from '@nestjs/common';
 import { UserRole } from '@campusjob/contracts';
 import { CurrentUser } from '../../../shared/decorators/current-user.decorator';
 import { Roles } from '../../../shared/decorators/roles.decorator';
@@ -6,12 +6,12 @@ import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../shared/guards/roles.guard';
 import { M04Workflow } from '../application/m04-workflow';
 import {
-  DecideRescheduleDto, InviteInterviewDto, RecordInterviewResultDto,
+  CandidateListQueryDto, DecideRescheduleDto, InviteInterviewDto, RecordInterviewResultDto,
   RejectApplicationDto, RequestRescheduleDto, SubmitApplicationDto,
 } from './m04.dto';
 import { M04ExceptionFilter } from './m04-exception.filter';
 
-/** Registered only after real M02/M03 adapters are supplied to M04Module. */
+/** Production route surface backed by M02/M03 adapters registered in AppModule. */
 @Controller()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @UseFilters(M04ExceptionFilter)
@@ -40,14 +40,18 @@ export class M04Controller {
 
   @Get('employer/jobs/:jobId/applications')
   @Roles(UserRole.EMPLOYER)
-  candidates(@CurrentUser('id') employerId: string, @Param('jobId') jobId: string) {
-    return this.workflow.listCandidates(employerId, jobId);
+  candidates(
+    @CurrentUser('id') employerId: string,
+    @Param('jobId') jobId: string,
+    @Query() query: CandidateListQueryDto,
+  ) {
+    return this.workflow.listCandidates(employerId, jobId, query);
   }
 
   @Get('employer/applications/:id')
   @Roles(UserRole.EMPLOYER)
   candidate(@CurrentUser('id') employerId: string, @Param('id') id: string) {
-    return this.workflow.getCandidate(employerId, id);
+    return this.workflow.getCandidateDetail(employerId, id);
   }
 
   @Patch('employer/applications/:id/viewed')

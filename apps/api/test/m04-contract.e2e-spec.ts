@@ -78,6 +78,20 @@ describe('M04 API contract with fixture adapters', () => {
       .send({ scheduledAt: 'not-a-date', mode: 'ONLINE', locationOrLink: 'https://example.org' })
       .expect(400);
     expect(workflow.invite).not.toHaveBeenCalled();
+    await request(app.getHttpServer()).post('/api/v1/employer/applications/app-1/interviews')
+      .set('x-test-user', 'employer-a').set('x-test-role', 'EMPLOYER')
+      .send({ scheduledAt: '2026-12-01T10:00:00', mode: 'ONLINE', locationOrLink: 'https://example.org' })
+      .expect(400);
+  });
+
+  it('transforms and validates candidate pagination and sort query', async () => {
+    workflow.listCandidates.mockResolvedValue({ data: [], meta: { page: 2, pageSize: 10, total: 0, totalPages: 0 } });
+    await request(app.getHttpServer()).get('/api/v1/employer/jobs/job-a/applications?sort=desc&page=2&pageSize=10')
+      .set('x-test-user', 'employer-a').set('x-test-role', 'EMPLOYER')
+      .expect(200);
+    expect(workflow.listCandidates).toHaveBeenCalledWith('employer-a', 'job-a', {
+      sort: 'desc', page: 2, pageSize: 10,
+    });
   });
 
   it('maps QUOTA_EXCEEDED to HTTP 409 with explicit error code (S3-M04-03)', async () => {
