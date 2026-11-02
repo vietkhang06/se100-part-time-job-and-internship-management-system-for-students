@@ -3,6 +3,7 @@
 Tài liệu này xác định ma trận kiểm thử bảo mật liên phân hệ (Cross-module Security Test Matrix) chính thức cho nhiệm vụ **S2-M01-05**, đóng vai trò nguồn chân lý (Single Source of Truth) giữa Backend (`apps/api`), Gói hợp đồng dùng chung (`packages/contracts`), và hệ thống kiểm thử tự động E2E.
 
 - **Mã nhiệm vụ:** S2-M01-05 — Cross-module Authorization
+- **Bổ sung:** S3-M01-03 — Protect `GET /api/v1/users/:id` (ca T24–T29 bên dưới)
 - **Phân hệ bao phủ:** M01 (Account & RBAC), M02 (Student Profile & CV), M03 (Employer & Job Ownership), M04 (Application & Interview Flow)
 - **Hợp đồng quy chiếu:**
   - **C-01 (Auth Contract):** Định danh người dùng, JWT token payload, trạng thái tài khoản (`UserStatus`), chuẩn lỗi `ApiErrorResponse`.
@@ -11,6 +12,21 @@ Tài liệu này xác định ma trận kiểm thử bảo mật liên phân h�
   - **C-04 (Privacy & Safe View Contract):** Nhà tuyển dụng không có quyền gọi trực tiếp các endpoint CV của sinh viên; chỉ xem CV qua bản chụp gắn với đơn ứng tuyển.
   - **C-05 (Ownership Verification & Anti-IDOR):** Trích xuất định danh `userId` an toàn từ AuthContext JWT (`req.user.id`). Thao tác trái phép trên tài nguyên của người khác trả về `404 Not Found` (`CV_NOT_FOUND` / `NOT_FOUND`) để ngăn chặn việc dò quét định danh (ID harvesting).
   - **M04 Application Contract:** Ứng viên chỉ xem và thao tác trên đơn ứng tuyển của mình; Nhà tuyển dụng chỉ xem và xử lý ứng viên của tin tuyển dụng do doanh nghiệp mình trực tiếp quản lý.
+
+---
+
+## 4. Bổ sung kiểm thử bảo mật cho `GET /api/v1/users/:id` (S3-M01-03)
+
+Route dùng `JwtAuthGuard` và principal `AuthContext` đã được xác minh. Người dùng được xem tài khoản của chính mình; chỉ `ADMIN` được xem tài khoản khác. Từ chối cross-account cho các vai trò khác trả `403 FORBIDDEN` trước khi truy vấn repository. Do đó, 403 áp dụng cho mọi ID đích và không phân biệt ID có tồn tại hay không. Tài khoản đích không tồn tại trả 404 sau khi quyền truy cập đã được cho phép. Response chỉ gồm `id`, `email`, `fullName`, `role`, `status`, `emailVerified`.
+
+| Mã Case | Tuyến đường | Tác nhân / tình huống | Đơn vị thực thi | Kết quả mong đợi |
+| :---: | :--- | :--- | :--- | :--- |
+| **T24** | `GET /api/v1/users/:id` | Khách vãng lai, không có JWT | `JwtAuthGuard` | 401 `UNAUTHORIZED` |
+| **T25** | `GET /api/v1/users/:id` | JWT sai chữ ký/định dạng | `JwtAuthGuard` | 401 `UNAUTHORIZED` |
+| **T26** | `GET /api/v1/users/:id` | Mọi vai trò xem tài khoản có ID trùng với `AuthContext.id` | `GetUserByIdUseCase` | 200; đúng allowlist response |
+| **T27** | `GET /api/v1/users/:id` | `STUDENT`, `EMPLOYER`, hoặc `MODERATOR` xem ID khác; cố giả mạo role qua header/query | `GetUserByIdUseCase` | 403 `FORBIDDEN`; repository không được gọi |
+| **T28** | `GET /api/v1/users/:id` | `ADMIN` xem ID tài khoản khác | `GetUserByIdUseCase` | 200; đúng allowlist response |
+| **T29** | `GET /api/v1/users/:id` | `ADMIN` xem ID hợp lệ nhưng không tồn tại | `GetUserByIdUseCase` | 404 Not Found |
 
 ---
 

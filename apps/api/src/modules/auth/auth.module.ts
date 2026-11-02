@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { JwtModule, JwtModuleOptions, JwtService } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -49,16 +49,13 @@ export function parseJwtExpiration(value: string | undefined): JwtExpiration {
 @Module({
   imports: [
     DatabaseModule,
-    UsersModule,
+    forwardRef(() => UsersModule),
     MailModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>(
-          'JWT_ACCESS_SECRET',
-          'replace_with_long_random_access_secret',
-        ),
+        secret: configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
         signOptions: {
           expiresIn: parseJwtExpiration(
             configService.get<string>('JWT_ACCESS_EXPIRES_IN', '15m'),
