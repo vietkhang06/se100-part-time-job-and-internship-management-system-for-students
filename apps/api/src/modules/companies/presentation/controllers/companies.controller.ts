@@ -10,9 +10,13 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
+  BadRequestException,
   Inject,
   Optional,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiOperation,
@@ -27,6 +31,8 @@ import {
   CompanyErrorCode,
   PublicCompanyListResponseDto,
   PublicCompanyResponseDto,
+  FileAssetDto,
+  FileAssetStatus,
 } from '@campusjob/contracts';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { RolesGuard } from '../../../../shared/guards/roles.guard';
@@ -46,6 +52,7 @@ import { ResubmitCompanyVerificationUseCase } from '../../application/use-cases/
 import { GetCompanyVerificationHistoryUseCase } from '../../application/use-cases/get-company-verification-history.use-case';
 import { SearchPublicCompaniesUseCase } from '../../application/use-cases/search-public-companies.use-case';
 import { GetPublicCompanyDetailUseCase } from '../../application/use-cases/get-public-company-detail.use-case';
+import { FileAssetService } from '../../../../shared/storage/file-asset.service';
 import {
   ICompanyRepository,
   COMPANY_REPOSITORY_TOKEN,
@@ -57,6 +64,7 @@ import {
  * S4-M03-01: Quản lý hồ sơ doanh nghiệp và kiểm tra quyền CompanyMember/owner.
  * S4-M03-02: Quy trình xác thực doanh nghiệp (Admin-only decision, resubmit preserving history).
  * S5-M03-04: Danh sách và chi tiết doanh nghiệp công khai (UC15, UC16).
+ * S7-M03-02: Tải lên tài liệu pháp lý cho hồ sơ doanh nghiệp (PDF/PNG/JPEG).
  */
 @ApiTags('Companies')
 @ApiBearerAuth()
@@ -76,6 +84,8 @@ export class CompaniesController {
     private readonly searchPublicCompaniesUseCase?: SearchPublicCompaniesUseCase,
     @Optional()
     private readonly getPublicCompanyDetailUseCase?: GetPublicCompanyDetailUseCase,
+    @Optional()
+    private readonly fileAssetService?: FileAssetService,
   ) {}
 
   /**
@@ -206,6 +216,87 @@ export class CompaniesController {
     @Body() dto: ResubmitVerificationDto,
   ): Promise<CompanyProfileResponseDto> {
     return this.resubmitVerificationUseCase.execute(userId, dto);
+  }
+
+  /**
+   * S7-M03-02: Tải lên tài liệu pháp lý cho doanh nghiệp (PDF/PNG/JPEG)
+   * POST /api/v1/companies/upload-document
+   */
+  @Post(['upload-document', 'documents/upload'])
+  @HttpCode(HttpStatus.CREATED)
+  @Roles(UserRole.EMPLOYER)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+      fileFilter: (_req, file, callback) => {
+        if (!file) {
+          return callback(
+            new BadRequestException('Vui lòng chọn tệp tài liệu để tải lên.'),
+            false,
+          );
+        }
+        const ext = (file.originalname || '').toLowerCase();
+        const mime = (file.mimetype || '').toLowerCase();
+        const isAllowedExt =
+          ext.endsWith('.pdf') ||
+          ext.endsWith('.png') ||
+          ext.endsWith('.jpg') ||
+          ext.endsWith('.jpeg');
+        const isAllowedMime = [
+          'application/pdf',
+          'image/png',
+          'image/jpeg',
+          'image/jpg',
+          'application/octet-stream',
+        ].includes(mime);
+        if (!isAllowedExt || !isAllowedMime) {
+          return callback(
+            new BadRequestException(
+              'Định dạng tệp không được hỗ trợ. Hệ thống chỉ chấp nhận PDF hoặc ảnh PNG/JPG.',
+            ),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  @ApiOperation({
+    summary: 'Tải lên tài liệu pháp lý doanh nghiệp để lấy fileAssetId',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Tải lên thành công, trả về metadata FileAsset',
+  })
+  async uploadDocument(
+    @CurrentUser('id') userId: string,
+    @UploadedFile() file: any,
+  ): Promise<FileAssetDto> {
+    if (!file) {
+      throw new BadRequestException('Vui lòng chọn tệp tài liệu để tải lên.');
+    }
+    if (!this.fileAssetService) {
+      throw new BadRequestException('Dịch vụ lưu trữ tệp chưa sẵn sàng.');
+    }
+    const asset = await this.fileAssetService.storeFileAsset({
+      buffer: file.buffer,
+      originalFilename: file.originalname,
+      mimeType: file.mimetype,
+      ownerUserId: userId,
+      status: FileAssetStatus.PERMANENT,
+    });
+    return {
+      id: asset.id,
+      ownerUserId: asset.ownerUserId,
+      originalName: asset.originalName,
+      mimeType: asset.mimeType,
+      sizeBytes: Number(asset.sizeBytes),
+      checksumSha256: asset.checksumSha256,
+      storageKey: asset.storageKey,
+      status: asset.status as FileAssetStatus,
+      uploadedAt: asset.uploadedAt.toISOString(),
+      updatedAt: asset.updatedAt.toISOString(),
+    };
   }
 
   /**

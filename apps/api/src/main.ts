@@ -14,6 +14,16 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get<number>('API_PORT', 8080);
   const webUrl = configService.get<string>('WEB_URL', 'http://localhost:3000');
+  const allowedOrigins = webUrl
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  // In development, also permit port 3001 if port 3000 was occupied
+  if (configService.get<string>('NODE_ENV', 'development') === 'development') {
+    if (!allowedOrigins.includes('http://localhost:3000')) allowedOrigins.push('http://localhost:3000');
+    if (!allowedOrigins.includes('http://localhost:3001')) allowedOrigins.push('http://localhost:3001');
+  }
 
   // Security Middleware
   app.use(helmet());
@@ -21,7 +31,7 @@ async function bootstrap() {
 
   // CORS
   app.enableCors({
-    origin: [webUrl],
+    origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id', 'x-correlation-id'],
@@ -56,6 +66,6 @@ async function bootstrap() {
   await app.listen(port);
   logger.log(`CampusJob API running on http://localhost:${port}/api/v1`);
   logger.log(`Swagger documentation available at http://localhost:${port}/docs`);
+  logger.log(`CORS enabled for origins: ${allowedOrigins.join(', ')}`);
 }
-
 bootstrap();

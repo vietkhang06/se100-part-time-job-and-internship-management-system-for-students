@@ -37,6 +37,20 @@ describe('CompaniesController', () => {
 
     const mockFileAssetService = {
       verifyOwnership: jest.fn().mockResolvedValue({ id: 'file-1' }),
+      storeFileAsset: jest.fn().mockImplementation((opts: any) =>
+        Promise.resolve({
+          id: 'uploaded-asset-1',
+          ownerUserId: opts.ownerUserId,
+          originalName: opts.originalFilename || null,
+          mimeType: opts.mimeType,
+          sizeBytes: 1024,
+          checksumSha256: 'sha256-mock',
+          storageKey: 'key-1.pdf',
+          status: 'PERMANENT',
+          uploadedAt: new Date(),
+          updatedAt: new Date(),
+        }),
+      ),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -143,5 +157,19 @@ describe('CompaniesController', () => {
       UserRole.EMPLOYER,
     );
     expect(historyRes.data.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('should allow Employer to upload legal verification document (S7-M03-02)', async () => {
+    const mockFile = {
+      buffer: Buffer.from('mock-file-data'),
+      originalname: 'license.pdf',
+      mimetype: 'application/pdf',
+      size: 1024,
+    };
+    const res = await controller.uploadDocument(employerUserId, mockFile);
+    expect(res.id).toBe('uploaded-asset-1');
+    expect(res.originalName).toBe('license.pdf');
+    expect(res.mimeType).toBe('application/pdf');
+    expect(res.status).toBe('PERMANENT');
   });
 });

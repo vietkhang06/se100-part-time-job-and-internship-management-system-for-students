@@ -54,9 +54,13 @@ export async function apiClient<T>(
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
+
+  // Only set Content-Type: application/json when request body is present and not FormData
+  if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   if (inMemoryAccessToken) {
     headers['Authorization'] = `Bearer ${inMemoryAccessToken}`;
@@ -65,7 +69,7 @@ export async function apiClient<T>(
   const response = await fetch(url, {
     ...options,
     headers,
-    credentials: 'include', // for HttpOnly refresh cookie
+    credentials: options.credentials ?? 'include', // for HttpOnly refresh cookie
   });
 
   if (!response.ok) {
