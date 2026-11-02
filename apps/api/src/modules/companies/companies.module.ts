@@ -1,3 +1,18 @@
+import { MailModule } from '../../shared/mail/mail.module';
+import { SavedJobsController } from './presentation/controllers/saved-jobs.controller';
+import { AdminJobsController } from './presentation/controllers/admin-jobs.controller';
+import { SaveJobUseCase } from './application/use-cases/save-job.use-case';
+import { UnsaveJobUseCase } from './application/use-cases/unsave-job.use-case';
+import { ListSavedJobsUseCase } from './application/use-cases/list-saved-jobs.use-case';
+import { GetSavedJobIdsUseCase } from './application/use-cases/get-saved-job-ids.use-case';
+import { GetAdminJobMetricsUseCase } from './application/use-cases/get-admin-job-metrics.use-case';
+import { JobExpirySchedulerService } from './application/services/job-expiry-scheduler.service';
+import { SAVED_JOB_REPOSITORY_TOKEN } from './domain/repositories/saved-job.repository.interface';
+import { JOB_EXPIRY_REMINDER_LOG_REPOSITORY_TOKEN } from './domain/repositories/job-expiry-reminder-log.repository.interface';
+import { JOB_EXPIRY_NOTIFIER_TOKEN } from './domain/ports/job-expiry-notifier.port';
+import { PrismaSavedJobRepository } from './infrastructure/persistence/prisma-saved-job.repository';
+import { PrismaJobExpiryReminderLogRepository } from './infrastructure/persistence/prisma-job-expiry-reminder-log.repository';
+import { JobExpiryEmailNotifierAdapter } from './infrastructure/adapters/job-expiry-email-notifier.adapter';
 import { Module, OnModuleInit, Optional } from '@nestjs/common';
 import { ModerationTargetType } from '@campusjob/contracts';
 import { DatabaseModule } from '../../shared/database/database.module';
@@ -58,13 +73,15 @@ import { CompanyDirectoryAdapter } from './infrastructure/adapters/company-direc
 import { M04_JOB_SOURCE } from '../applications/m04.module';
 
 @Module({
-  imports: [DatabaseModule, StorageModule, ModerationModule],
+  imports: [DatabaseModule, StorageModule, ModerationModule, MailModule],
   controllers: [
     CompaniesController,
     CompanyBranchesController,
     JobsController,
     PublicJobsController,
     PublicCompaniesController,
+    SavedJobsController,
+    AdminJobsController,
   ],
   providers: [
     GetCompanyProfileUseCase,
@@ -93,6 +110,24 @@ import { M04_JOB_SOURCE } from '../applications/m04.module';
     GetPublicJobDetailUseCase,
     JobAccessSourceAdapter,
     CompanyDirectoryAdapter,
+    SaveJobUseCase,
+    UnsaveJobUseCase,
+    ListSavedJobsUseCase,
+    GetSavedJobIdsUseCase,
+    GetAdminJobMetricsUseCase,
+    JobExpirySchedulerService,
+    {
+      provide: SAVED_JOB_REPOSITORY_TOKEN,
+      useClass: PrismaSavedJobRepository,
+    },
+    {
+      provide: JOB_EXPIRY_REMINDER_LOG_REPOSITORY_TOKEN,
+      useClass: PrismaJobExpiryReminderLogRepository,
+    },
+    {
+      provide: JOB_EXPIRY_NOTIFIER_TOKEN,
+      useClass: JobExpiryEmailNotifierAdapter,
+    },
     {
       provide: COMPANY_REPOSITORY_TOKEN,
       useClass: PrismaCompanyRepository,
@@ -161,6 +196,15 @@ import { M04_JOB_SOURCE } from '../applications/m04.module';
     JOB_POSTING_REPOSITORY_TOKEN,
     JOB_BRANCH_USAGE_CHECKER_TOKEN,
     JOB_MODERATION_QUEUE_PORT_TOKEN,
+    SaveJobUseCase,
+    UnsaveJobUseCase,
+    ListSavedJobsUseCase,
+    GetSavedJobIdsUseCase,
+    GetAdminJobMetricsUseCase,
+    JobExpirySchedulerService,
+    SAVED_JOB_REPOSITORY_TOKEN,
+    JOB_EXPIRY_REMINDER_LOG_REPOSITORY_TOKEN,
+    JOB_EXPIRY_NOTIFIER_TOKEN,
   ],
 })
 export class CompaniesModule implements OnModuleInit {

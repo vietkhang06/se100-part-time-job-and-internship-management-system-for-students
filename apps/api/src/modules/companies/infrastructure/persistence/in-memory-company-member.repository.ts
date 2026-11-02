@@ -1,6 +1,7 @@
 import { ICompanyMemberRepository } from '../../domain/repositories/company-member.repository.interface';
 import { CompanyMemberEntity } from '../../domain/entities/company-member.entity';
 import { CompanyMemberRole, CompanyMemberStatus } from '@campusjob/contracts';
+import { CompanyMemberWithUser } from '../../domain/repositories/company-member.repository.interface';
 
 export class InMemoryCompanyMemberRepository
   implements ICompanyMemberRepository
@@ -17,6 +18,24 @@ export class InMemoryCompanyMemberRepository
       }
     }
     return null;
+  }
+
+  async findActiveMembersByCompanyId(
+    companyId: string,
+  ): Promise<CompanyMemberWithUser[]> {
+    const list: CompanyMemberWithUser[] = [];
+    for (const m of this.members.values()) {
+      if (m.companyId === companyId && m.status === CompanyMemberStatus.ACTIVE) {
+        list.push({
+          member: this.clone(m),
+          user: {
+            email: `user-${m.userId}@example.com`,
+            fullName: `Member ${m.userId}`,
+          },
+        });
+      }
+    }
+    return list;
   }
 
   async findActiveByUserId(userId: string): Promise<CompanyMemberEntity | null> {

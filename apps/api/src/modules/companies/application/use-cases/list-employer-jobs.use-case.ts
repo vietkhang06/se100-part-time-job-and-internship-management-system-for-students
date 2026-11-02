@@ -15,6 +15,10 @@ import {
   ICompanyMemberRepository,
   COMPANY_MEMBER_REPOSITORY_TOKEN,
 } from '../../domain/repositories/company-member.repository.interface';
+import {
+  ISavedJobRepository,
+  SAVED_JOB_REPOSITORY_TOKEN,
+} from '../../domain/repositories/saved-job.repository.interface';
 import { JobPostingQueryDto } from '../dto/job-posting-query.dto';
 
 @Injectable()
@@ -24,6 +28,8 @@ export class ListEmployerJobsUseCase {
     private readonly jobRepo: IJobPostingRepository,
     @Inject(COMPANY_MEMBER_REPOSITORY_TOKEN)
     private readonly memberRepo: ICompanyMemberRepository,
+    @Inject(SAVED_JOB_REPOSITORY_TOKEN)
+    private readonly savedJobRepo: ISavedJobRepository,
   ) {}
 
   async execute(
@@ -52,8 +58,13 @@ export class ListEmployerJobsUseCase {
       },
     );
 
+    const jobIds = jobs.map((j) => j.id);
+    const saveCounts = await this.savedJobRepo.countByJobIds(jobIds);
+
     return {
-      jobs: jobs.map((j) => j.toDto()),
+      jobs: jobs.map((j) =>
+        j.toDto({ saveCount: saveCounts[j.id] ?? 0 }),
+      ),
       total,
       page,
       limit,

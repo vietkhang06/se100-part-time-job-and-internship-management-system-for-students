@@ -79,4 +79,30 @@ export interface IJobPostingRepository {
     options: SearchPublicJobsOptions,
   ): Promise<{ jobs: PublicJobWithDetails[]; total: number }>;
   findPublicById(id: string): Promise<PublicJobWithDetails | null>;
+  recordPublicView(jobId: string, viewerKey: string): Promise<boolean>;
+  closeExpiredJobs(now?: Date): Promise<number>;
+  findExpiringJobs(now: Date, withinDays: number): Promise<JobPostingEntity[]>;
+  getAdminJobMetrics(): Promise<{
+    totalJobs: number;
+    totalViews: number;
+    totalSaves: number;
+    jobs: Array<{
+      jobId: string;
+      title: string;
+      companyId: string;
+      companyName: string;
+      status: JobStatus;
+      viewCount: number;
+      saveCount: number;
+    }>;
+  }>;
+  getSingleJobMetrics(jobId: string): Promise<{
+    jobId: string;
+    title: string;
+    companyId: string;
+    companyName: string;
+    status: JobStatus;
+    viewCount: number;
+    saveCount: number;
+  } | null>;
 }

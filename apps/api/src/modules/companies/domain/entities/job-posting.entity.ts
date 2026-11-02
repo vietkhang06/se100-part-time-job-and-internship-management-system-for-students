@@ -134,7 +134,7 @@ export class JobPostingEntity {
     }
   }
 
-  toDto(): JobPostingDto {
+  toDto(extras?: { saveCount?: number }): JobPostingDto {
     return {
       id: this.id,
       companyId: this.companyId,
@@ -154,6 +154,7 @@ export class JobPostingEntity {
       deadline: this.deadline.toISOString(),
       status: this.status,
       viewCount: this.viewCount,
+      saveCount: extras?.saveCount,
       rejectionReason: this.rejectionReason,
       rejectedAt: this.rejectedAt ? this.rejectedAt.toISOString() : null,
       hiddenByModeration: this.hiddenByModeration,
@@ -180,7 +181,6 @@ export class JobPostingEntity {
       benefits: this.benefits,
       deadline: this.deadline.toISOString(),
       status: this.status,
-      viewCount: this.viewCount,
       createdAt: this.createdAt.toISOString(),
       updatedAt: this.updatedAt.toISOString(),
       companyName: extras?.companyName,

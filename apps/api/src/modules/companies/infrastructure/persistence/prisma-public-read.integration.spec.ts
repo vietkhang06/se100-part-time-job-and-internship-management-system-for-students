@@ -35,7 +35,7 @@ import { JobAccessSourceAdapter } from '../adapters/job-access-source.adapter';
 import { M04_JOB_SOURCE } from '../../../applications/m04.module';
 
 const databaseUrl =
-  process.env.DATABASE_URL ||
+  process.env.SCRATCH_DATABASE_URL ||
   'postgresql://campusjob:campusjob_dev@localhost:5435/campusjob_m03_scratch?schema=public';
 
 process.env.DATABASE_URL = databaseUrl;
@@ -90,7 +90,7 @@ describe('Prisma Public Read & JobAccessSource (Real PostgreSQL Scratch DB)', ()
 
     try {
       await prisma.$connect();
-      await prisma.$executeRaw`SELECT 1`;
+      await prisma.$executeRaw`SELECT 1 FROM "User" LIMIT 1`;
       isDbAvailable = true;
     } catch (err) {
       console.warn('Scratch database not available on port 5435, skipping real-DB integration tests.', err);

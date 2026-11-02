@@ -217,6 +217,109 @@ export class InMemoryJobPostingRepository
     };
   }
 
+  private views: Set<string> = new Set();
+
+  async recordPublicView(jobId: string, viewerKey: string): Promise<boolean> {
+    const job = this.jobs.get(jobId);
+    if (!job) return false;
+    const today = new Date().toISOString().slice(0, 10);
+    const logKey = `${jobId}:${viewerKey}:${today}`;
+    if (this.views.has(logKey)) {
+      return false;
+    }
+    this.views.add(logKey);
+    (job as any).viewCount = (job.viewCount || 0) + 1;
+    return true;
+  }
+
+  async closeExpiredJobs(): Promise<number> {
+    const now = new Date();
+    let count = 0;
+    for (const job of this.jobs.values()) {
+      if (job.status !== JobStatus.CLOSED && job.deadline.getTime() < now.getTime()) {
+        (job as any).status = JobStatus.CLOSED;
+        count++;
+      }
+    }
+    return count;
+  }
+
+  async findExpiringJobs(
+    now: Date,
+    withinDays: number,
+  ): Promise<JobPostingEntity[]> {
+    const threshold = new Date(now.getTime() + withinDays * 24 * 60 * 60 * 1000);
+    const expiring: JobPostingEntity[] = [];
+    for (const job of this.jobs.values()) {
+      if (
+        job.status === JobStatus.OPEN &&
+        job.deadline.getTime() > now.getTime() &&
+        job.deadline.getTime() <= threshold.getTime()
+      ) {
+        expiring.push(new JobPostingEntity(job));
+      }
+    }
+    return expiring;
+  }
+
+  async getAdminJobMetrics(): Promise<{
+    totalJobs: number;
+    totalViews: number;
+    totalSaves: number;
+    jobs: {
+      jobId: string;
+      title: string;
+      companyId: string;
+      companyName: string;
+      status: JobStatus;
+      viewCount: number;
+      saveCount: number;
+    }[];
+  }> {
+    const all = Array.from(this.jobs.values());
+    const totalJobs = all.length;
+    const totalViews = all.reduce((sum, j) => sum + (j.viewCount || 0), 0);
+    const jobs = all.map((j) => ({
+      jobId: j.id,
+      title: j.title,
+      companyId: j.companyId,
+      companyName: 'Test Company',
+      status: j.status,
+      viewCount: j.viewCount || 0,
+      saveCount: 0,
+    }));
+    return {
+      totalJobs,
+      totalViews,
+      totalSaves: 0,
+      jobs,
+    };
+  }
+
+  async getSingleJobMetrics(
+    jobId: string,
+  ): Promise<{
+    jobId: string;
+    title: string;
+    companyId: string;
+    companyName: string;
+    status: JobStatus;
+    viewCount: number;
+    saveCount: number;
+  } | null> {
+    const job = this.jobs.get(jobId);
+    if (!job) return null;
+    return {
+      jobId: job.id,
+      title: job.title,
+      companyId: job.companyId,
+      companyName: 'Test Company',
+      status: job.status,
+      viewCount: job.viewCount || 0,
+      saveCount: 0,
+    };
+  }
+
   // Test helpers
   clear(): void {
     this.jobs.clear();

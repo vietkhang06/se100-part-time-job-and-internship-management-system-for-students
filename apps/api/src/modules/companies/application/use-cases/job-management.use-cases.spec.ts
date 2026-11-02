@@ -13,6 +13,7 @@ import {
 } from '@campusjob/contracts';
 import { InMemoryCompanyRepository } from '../../infrastructure/persistence/in-memory-company.repository';
 import { InMemoryCompanyMemberRepository } from '../../infrastructure/persistence/in-memory-company-member.repository';
+import { InMemorySavedJobRepository } from '../../infrastructure/persistence/in-memory-saved-job.repository';
 import { InMemoryCompanyBranchRepository } from '../../infrastructure/persistence/in-memory-company-branch.repository';
 import { InMemoryJobPostingRepository } from '../../infrastructure/persistence/in-memory-job-posting.repository';
 import { CreateJobPostingUseCase } from './create-job-posting.use-case';
@@ -24,6 +25,7 @@ import { CreateJobPostingDto } from '../dto/create-job-posting.dto';
 describe('S4-M03-04: Employer Job Management API & FR-08 Validation', () => {
   let companyRepo: InMemoryCompanyRepository;
   let memberRepo: InMemoryCompanyMemberRepository;
+  let savedJobRepo: InMemorySavedJobRepository;
   let branchRepo: InMemoryCompanyBranchRepository;
   let jobRepo: InMemoryJobPostingRepository;
 
@@ -42,13 +44,14 @@ describe('S4-M03-04: Employer Job Management API & FR-08 Validation', () => {
   beforeEach(async () => {
     companyRepo = new InMemoryCompanyRepository();
     memberRepo = new InMemoryCompanyMemberRepository();
+    savedJobRepo = new InMemorySavedJobRepository();
     branchRepo = new InMemoryCompanyBranchRepository();
     jobRepo = new InMemoryJobPostingRepository();
 
     createJobUseCase = new CreateJobPostingUseCase(jobRepo, memberRepo, branchRepo);
     updateJobUseCase = new UpdateJobPostingUseCase(jobRepo, memberRepo, branchRepo);
-    listJobsUseCase = new ListEmployerJobsUseCase(jobRepo, memberRepo);
-    getJobDetailUseCase = new GetEmployerJobDetailUseCase(jobRepo, memberRepo);
+    listJobsUseCase = new ListEmployerJobsUseCase(jobRepo, memberRepo, savedJobRepo);
+    getJobDetailUseCase = new GetEmployerJobDetailUseCase(jobRepo, memberRepo, savedJobRepo);
 
     // Setup Company A & Owner
     const companyA = await companyRepo.create({
