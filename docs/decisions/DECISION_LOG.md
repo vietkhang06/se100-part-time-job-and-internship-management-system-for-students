@@ -16,3 +16,4 @@
 | ADR-012 | Payment và messaging thuộc giai đoạn 2 | Chấp thuận |
 | ADR-013 | Không chạy seed trong production | Chấp thuận |
 | ADR-014 | Chuẩn hóa AuthContext (C-01) gồm 8 trường, ủy quyền qua RBAC và Resource Ownership, không dùng permissions array ở Sprint 2 | Chấp thuận |
+| ADR-015 | Chính sách chế tài M05: đếm "lần vi phạm" = báo cáo SUBSTANTIATED trong 180 ngày; lần 1 ghi nhận, lần 2 cảnh cáo, từ lần 3 khóa ứng tuyển 30–90 ngày; chỉ Admin quyết định cuối. Chi tiết: docs/api/M05_SANCTION_POLICY_DECISION.md | Đề xuất (chờ Owner/PM duyệt) |
