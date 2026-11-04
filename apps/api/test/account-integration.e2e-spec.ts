@@ -184,6 +184,17 @@ describe('S2-M01-06: Account Integration (E2E & Contract-Boundary)', () => {
       }
       throw new M04WorkflowError('FORBIDDEN');
     },
+    async getApplicationContext(jobId: string) {
+      if (jobId !== testJobIdA) throw new M04WorkflowError('NOT_FOUND');
+      return {
+        id: jobId, title: 'Account integration job', companyId: 'account-int-company',
+        companyName: 'Account Integration Company', requiredSkills: [], targetCount: 1,
+        managerUserIds: [accounts.employerA.id],
+      };
+    },
+    async suggestClosingWhenFilled(): Promise<boolean> {
+      return false;
+    },
   };
 
   async function loginAndGetToken(email: string): Promise<string> {
@@ -599,9 +610,10 @@ describe('S2-M01-06: Account Integration (E2E & Contract-Boundary)', () => {
         .set('Authorization', `Bearer ${accounts.employerA.token}`)
         .expect(200);
 
-      expect(Array.isArray(res.body)).toBe(true);
-      const appIds = res.body.map((a: { id: string }) => a.id);
+      expect(Array.isArray(res.body.data)).toBe(true);
+      const appIds = res.body.data.map((a: { id: string }) => a.id);
       expect(appIds).toContain(createdApplicationIdA);
+      expect(res.body.meta).toEqual(expect.objectContaining({ page: 1, pageSize: 20 }));
     });
   });
 });

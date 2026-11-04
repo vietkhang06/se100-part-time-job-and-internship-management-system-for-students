@@ -1,20 +1,29 @@
-import { CvSnapshotSource, JobAccessSource, M04Repository, M04WorkflowError, ApplicationRecord, InterviewRecord } from './m04-ports';
+import { Logger } from '@nestjs/common';
+import { NotificationEventType, UserRole } from '@campusjob/contracts';
+import {
+  CvSnapshotSource, JobAccessSource, M04EventDispatcher, M04EventDraft, M04Repository,
+  M04WorkflowError, ApplicationRecord, InterviewRecord,
+} from './m04-ports';
 import { ApplicationStatus, nextApplicationStatus } from '../domain/application-state';
 import { ApplicationSubmissionPolicyError, assertCanSubmitApplication } from '../domain/application-submission-policy';
-import { UserRole } from '@campusjob/contracts';
 import { InterviewMode, assertCanDecideReschedule, assertCanRecordInterviewResult, assertCanRequestReschedule, assertValidInterviewSchedule } from '../../interviews/domain/interview-rules';
+import { assessMatchingScore } from '../domain/matching-score';
 
 /** M04 workflow. CV and Job decisions stay with the owning modules via ports. */
 export class M04Workflow {
+  private readonly logger = new Logger(M04Workflow.name);
+
   constructor(
     private readonly repository: M04Repository,
     private readonly cvs: CvSnapshotSource,
     private readonly jobs: JobAccessSource,
     private readonly now: () => Date = () => new Date(),
+    private readonly events: M04EventDispatcher = { dispatchPending: async () => undefined },
   ) {}
 
   async submit(studentId: string, jobId: string, cvId: string, coverLetter?: string): Promise<ApplicationRecord> {
     await this.jobs.assertAcceptingApplications(jobId);
+    const job = await this.jobs.getApplicationContext(jobId);
     const cvSnapshot = await this.cvs.getOwnedSnapshot(studentId, cvId);
     if (cvSnapshot.studentId !== studentId || cvSnapshot.originalCvId !== cvId) {
       throw new M04WorkflowError('FORBIDDEN');
@@ -36,9 +45,14 @@ export class M04Workflow {
       }
       throw error;
     }
-    return this.repository.createApplication({
+    const application = await this.repository.createApplication({
       studentId, jobId, cvId, cvSnapshot, coverLetter: coverLetter?.trim() || null,
-    });
+    }, job.managerUserIds.map((recipientId) => this.event(
+      NotificationEventType.APPLICATION_SUBMITTED, 'APPLICATION', studentId, recipientId,
+      { jobId, jobTitle: job.title, companyId: job.companyId, companyName: job.companyName, studentName: cvSnapshot.fullName },
+    )));
+    await this.dispatchEvents();
+    return application;
   }
 
   listMine(studentId: string): Promise<ApplicationRecord[]> {
@@ -51,16 +65,47 @@ export class M04Workflow {
     return application;
   }
 
-  async withdraw(studentId: string, id: string): Promise<ApplicationRecord> {
+  async getMineDetail(studentId: string, id: string) {
     const application = await this.getMine(studentId, id);
-    const next = nextApplicationStatus(application.status, 'WITHDRAW', UserRole.STUDENT);
-    return this.repository.changeApplicationStatus({ id, expected: application.status, next, actorId: studentId });
+    return { ...application, history: await this.repository.getApplicationHistory(id) };
   }
 
-  async listCandidates(employerId: string, jobId: string): Promise<ApplicationRecord[]> {
+  async withdraw(studentId: string, id: string): Promise<ApplicationRecord> {
+    const application = await this.getMine(studentId, id);
+    const job = await this.jobs.getApplicationContext(application.jobId);
+    const next = nextApplicationStatus(application.status, 'WITHDRAW', UserRole.STUDENT);
+    const changed = await this.repository.changeApplicationStatus(
+      { id, expected: application.status, next, actorId: studentId },
+      job.managerUserIds.map((recipientId) => this.statusEvent(application, job.title, studentId, recipientId, next)),
+    );
+    await this.dispatchEvents();
+    return changed;
+  }
+
+  async listCandidates(
+    employerId: string,
+    jobId: string,
+    query: { sort?: 'asc' | 'desc'; page?: number; pageSize?: number } = {},
+  ) {
     await this.jobs.assertManagedBy(jobId, employerId);
+    const job = await this.jobs.getApplicationContext(jobId);
     const applications = await this.repository.listJobApplications(jobId);
-    return applications.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    const sort = query.sort ?? 'asc';
+    const page = Math.max(1, query.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 20));
+    const ordered = applications.sort((a, b) => {
+      const time = a.createdAt.getTime() - b.createdAt.getTime();
+      const stable = time === 0 ? a.id.localeCompare(b.id) : time;
+      return sort === 'asc' ? stable : -stable;
+    });
+    const data = ordered.slice((page - 1) * pageSize, page * pageSize).map((application) => ({
+      ...application,
+      matchingScore: assessMatchingScore({
+        cvSkills: application.cvSnapshot.skills,
+        requiredSkills: job.requiredSkills,
+      }),
+    }));
+    return { data, meta: { page, pageSize, total: ordered.length, totalPages: Math.ceil(ordered.length / pageSize) } };
   }
 
   async getCandidate(employerId: string, id: string): Promise<ApplicationRecord> {
@@ -69,29 +114,61 @@ export class M04Workflow {
     return application;
   }
 
+  async getCandidateDetail(employerId: string, id: string) {
+    const application = await this.getCandidate(employerId, id);
+    const job = await this.jobs.getApplicationContext(application.jobId);
+    return {
+      ...application,
+      history: await this.repository.getApplicationHistory(id),
+      matchingScore: assessMatchingScore({
+        cvSkills: application.cvSnapshot.skills,
+        requiredSkills: job.requiredSkills,
+      }),
+    };
+  }
+
   async markViewed(employerId: string, id: string): Promise<ApplicationRecord> {
     const application = await this.getCandidate(employerId, id);
+    const job = await this.jobs.getApplicationContext(application.jobId);
     const next = nextApplicationStatus(application.status, 'MARK_VIEWED', UserRole.EMPLOYER);
-    return this.repository.changeApplicationStatus({ id, expected: application.status, next, actorId: employerId });
+    const changed = await this.repository.changeApplicationStatus(
+      { id, expected: application.status, next, actorId: employerId },
+      [this.statusEvent(application, job.title, employerId, application.studentId, next)],
+    );
+    await this.dispatchEvents();
+    return changed;
   }
 
   async reject(employerId: string, id: string, reason: string): Promise<ApplicationRecord> {
     if (!reason?.trim()) throw new M04WorkflowError('INVALID_INPUT');
     const application = await this.getCandidate(employerId, id);
+    const job = await this.jobs.getApplicationContext(application.jobId);
     const next = nextApplicationStatus(application.status, 'REJECT', UserRole.EMPLOYER, reason.trim());
-    return this.repository.changeApplicationStatus({ id, expected: application.status, next, actorId: employerId, reason: reason.trim() });
+    const changed = await this.repository.changeApplicationStatus(
+      { id, expected: application.status, next, actorId: employerId, reason: reason.trim() },
+      [this.statusEvent(application, job.title, employerId, application.studentId, next, reason.trim())],
+    );
+    await this.dispatchEvents();
+    return changed;
   }
 
   async invite(employerId: string, id: string, input: {
     scheduledAt: Date; mode: InterviewMode; locationOrLink: string; message?: string;
   }): Promise<InterviewRecord> {
     const application = await this.getCandidate(employerId, id);
+    const job = await this.jobs.getApplicationContext(application.jobId);
     nextApplicationStatus(application.status, 'SCHEDULE_INTERVIEW', UserRole.EMPLOYER);
     assertValidInterviewSchedule(input.scheduledAt, input.mode, input.locationOrLink, this.now());
-    return this.repository.createInterview({
+    const interview = await this.repository.createInterview({
       applicationId: id, actorId: employerId, scheduledAt: input.scheduledAt,
       mode: input.mode, locationOrLink: input.locationOrLink.trim(), message: input.message?.trim() || null,
-    });
+    }, [this.event(
+      NotificationEventType.INTERVIEW_INVITED, 'INTERVIEW', employerId, application.studentId,
+      { jobId: application.jobId, jobTitle: job.title, companyId: job.companyId, companyName: job.companyName,
+        scheduledAt: input.scheduledAt.toISOString(), mode: input.mode, locationOrLink: input.locationOrLink.trim() },
+    )]);
+    await this.dispatchEvents();
+    return interview;
   }
 
   listMyInterviews(studentId: string): Promise<InterviewRecord[]> {
@@ -99,11 +176,21 @@ export class M04Workflow {
   }
 
   async confirmInterview(studentId: string, interviewId: string): Promise<InterviewRecord> {
-    const { interview } = await this.getMyInterview(studentId, interviewId);
+    const { interview, application } = await this.getMyInterview(studentId, interviewId);
     if (interview.confirmedAt || interview.result || interview.scheduledAt.getTime() <= this.now().getTime()) {
       throw new M04WorkflowError('INVALID_STATE');
     }
-    return this.repository.confirmInterview(interviewId, this.now());
+    const job = await this.jobs.getApplicationContext(application.jobId);
+    const confirmed = await this.repository.confirmInterview(
+      interviewId,
+      this.now(),
+      job.managerUserIds.map((recipientId) => this.event(
+        NotificationEventType.INTERVIEW_CONFIRMED, 'INTERVIEW', studentId, recipientId,
+        { jobId: application.jobId, jobTitle: job.title, scheduledAt: interview.scheduledAt.toISOString() },
+      )),
+    );
+    await this.dispatchEvents();
+    return confirmed;
   }
 
   async requestReschedule(studentId: string, interviewId: string, proposedAt: Date, message?: string) {
@@ -113,7 +200,16 @@ export class M04Workflow {
     }
     const existing = await this.repository.getChangeRequest(interviewId);
     assertCanRequestReschedule(existing ? 1 : 0, interview.scheduledAt, proposedAt, this.now());
-    return this.repository.createChangeRequest({ interviewId, proposedAt, message: message?.trim() || null });
+    const job = await this.jobs.getApplicationContext(application.jobId);
+    const request = await this.repository.createChangeRequest(
+      { interviewId, proposedAt, message: message?.trim() || null },
+      job.managerUserIds.map((recipientId) => this.event(
+        NotificationEventType.INTERVIEW_RESCHEDULE_REQUESTED, 'INTERVIEW_CHANGE_REQUEST', studentId, recipientId,
+        { jobId: application.jobId, jobTitle: job.title, proposedAt: proposedAt.toISOString(), reason: message?.trim() },
+      )),
+    );
+    await this.dispatchEvents();
+    return request;
   }
 
   async decideReschedule(employerId: string, interviewId: string, decision: 'APPROVED' | 'REJECTED') {
@@ -128,7 +224,17 @@ export class M04Workflow {
     if (decision === 'APPROVED' && request.proposedAt.getTime() <= this.now().getTime()) {
       throw new M04WorkflowError('INVALID_STATE');
     }
-    return this.repository.decideChangeRequest({ interviewId, decision, decidedBy: employerId, at: this.now() });
+    const job = await this.jobs.getApplicationContext(application.jobId);
+    const changed = await this.repository.decideChangeRequest(
+      { interviewId, decision, decidedBy: employerId, at: this.now() },
+      [this.event(
+        NotificationEventType.INTERVIEW_RESCHEDULE_RESOLVED, 'INTERVIEW_CHANGE_REQUEST', employerId,
+        application.studentId, { jobId: application.jobId, jobTitle: job.title, result: decision,
+          proposedAt: request.proposedAt.toISOString() },
+      )],
+    );
+    await this.dispatchEvents();
+    return changed;
   }
 
   async recordResult(employerId: string, interviewId: string, result: 'ACCEPTED' | 'REJECTED', reason?: string): Promise<InterviewRecord> {
@@ -138,7 +244,57 @@ export class M04Workflow {
     if (interview.result) throw new M04WorkflowError('INVALID_STATE');
     if (result === 'REJECTED' && !reason?.trim()) throw new M04WorkflowError('INVALID_INPUT');
     nextApplicationStatus(application.status, result === 'ACCEPTED' ? 'ACCEPT_AFTER_INTERVIEW' : 'REJECT_AFTER_INTERVIEW', UserRole.EMPLOYER, reason?.trim());
-    return this.repository.recordInterviewResult({ interviewId, result, actorId: employerId, at: this.now(), reason: reason?.trim() });
+    const job = await this.jobs.getApplicationContext(application.jobId);
+    const recorded = await this.repository.recordInterviewResult(
+      { interviewId, result, actorId: employerId, at: this.now(), reason: reason?.trim() },
+      [
+        this.event(NotificationEventType.INTERVIEW_RESULT_RECORDED, 'INTERVIEW', employerId, application.studentId,
+          { jobId: application.jobId, jobTitle: job.title, result, reason: reason?.trim() }),
+        this.statusEvent(application, job.title, employerId, application.studentId,
+          result === 'ACCEPTED' ? ApplicationStatus.ACCEPTED : ApplicationStatus.REJECTED, reason?.trim()),
+        ...(result === 'ACCEPTED' ? [{
+          eventType: 'JOB_CLOSE_SUGGESTED' as const,
+          entityType: 'APPLICATION' as const,
+          actorId: employerId,
+          recipientId: job.companyId,
+          payload: { jobId: application.jobId, targetCount: job.targetCount },
+        }] : []),
+      ],
+    );
+    await this.dispatchEvents();
+    return recorded;
+  }
+
+  private event(
+    eventType: NotificationEventType,
+    entityType: M04EventDraft['entityType'],
+    actorId: string,
+    recipientId: string,
+    payload: Readonly<Record<string, unknown>>,
+  ): M04EventDraft {
+    return { eventType, entityType, actorId, recipientId, payload };
+  }
+
+  private statusEvent(
+    application: ApplicationRecord,
+    jobTitle: string,
+    actorId: string,
+    recipientId: string,
+    status: ApplicationStatus,
+    reason?: string,
+  ): M04EventDraft {
+    return this.event(NotificationEventType.APPLICATION_STATUS_CHANGED, 'APPLICATION', actorId, recipientId, {
+      jobId: application.jobId, jobTitle, fromStatus: application.status, status, reason,
+    });
+  }
+
+  private async dispatchEvents(): Promise<void> {
+    try {
+      await this.events.dispatchPending();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`M04 outbox delivery deferred: ${message}`);
+    }
   }
 
   private async getMyInterview(studentId: string, interviewId: string) {

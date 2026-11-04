@@ -109,6 +109,17 @@ describe('S2-M02-06: M02 Integration Tests (UC11–UC12, UC31–UC35, UC37–UC3
     async assertManagedBy(): Promise<void> {
       return;
     },
+    async getApplicationContext(jobId: string) {
+      if (jobId !== testJobId) throw new M04WorkflowError('NOT_FOUND');
+      return {
+        id: jobId, title: 'M02 integration job', companyId: 'm02-int-company',
+        companyName: 'M02 Integration Company', requiredSkills: [], targetCount: 1,
+        managerUserIds: [],
+      };
+    },
+    async suggestClosingWhenFilled(): Promise<boolean> {
+      return false;
+    },
   };
 
   async function loginUser(email: string): Promise<string> {
@@ -499,7 +510,7 @@ describe('S2-M02-06: M02 Integration Tests (UC11–UC12, UC31–UC35, UC37–UC3
     it('INT-17: M04 nộp đơn thành công khi tiêu thụ CvSnapshotSource từ M02', async () => {
       // Sinh viên A nộp đơn ứng tuyển với cv1Id
       const application = await m04Workflow.submit(
-        accounts.studentA.profileId!,
+        accounts.studentA.id,
         testJobId,
         accounts.studentA.cv1Id!,
         'Em xin nộp đơn ứng tuyển vị trí Backend Intern',
@@ -507,7 +518,7 @@ describe('S2-M02-06: M02 Integration Tests (UC11–UC12, UC31–UC35, UC37–UC3
 
       expect(application).toBeDefined();
       expect(application.id).toBeDefined();
-      expect(application.studentId).toBe(accounts.studentA.profileId);
+      expect(application.studentId).toBe(accounts.studentA.id);
       expect(application.cvId).toBe(accounts.studentA.cv1Id);
 
       // Snapshot được M04 lưu giữ trong PostgreSQL
@@ -524,7 +535,7 @@ describe('S2-M02-06: M02 Integration Tests (UC11–UC12, UC31–UC35, UC37–UC3
       // Sinh viên A truyền cvId của sinh viên B
       await expect(
         m04Workflow.submit(
-          accounts.studentA.profileId!,
+          accounts.studentA.id,
           testJobId,
           accounts.studentB.cvId!,
           'Nộp đơn bằng CV người khác',
@@ -544,7 +555,7 @@ describe('S2-M02-06: M02 Integration Tests (UC11–UC12, UC31–UC35, UC37–UC3
         .expect(200);
 
       // 2. M04 truy vấn lại chi tiết đơn ứng tuyển của sinh viên A (UC37)
-      const appRecord = await m04Workflow.getMine(accounts.studentA.profileId!, createdApplicationId);
+      const appRecord = await m04Workflow.getMine(accounts.studentA.id, createdApplicationId);
 
       // 3. Khẳng định: Snapshot trong hồ sơ vẫn mang giá trị ban đầu tại thời điểm nộp đơn
       expect(appRecord.cvSnapshot.title).toBe('CV Backend Engineer - Student A');
@@ -560,7 +571,7 @@ describe('S2-M02-06: M02 Integration Tests (UC11–UC12, UC31–UC35, UC37–UC3
         .expect(200);
 
       // 2. Đơn ứng tuyển ban đầu gắn với cv1Id vẫn đọc được toàn bộ snapshot bình thường
-      const appRecord = await m04Workflow.getMine(accounts.studentA.profileId!, createdApplicationId);
+      const appRecord = await m04Workflow.getMine(accounts.studentA.id, createdApplicationId);
       expect(appRecord).toBeDefined();
       expect(appRecord.cvSnapshot.title).toBe('CV Backend Engineer - Student A');
       expect(appRecord.cvSnapshot.originalCvId).toBe(accounts.studentA.cv1Id);

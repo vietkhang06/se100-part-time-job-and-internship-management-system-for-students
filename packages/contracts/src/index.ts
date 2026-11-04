@@ -257,6 +257,7 @@ export enum NotificationEventType {
   INTERVIEW_CONFIRMED = 'INTERVIEW_CONFIRMED',
   INTERVIEW_RESCHEDULE_REQUESTED = 'INTERVIEW_RESCHEDULE_REQUESTED',
   INTERVIEW_RESCHEDULE_RESOLVED = 'INTERVIEW_RESCHEDULE_RESOLVED',
+  INTERVIEW_RESULT_RECORDED = 'INTERVIEW_RESULT_RECORDED',
   REPORT_RECEIVED = 'REPORT_RECEIVED',
   REPORT_RESOLVED = 'REPORT_RESOLVED',
   SANCTION_APPLIED = 'SANCTION_APPLIED',
@@ -766,6 +767,28 @@ export interface JobPostingDto {
   hiddenByModeration?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+/** C-07 view published by M03 for M04; consumers never query M03 tables. */
+export interface ApplicationJobContextDto {
+  id: string;
+  title: string;
+  companyId: string;
+  companyName: string;
+  requiredSkills: readonly string[];
+  targetCount: number;
+  managerUserIds: readonly string[];
+}
+
+export interface JobAccessSource {
+  assertAcceptingApplications(jobId: string): Promise<void>;
+  assertManagedBy(jobId: string, employerUserId: string): Promise<void>;
+  getApplicationContext(jobId: string): Promise<ApplicationJobContextDto>;
+  suggestClosingWhenFilled(input: {
+    jobId: string;
+    applicationId: string;
+    acceptedCount: number;
+  }): Promise<boolean>;
 }
 
 export interface SavedJobDto {

@@ -1,6 +1,13 @@
-import { CvSnapshotDto } from '@campusjob/contracts';
+import {
+  ApplicationJobContextDto, CvSnapshotDto, JobAccessSource as ContractJobAccessSource,
+  NotificationEventType,
+} from '@campusjob/contracts';
 import { ApplicationStatus } from '../domain/application-state';
 import { InterviewMode } from '../../interviews/domain/interview-rules';
+
+export const M04_CV_SOURCE = Symbol('M04_CV_SOURCE');
+export const M04_JOB_SOURCE = Symbol('M04_JOB_SOURCE');
+export const M04_REPOSITORY = Symbol('M04_REPOSITORY');
 
 export type ApplicationRecord = Readonly<{
   id: string;
@@ -33,15 +40,35 @@ export type ChangeRequestRecord = Readonly<{
   decision: 'PENDING' | 'APPROVED' | 'REJECTED';
 }>;
 
+export type JobApplicationContext = Readonly<ApplicationJobContextDto>;
+
+export type M04EventDraft = Readonly<{
+  eventType: NotificationEventType | 'JOB_CLOSE_SUGGESTED';
+  entityType: 'APPLICATION' | 'INTERVIEW' | 'INTERVIEW_CHANGE_REQUEST';
+  actorId: string;
+  recipientId: string;
+  payload: Readonly<Record<string, unknown>>;
+}>;
+
+export type ApplicationHistoryRecord = Readonly<{
+  id: string;
+  actorId: string;
+  fromStatus: ApplicationStatus | null;
+  toStatus: ApplicationStatus;
+  reason: string | null;
+  createdAt: Date;
+}>;
+
 /** M02 must verify CV ownership and return an immutable snapshot. */
 export interface CvSnapshotSource {
   getOwnedSnapshot(studentId: string, cvId: string): Promise<CvSnapshotDto>;
 }
 
 /** M03 owns job eligibility and the real employer-to-job relationship. */
-export interface JobAccessSource {
-  assertAcceptingApplications(jobId: string): Promise<void>;
-  assertManagedBy(jobId: string, employerUserId: string): Promise<void>;
+export type JobAccessSource = ContractJobAccessSource;
+
+export interface M04EventDispatcher {
+  dispatchPending(): Promise<void>;
 }
 
 /**
@@ -56,8 +83,9 @@ export interface M04Repository {
     cvId: string;
     cvSnapshot: CvSnapshotDto;
     coverLetter: string | null;
-  }): Promise<ApplicationRecord>;
+  }, events?: readonly M04EventDraft[]): Promise<ApplicationRecord>;
   getApplication(id: string): Promise<ApplicationRecord | null>;
+  getApplicationHistory(id: string): Promise<ApplicationHistoryRecord[]>;
   listStudentApplications(studentId: string): Promise<ApplicationRecord[]>;
   listJobApplications(jobId: string): Promise<ApplicationRecord[]>;
   changeApplicationStatus(input: {
@@ -66,7 +94,7 @@ export interface M04Repository {
     next: ApplicationStatus;
     actorId: string;
     reason?: string;
-  }): Promise<ApplicationRecord>;
+  }, events?: readonly M04EventDraft[]): Promise<ApplicationRecord>;
   createInterview(input: {
     applicationId: string;
     actorId: string;
@@ -74,29 +102,29 @@ export interface M04Repository {
     mode: InterviewMode;
     locationOrLink: string;
     message: string | null;
-  }): Promise<InterviewRecord>;
+  }, events?: readonly M04EventDraft[]): Promise<InterviewRecord>;
   getInterview(id: string): Promise<InterviewRecord | null>;
   listStudentInterviews(studentId: string): Promise<InterviewRecord[]>;
-  confirmInterview(id: string, at: Date): Promise<InterviewRecord>;
+  confirmInterview(id: string, at: Date, events?: readonly M04EventDraft[]): Promise<InterviewRecord>;
   getChangeRequest(interviewId: string): Promise<ChangeRequestRecord | null>;
   createChangeRequest(input: {
     interviewId: string;
     proposedAt: Date;
     message: string | null;
-  }): Promise<ChangeRequestRecord>;
+  }, events?: readonly M04EventDraft[]): Promise<ChangeRequestRecord>;
   decideChangeRequest(input: {
     interviewId: string;
     decision: 'APPROVED' | 'REJECTED';
     decidedBy: string;
     at: Date;
-  }): Promise<ChangeRequestRecord>;
+  }, events?: readonly M04EventDraft[]): Promise<ChangeRequestRecord>;
   recordInterviewResult(input: {
     interviewId: string;
     result: 'ACCEPTED' | 'REJECTED';
     actorId: string;
     at: Date;
     reason?: string;
-  }): Promise<InterviewRecord>;
+  }, events?: readonly M04EventDraft[]): Promise<InterviewRecord>;
 }
 
 export class M04WorkflowError extends Error {

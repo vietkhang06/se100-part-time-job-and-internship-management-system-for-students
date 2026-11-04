@@ -1,9 +1,9 @@
-import { CvSnapshotDto } from '@campusjob/contracts';
+import { CvSnapshotDto, NotificationEventType } from '@campusjob/contracts';
 import { ApplicationStatus } from '../domain/application-state';
 import { M04Workflow } from './m04-workflow';
 import {
   ApplicationRecord, ChangeRequestRecord, CvSnapshotSource, InterviewRecord,
-  JobAccessSource, M04Repository, M04WorkflowError,
+  JobAccessSource, M04EventDraft, M04Repository, M04WorkflowError,
 } from './m04-ports';
 
 const snapshot: CvSnapshotDto = {
@@ -18,10 +18,11 @@ class MemoryRepository implements M04Repository {
   interviews = new Map<string, InterviewRecord>();
   changes = new Map<string, ChangeRequestRecord>();
   history: { applicationId: string; from: ApplicationStatus | null; to: ApplicationStatus }[] = [];
+  emitted: M04EventDraft[] = [];
 
   async createApplication(input: {
     studentId: string; jobId: string; cvId: string; cvSnapshot: CvSnapshotDto; coverLetter: string | null;
-  }): Promise<ApplicationRecord> {
+  }, events: readonly M04EventDraft[] = []): Promise<ApplicationRecord> {
     if ([...this.applications.values()].some((a) => a.studentId === input.studentId && a.jobId === input.jobId)) {
       throw new M04WorkflowError('DUPLICATE_APPLICATION');
     }
@@ -39,9 +40,16 @@ class MemoryRepository implements M04Repository {
     };
     this.applications.set(row.id, row);
     this.history.push({ applicationId: row.id, from: null, to: row.status });
+    this.emitted.push(...events);
     return row;
   }
   async getApplication(id: string) { return this.applications.get(id) ?? null; }
+  async getApplicationHistory(id: string) {
+    return this.history.filter((item) => item.applicationId === id).map((item, index) => ({
+      id: `history-${index + 1}`, actorId: 'actor', fromStatus: item.from,
+      toStatus: item.to, reason: null, createdAt: new Date(index),
+    }));
+  }
   async listStudentApplications(studentId: string) {
     return [...this.applications.values()].filter((a) => a.studentId === studentId);
   }
@@ -50,18 +58,19 @@ class MemoryRepository implements M04Repository {
   }
   async changeApplicationStatus(input: {
     id: string; expected: ApplicationStatus; next: ApplicationStatus; actorId: string; reason?: string;
-  }) {
+  }, events: readonly M04EventDraft[] = []) {
     const old = this.applications.get(input.id);
     if (!old || old.status !== input.expected) throw new M04WorkflowError('CONCURRENT_CHANGE');
     const row = { ...old, status: input.next, rejectionReason: input.reason ?? old.rejectionReason };
     this.applications.set(input.id, row);
     this.history.push({ applicationId: input.id, from: old.status, to: input.next });
+    this.emitted.push(...events);
     return row;
   }
   async createInterview(input: {
     applicationId: string; actorId: string; scheduledAt: Date; mode: 'ONSITE' | 'ONLINE';
     locationOrLink: string; message: string | null;
-  }) {
+  }, events: readonly M04EventDraft[] = []) {
     await this.changeApplicationStatus({ id: input.applicationId, expected: ApplicationStatus.REVIEWING,
       next: ApplicationStatus.INTERVIEW_SCHEDULED, actorId: input.actorId });
     const row: InterviewRecord = {
@@ -70,6 +79,7 @@ class MemoryRepository implements M04Repository {
       message: input.message, confirmedAt: null, result: null,
     };
     this.interviews.set(row.id, row);
+    this.emitted.push(...events);
     return row;
   }
   async getInterview(id: string) { return this.interviews.get(id) ?? null; }
@@ -78,23 +88,28 @@ class MemoryRepository implements M04Repository {
       (i) => this.applications.get(i.applicationId)?.studentId === studentId,
     );
   }
-  async confirmInterview(id: string, at: Date) {
+  async confirmInterview(id: string, at: Date, events: readonly M04EventDraft[] = []) {
     const old = this.interviews.get(id);
     if (!old || old.confirmedAt || old.result || old.scheduledAt <= at) throw new M04WorkflowError('CONCURRENT_CHANGE');
     const row = { ...old, confirmedAt: at };
     this.interviews.set(id, row);
+    this.emitted.push(...events);
     return row;
   }
   async getChangeRequest(interviewId: string) { return this.changes.get(interviewId) ?? null; }
-  async createChangeRequest(input: { interviewId: string; proposedAt: Date; message: string | null }) {
+  async createChangeRequest(
+    input: { interviewId: string; proposedAt: Date; message: string | null },
+    events: readonly M04EventDraft[] = [],
+  ) {
     if (this.changes.has(input.interviewId)) throw new M04WorkflowError('CONCURRENT_CHANGE');
     const row: ChangeRequestRecord = { ...input, id: 'change-1', decision: 'PENDING' };
     this.changes.set(input.interviewId, row);
+    this.emitted.push(...events);
     return row;
   }
   async decideChangeRequest(input: {
     interviewId: string; decision: 'APPROVED' | 'REJECTED'; decidedBy: string; at: Date;
-  }) {
+  }, events: readonly M04EventDraft[] = []) {
     const old = this.changes.get(input.interviewId);
     if (!old || old.decision !== 'PENDING') throw new M04WorkflowError('CONCURRENT_CHANGE');
     const row: ChangeRequestRecord = { ...old, decision: input.decision };
@@ -103,11 +118,12 @@ class MemoryRepository implements M04Repository {
       const interview = this.interviews.get(input.interviewId)!;
       this.interviews.set(input.interviewId, { ...interview, scheduledAt: row.proposedAt });
     }
+    this.emitted.push(...events);
     return row;
   }
   async recordInterviewResult(input: {
     interviewId: string; result: 'ACCEPTED' | 'REJECTED'; actorId: string; at: Date; reason?: string;
-  }) {
+  }, events: readonly M04EventDraft[] = []) {
     const old = this.interviews.get(input.interviewId);
     if (!old || old.result || old.scheduledAt > input.at) throw new M04WorkflowError('CONCURRENT_CHANGE');
     await this.changeApplicationStatus({ id: old.applicationId, expected: ApplicationStatus.INTERVIEW_SCHEDULED,
@@ -115,6 +131,7 @@ class MemoryRepository implements M04Repository {
       actorId: input.actorId, reason: input.reason });
     const row: InterviewRecord = { ...old, result: input.result };
     this.interviews.set(input.interviewId, row);
+    this.emitted.push(...events);
     return row;
   }
 }
@@ -132,6 +149,11 @@ describe('M04 workflow with contract fixtures', () => {
     assertManagedBy: async (jobId, employerId) => {
       if (!jobId.startsWith('job-') || employerId !== owner) throw new M04WorkflowError('FORBIDDEN');
     },
+    getApplicationContext: async (jobId) => ({
+      id: jobId, title: `Title ${jobId}`, companyId: 'company-a', companyName: 'Company A',
+      requiredSkills: ['typescript'], targetCount: 1, managerUserIds: [owner],
+    }),
+    suggestClosingWhenFilled: async ({ acceptedCount }) => acceptedCount >= 1,
   };
   const cvs: CvSnapshotSource = {
     getOwnedSnapshot: async (studentId, cvId) => {
@@ -230,5 +252,18 @@ describe('M04 workflow with contract fixtures', () => {
       ApplicationStatus.SUBMITTED, ApplicationStatus.REVIEWING,
       ApplicationStatus.INTERVIEW_SCHEDULED, ApplicationStatus.ACCEPTED,
     ]);
+    expect(repository.emitted.map((event) => event.eventType)).toEqual([
+      NotificationEventType.APPLICATION_SUBMITTED,
+      NotificationEventType.APPLICATION_STATUS_CHANGED,
+      NotificationEventType.INTERVIEW_INVITED,
+      NotificationEventType.INTERVIEW_CONFIRMED,
+      NotificationEventType.INTERVIEW_RESCHEDULE_REQUESTED,
+      NotificationEventType.INTERVIEW_RESCHEDULE_RESOLVED,
+      NotificationEventType.INTERVIEW_RESULT_RECORDED,
+      NotificationEventType.APPLICATION_STATUS_CHANGED,
+      'JOB_CLOSE_SUGGESTED',
+    ]);
+    expect(repository.emitted.every((event) => event.actorId && event.recipientId)).toBe(true);
+    expect(repository.emitted.slice(-3, -1).every((event) => event.recipientId === 'student-a')).toBe(true);
   });
 });

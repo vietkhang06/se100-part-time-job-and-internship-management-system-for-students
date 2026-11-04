@@ -21,8 +21,8 @@ class FixtureJwtGuard implements CanActivate {
 describe('M04 API contract with fixture adapters', () => {
   let app: INestApplication;
   const workflow = {
-    submit: jest.fn(), getMine: jest.fn(), markViewed: jest.fn(),
-    getCandidate: jest.fn(), invite: jest.fn(),
+    submit: jest.fn(), getMineDetail: jest.fn(), markViewed: jest.fn(), listCandidates: jest.fn(),
+    getCandidateDetail: jest.fn(), invite: jest.fn(),
   };
 
   beforeAll(async () => {
@@ -62,11 +62,11 @@ describe('M04 API contract with fixture adapters', () => {
   });
 
   it('maps resource ownership errors to 404/403 without leaking application data', async () => {
-    workflow.getMine.mockRejectedValue(new M04WorkflowError('NOT_FOUND'));
+    workflow.getMineDetail.mockRejectedValue(new M04WorkflowError('NOT_FOUND'));
     await request(app.getHttpServer()).get('/api/v1/applications/me/app-foreign')
       .set('x-test-user', 'student-a').set('x-test-role', 'STUDENT')
       .expect(404);
-    workflow.getCandidate.mockRejectedValue(new M04WorkflowError('FORBIDDEN'));
+    workflow.getCandidateDetail.mockRejectedValue(new M04WorkflowError('FORBIDDEN'));
     await request(app.getHttpServer()).get('/api/v1/employer/applications/app-foreign')
       .set('x-test-user', 'employer-a').set('x-test-role', 'EMPLOYER')
       .expect(403);
@@ -78,6 +78,20 @@ describe('M04 API contract with fixture adapters', () => {
       .send({ scheduledAt: 'not-a-date', mode: 'ONLINE', locationOrLink: 'https://example.org' })
       .expect(400);
     expect(workflow.invite).not.toHaveBeenCalled();
+    await request(app.getHttpServer()).post('/api/v1/employer/applications/app-1/interviews')
+      .set('x-test-user', 'employer-a').set('x-test-role', 'EMPLOYER')
+      .send({ scheduledAt: '2026-12-01T10:00:00', mode: 'ONLINE', locationOrLink: 'https://example.org' })
+      .expect(400);
+  });
+
+  it('transforms and validates candidate pagination and sort query', async () => {
+    workflow.listCandidates.mockResolvedValue({ data: [], meta: { page: 2, pageSize: 10, total: 0, totalPages: 0 } });
+    await request(app.getHttpServer()).get('/api/v1/employer/jobs/job-a/applications?sort=desc&page=2&pageSize=10')
+      .set('x-test-user', 'employer-a').set('x-test-role', 'EMPLOYER')
+      .expect(200);
+    expect(workflow.listCandidates).toHaveBeenCalledWith('employer-a', 'job-a', {
+      sort: 'desc', page: 2, pageSize: 10,
+    });
   });
 
   it('maps QUOTA_EXCEEDED to HTTP 409 with explicit error code (S3-M04-03)', async () => {
