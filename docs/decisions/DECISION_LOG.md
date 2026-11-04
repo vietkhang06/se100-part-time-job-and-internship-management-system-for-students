@@ -16,3 +16,4 @@
 | ADR-012 | Payment và messaging thuộc giai đoạn 2 | Chấp thuận |
 | ADR-013 | Không chạy seed trong production | Chấp thuận |
 | ADR-014 | Chuẩn hóa AuthContext (C-01) gồm 8 trường, ủy quyền qua RBAC và Resource Ownership, không dùng permissions array ở Sprint 2 | Chấp thuận |
+| ADR-015 | Đồng bộ StudentProfileDto (C-03) và schema Prisma: ánh xạ StudentSkill sang skills[], các trường avatarUrl, campusEmail, isCampusVerified chưa có persistence được trả về null/false theo contract mà không tự thêm cột hoặc giả dữ liệu khi chưa có yêu cầu SRS/FR được phê duyệt | Chấp thuận |
