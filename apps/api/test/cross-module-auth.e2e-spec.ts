@@ -280,6 +280,7 @@ describe('S2-M01-05: Cross-Module Authorization (E2E & Contract Tests)', () => {
         const profileIds = profiles.map((p) => p.id);
         if (profileIds.length > 0) {
           await prisma.cv.deleteMany({ where: { studentProfileId: { in: profileIds } } });
+          await prisma.studentSkill.deleteMany({ where: { studentProfileId: { in: profileIds } } });
           await prisma.studentProfile.deleteMany({ where: { id: { in: profileIds } } });
         }
 
