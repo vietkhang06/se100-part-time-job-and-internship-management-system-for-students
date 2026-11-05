@@ -1,5 +1,7 @@
 # 1. S3-M04-02 — Application Message Contract và Message Flow
 
+> **S8-M04-02 review — 05/11/2026:** vẫn `BLOCKED_BY_DECISION`. Không tìm thấy phê duyệt thay đổi ADR-012 hoặc đưa UC69–UC70 vào MVP; vì vậy không bật schema, API, UI hay notification message.
+
 **DRAFT — chưa được Owner/PM phê duyệt triển khai.** Ngày đối chiếu 23/10/2026. Owner M04: Gia Khang; reviewer task: Việt Khang (theo workbook). Chưa ghi nhận người duyệt hoặc ngày duyệt. Tài liệu này không tạo Contract ID mới.
 
 ## 1.1. Căn cứ và cổng phạm vi
