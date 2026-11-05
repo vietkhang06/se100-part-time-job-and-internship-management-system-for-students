@@ -1,11 +1,9 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import helmet from 'helmet';
-import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
-import { GlobalExceptionFilter } from './shared/filters/http-exception.filter';
+import { configureApplication } from './configure-app';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -13,34 +11,7 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('API_PORT', 8080);
-  const webUrl = configService.get<string>('WEB_URL', 'http://localhost:3000');
-
-  // Security Middleware
-  app.use(helmet());
-  app.use(cookieParser());
-
-  // CORS
-  app.enableCors({
-    origin: [webUrl],
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-request-id', 'x-correlation-id'],
-  });
-
-  // Global Prefix
-  app.setGlobalPrefix('api/v1');
-
-  // Global Validation
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      transform: true,
-      forbidNonWhitelisted: true,
-    }),
-  );
-
-  // Global Exception Filter
-  app.useGlobalFilters(new GlobalExceptionFilter());
+  configureApplication(app);
 
   // Swagger Documentation
   const swaggerConfig = new DocumentBuilder()
