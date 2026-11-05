@@ -344,6 +344,7 @@ describe('S2-M01-06: Account Integration (E2E & Contract-Boundary)', () => {
         const profileIds = profiles.map((p) => p.id);
         if (profileIds.length > 0) {
           await prisma.cv.deleteMany({ where: { studentProfileId: { in: profileIds } } });
+          await prisma.studentSkill.deleteMany({ where: { studentProfileId: { in: profileIds } } });
           await prisma.studentProfile.deleteMany({ where: { id: { in: profileIds } } });
         }
 
