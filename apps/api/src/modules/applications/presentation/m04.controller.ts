@@ -76,6 +76,15 @@ export class M04Controller {
   @Roles(UserRole.STUDENT)
   myInterviews(@CurrentUser('id') studentId: string) { return this.workflow.listMyInterviews(studentId); }
 
+  @Get('employer/jobs/:jobId/interviews')
+  @Roles(UserRole.EMPLOYER)
+  employerInterviews(
+    @CurrentUser('id') employerId: string,
+    @Param('jobId') jobId: string,
+  ) {
+    return this.workflow.listEmployerInterviews(employerId, jobId);
+  }
+
   @Post('interviews/:id/confirm')
   @Roles(UserRole.STUDENT)
   confirm(@CurrentUser('id') studentId: string, @Param('id') id: string) {

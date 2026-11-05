@@ -88,6 +88,23 @@ class MemoryRepository implements M04Repository {
       (i) => this.applications.get(i.applicationId)?.studentId === studentId,
     );
   }
+  async listStudentInterviewViews(studentId: string) {
+    const interviews = await this.listStudentInterviews(studentId);
+    return interviews.map((interview) => ({
+      interview,
+      application: this.applications.get(interview.applicationId)!,
+      changeRequest: this.changes.get(interview.id) ?? null,
+    }));
+  }
+  async listJobInterviewViews(jobId: string) {
+    return [...this.interviews.values()]
+      .filter((interview) => this.applications.get(interview.applicationId)?.jobId === jobId)
+      .map((interview) => ({
+        interview,
+        application: this.applications.get(interview.applicationId)!,
+        changeRequest: this.changes.get(interview.id) ?? null,
+      }));
+  }
   async confirmInterview(id: string, at: Date, events: readonly M04EventDraft[] = []) {
     const old = this.interviews.get(id);
     if (!old || old.confirmedAt || old.result || old.scheduledAt <= at) throw new M04WorkflowError('CONCURRENT_CHANGE');

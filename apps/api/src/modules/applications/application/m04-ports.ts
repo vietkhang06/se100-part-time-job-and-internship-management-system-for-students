@@ -40,6 +40,12 @@ export type ChangeRequestRecord = Readonly<{
   decision: 'PENDING' | 'APPROVED' | 'REJECTED';
 }>;
 
+export type InterviewViewRecord = Readonly<{
+  interview: InterviewRecord;
+  application: Pick<ApplicationRecord, 'id' | 'studentId' | 'jobId' | 'status' | 'cvSnapshot'>;
+  changeRequest: ChangeRequestRecord | null;
+}>;
+
 export type JobApplicationContext = Readonly<ApplicationJobContextDto>;
 
 export type M04EventDraft = Readonly<{
@@ -105,6 +111,8 @@ export interface M04Repository {
   }, events?: readonly M04EventDraft[]): Promise<InterviewRecord>;
   getInterview(id: string): Promise<InterviewRecord | null>;
   listStudentInterviews(studentId: string): Promise<InterviewRecord[]>;
+  listStudentInterviewViews(studentId: string): Promise<InterviewViewRecord[]>;
+  listJobInterviewViews(jobId: string): Promise<InterviewViewRecord[]>;
   confirmInterview(id: string, at: Date, events?: readonly M04EventDraft[]): Promise<InterviewRecord>;
   getChangeRequest(interviewId: string): Promise<ChangeRequestRecord | null>;
   createChangeRequest(input: {
