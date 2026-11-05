@@ -171,8 +171,13 @@ export class M04Workflow {
     return interview;
   }
 
-  listMyInterviews(studentId: string): Promise<InterviewRecord[]> {
-    return this.repository.listStudentInterviews(studentId);
+  listMyInterviews(studentId: string) {
+    return this.repository.listStudentInterviewViews(studentId);
+  }
+
+  async listEmployerInterviews(employerId: string, jobId: string) {
+    await this.jobs.assertManagedBy(jobId, employerId);
+    return this.repository.listJobInterviewViews(jobId);
   }
 
   async confirmInterview(studentId: string, interviewId: string): Promise<InterviewRecord> {

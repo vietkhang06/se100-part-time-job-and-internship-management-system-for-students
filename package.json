@@ -28,6 +28,7 @@
     "db:deploy": "dotenv -e .env -- pnpm --filter @campusjob/api exec prisma migrate deploy --schema prisma/schema.prisma",
     "db:studio": "dotenv -e .env -- pnpm --filter @campusjob/api exec prisma studio --schema prisma/schema.prisma",
     "admin:create": "dotenv -e .env -- pnpm --filter @campusjob/api admin:create",
+    "student:seed": "dotenv -e .env -- pnpm --filter @campusjob/api student:seed",
     "infra:config": "docker compose --env-file .env -f infra/docker-compose.yml config",
     "infra:up": "docker compose --env-file .env -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose --env-file .env -f infra/docker-compose.yml down",

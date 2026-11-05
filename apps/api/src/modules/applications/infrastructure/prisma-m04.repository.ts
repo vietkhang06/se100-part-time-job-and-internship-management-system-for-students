@@ -4,7 +4,7 @@ import { CvSnapshotDto } from '@campusjob/contracts';
 import { PrismaService } from '../../../shared/database/prisma.service';
 import { ApplicationStatus } from '../domain/application-state';
 import {
-  ApplicationHistoryRecord, ApplicationRecord, ChangeRequestRecord, InterviewRecord,
+  ApplicationHistoryRecord, ApplicationRecord, ChangeRequestRecord, InterviewRecord, InterviewViewRecord,
   M04EventDraft, M04Repository, M04WorkflowError,
 } from '../application/m04-ports';
 
@@ -123,6 +123,24 @@ export class PrismaM04Repository implements M04Repository {
       where: { application: { studentId } }, orderBy: { scheduledAt: 'asc' },
     });
     return rows.map((row) => this.interview(row));
+  }
+
+  async listStudentInterviewViews(studentId: string): Promise<InterviewViewRecord[]> {
+    const rows = await this.prisma.interview.findMany({
+      where: { application: { studentId } },
+      include: { application: true, changeRequest: true },
+      orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => this.interviewView(row));
+  }
+
+  async listJobInterviewViews(jobId: string): Promise<InterviewViewRecord[]> {
+    const rows = await this.prisma.interview.findMany({
+      where: { application: { jobId } },
+      include: { application: true, changeRequest: true },
+      orderBy: [{ scheduledAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => this.interviewView(row));
   }
 
   async confirmInterview(id: string, at: Date, events: readonly M04EventDraft[] = []): Promise<InterviewRecord> {
@@ -286,6 +304,24 @@ export class PrismaM04Repository implements M04Repository {
     return {
       id: row.id, interviewId: row.interviewId, proposedAt: row.proposedAt,
       message: row.message, decision: row.decision,
+    };
+  }
+
+  private interviewView(row: Interview & {
+    application: Application;
+    changeRequest: InterviewChangeRequest | null;
+  }): InterviewViewRecord {
+    const application = this.application(row.application);
+    return {
+      interview: this.interview(row),
+      application: {
+        id: application.id,
+        studentId: application.studentId,
+        jobId: application.jobId,
+        status: application.status,
+        cvSnapshot: application.cvSnapshot,
+      },
+      changeRequest: row.changeRequest ? this.changeRequest(row.changeRequest) : null,
     };
   }
 }

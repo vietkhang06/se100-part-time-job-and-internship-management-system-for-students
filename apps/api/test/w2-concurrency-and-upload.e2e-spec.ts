@@ -76,6 +76,7 @@ describe('W2 Real Concurrency & HTTP Upload Verification (e2e)', () => {
       if (testStudentUser && testStudentProfile) {
         await prisma.cv.deleteMany({ where: { studentProfileId: testStudentProfile.id } });
         await prisma.fileAsset.deleteMany({ where: { ownerUserId: testStudentUser.id } });
+        await prisma.studentSkill.deleteMany({ where: { studentProfileId: testStudentProfile.id } });
         await prisma.studentProfile.deleteMany({ where: { userId: testStudentUser.id } });
         await prisma.user.deleteMany({ where: { id: testStudentUser.id } });
       }

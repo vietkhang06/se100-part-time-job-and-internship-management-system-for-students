@@ -438,7 +438,7 @@ describe('RBAC Authorization (e2e)', () => {
     it.each(['student', 'employer', 'moderator'] as const)(
       'denies %s from viewing another account without trusting client role fields',
       async (key) => {
-        const targetId = await userId('employer');
+        const targetId = await userId(key === 'employer' ? 'student' : 'employer');
         const response = await request(app.getHttpServer())
           .get(`/api/v1/users/${targetId}`)
           .set('Authorization', `Bearer ${users[key].token}`)
