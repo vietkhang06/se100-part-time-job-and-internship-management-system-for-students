@@ -21,7 +21,7 @@
     "test:e2e": "pnpm --filter @campusjob/api test:e2e",
     "test:e2e:m02": "pnpm --filter @campusjob/api exec jest --config test/jest-m02-e2e.json --runInBand --forceExit",
     "test:m04:postgres": "pnpm --filter @campusjob/api exec jest --config test/jest-m04-postgres.json --runInBand",
-    "test:e2e:m04": "pnpm --filter @campusjob/api exec jest --config test/jest-m04-production-e2e.json --runInBand",
+    "test:fixture:m04": "pnpm --filter @campusjob/api exec ts-node --transpile-only test/m04-browser-fixture.ts",
     "db:validate": "dotenv -e .env -- pnpm --filter @campusjob/api exec prisma validate --schema prisma/schema.prisma",
     "db:generate": "pnpm --filter @campusjob/api exec prisma generate --schema prisma/schema.prisma",
     "db:migrate": "dotenv -e .env -- pnpm --filter @campusjob/api exec prisma migrate dev --schema prisma/schema.prisma",

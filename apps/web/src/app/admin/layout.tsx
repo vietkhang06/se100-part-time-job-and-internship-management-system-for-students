@@ -7,9 +7,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <AppHeader userRole="ADMIN" userName="Quản trị viên" />
-      <div className="flex-1 flex">
+      <div className="flex flex-1 flex-col md:flex-row">
         <AppSidebar items={ADMIN_NAV_ITEMS} roleTitle="Không gian Quản trị" />
-        <main className="flex-1 p-6 md:p-8">{children}</main>
+        <main className="min-w-0 flex-1 p-4 sm:p-6 md:p-8">{children}</main>
       </div>
     </div>
   );

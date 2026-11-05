@@ -16,7 +16,7 @@ export function AppHeader({ userRole, userName }: AppHeaderProps) {
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white font-black text-sm">
               CJ
             </span>
-            <span>CampusJob</span>
+            <span className="hidden sm:inline">CampusJob</span>
           </Link>
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
             {PUBLIC_NAV_ITEMS.map((item) => (
@@ -34,7 +34,7 @@ export function AppHeader({ userRole, userName }: AppHeaderProps) {
         <div className="flex items-center gap-3">
           {userName ? (
             <div className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">Xin chào,</span>
+              <span className="hidden text-muted-foreground sm:inline">Xin chào,</span>
               <span className="font-semibold text-foreground">{userName}</span>
               <span className="ml-1 rounded bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
                 {userRole}

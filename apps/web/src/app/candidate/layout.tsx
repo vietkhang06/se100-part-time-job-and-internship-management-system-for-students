@@ -7,9 +7,9 @@ export default function CandidateLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <AppHeader userRole="STUDENT" userName="Sinh viên" />
-      <div className="flex-1 flex">
+      <div className="flex flex-1 flex-col md:flex-row">
         <AppSidebar items={CANDIDATE_NAV_ITEMS} roleTitle="Không gian Ứng viên" />
-        <main className="flex-1 p-6 md:p-8">{children}</main>
+        <main className="min-w-0 flex-1 p-4 sm:p-6 md:p-8">{children}</main>
       </div>
     </div>
   );

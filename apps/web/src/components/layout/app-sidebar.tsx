@@ -16,14 +16,14 @@ export function AppSidebar({ items, roleTitle }: AppSidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 shrink-0 border-r border-border bg-card/50 min-h-[calc(100vh-4rem)] p-4 flex flex-col justify-between">
+    <aside className="w-full shrink-0 border-b border-border bg-card/50 p-2 md:min-h-[calc(100vh-4rem)] md:w-64 md:border-b-0 md:border-r md:p-4 flex flex-col justify-between">
       <div className="space-y-4">
-        <div className="px-3 py-2">
+        <div className="hidden px-3 py-2 md:block">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {roleTitle}
           </h2>
         </div>
-        <nav className="space-y-1">
+        <nav className="flex gap-1 overflow-x-auto md:block md:space-y-1">
           {items.map((item) => {
             const isActive = pathname === item.href;
             return (
@@ -32,7 +32,7 @@ export function AppSidebar({ items, roleTitle }: AppSidebarProps) {
                 href={item.href}
                 className={twMerge(
                   clsx(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                    'flex shrink-0 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                     isActive
                       ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
                       : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
@@ -46,7 +46,7 @@ export function AppSidebar({ items, roleTitle }: AppSidebarProps) {
         </nav>
       </div>
 
-      <div className="border-t border-border pt-4 px-3 text-xs text-muted-foreground">
+      <div className="hidden border-t border-border pt-4 px-3 text-xs text-muted-foreground md:block">
         CampusJob v1.0.0 &copy; 2026
       </div>
     </aside>
