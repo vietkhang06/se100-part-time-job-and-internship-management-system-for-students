@@ -4,17 +4,18 @@ import cookieParser from 'cookie-parser';
 import supertest from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/shared/database/prisma.service';
-import { FileAssetStatus, FileAssetResult } from '../src/shared/storage/file-asset.service';
+import { FileAssetService, FileAssetStatus, FileAssetResult } from '../src/shared/storage/file-asset.service';
 import { IStorageService, STORAGE_SERVICE_TOKEN } from '../src/shared/storage/storage.interface';
 import { PasswordHasher } from '../src/modules/auth/infrastructure/security/password-hasher';
 import { UserRole, UserStatus, JobSeekingStatus } from '@campusjob/contracts';
 
 const request = supertest;
 
-describe('S3-M02-02: CV/FileAsset Lifecycle & Ownership Verification (e2e)', () => {
+describe('S3-M02-02 & S4-M02-02: CV/FileAsset Lifecycle & Ownership Verification (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let storageService: IStorageService;
+  let fileAssetService: FileAssetService;
 
   const defaultPassword = 'SecurePassword123!';
 
@@ -35,6 +36,11 @@ describe('S3-M02-02: CV/FileAsset Lifecycle & Ownership Verification (e2e)', () 
     employer: {
       id: '',
       email: 's3-m02-employer@campusjob.local',
+      token: '',
+    },
+    employerB: {
+      id: '',
+      email: 's4-m02-employer-b@campusjob.local',
       token: '',
     },
   };
@@ -71,6 +77,7 @@ describe('S3-M02-02: CV/FileAsset Lifecycle & Ownership Verification (e2e)', () 
     await app.init();
     prisma = app.get(PrismaService);
     storageService = app.get<IStorageService>(STORAGE_SERVICE_TOKEN);
+    fileAssetService = app.get(FileAssetService);
 
     // Dọn dẹp dữ liệu cũ nếu có
     const emails = Object.values(users).map((u) => u.email);
@@ -153,10 +160,24 @@ describe('S3-M02-02: CV/FileAsset Lifecycle & Ownership Verification (e2e)', () 
     });
     users.employer.id = userEmp.id;
 
+    // Employer B (công ty khác)
+    const userEmpB = await prisma.user.create({
+      data: {
+        email: users.employerB.email,
+        fullName: 'Phạm Tuyển Dụng Công Ty B',
+        role: UserRole.EMPLOYER,
+        status: UserStatus.ACTIVE,
+        passwordHash,
+        emailVerifiedAt: new Date(),
+      },
+    });
+    users.employerB.id = userEmpB.id;
+
     // Login để lấy access token
     users.studentA.token = await loginUser(users.studentA.email);
     users.studentB.token = await loginUser(users.studentB.email);
     users.employer.token = await loginUser(users.employer.email);
+    users.employerB.token = await loginUser(users.employerB.email);
   }, 45000);
 
   afterAll(async () => {
@@ -231,6 +252,50 @@ describe('S3-M02-02: CV/FileAsset Lifecycle & Ownership Verification (e2e)', () 
         .post('/api/v1/students/cvs/upload')
         .attach('file', Buffer.from('%PDF-1.7 authentic content'), 'cv.pdf')
         .expect(401);
+    });
+
+    it('LIFECYCLE-02c: Chặn vai trò EMPLOYER tải lên tệp CV với 403 Forbidden (Contract C-04/C-02)', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/students/cvs/upload')
+        .set('Authorization', `Bearer ${users.employer.token}`)
+        .attach('file', Buffer.from('%PDF-1.7 authentic content'), 'cv.pdf')
+        .expect(403);
+    });
+
+    it('LIFECYCLE-02d: Chặn tải lên tệp có đường dẫn chứa chuỗi path traversal (../../etc/passwd.pdf) với 400 Bad Request', async () => {
+      const boundary = '----CampusJobTraversalBoundary';
+      const rawMultipart = Buffer.concat([
+        Buffer.from(
+          `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="file"; filename="../../etc/passwd.pdf"\r\n` +
+            `Content-Type: application/pdf\r\n\r\n`,
+        ),
+        Buffer.from('%PDF-1.7 authentic content'),
+        Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]);
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/students/cvs/upload')
+        .set('Authorization', `Bearer ${users.studentA.token}`)
+        .set('Content-Type', `multipart/form-data; boundary=${boundary}`)
+        .send(rawMultipart)
+        .expect(400);
+
+      expect(res.body.message).toContain('chứa ký tự đường dẫn bị cấm');
+    });
+
+    it('LIFECYCLE-02e: Chặn tải lên tệp vượt quá giới hạn dung lượng 10MB (413 Payload Too Large)', async () => {
+      const over10MbBuffer = Buffer.concat([
+        Buffer.from('%PDF-1.7 '),
+        Buffer.alloc(10 * 1024 * 1024 + 512, 0x41),
+      ]);
+
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/students/cvs/upload')
+        .set('Authorization', `Bearer ${users.studentA.token}`)
+        .attach('file', over10MbBuffer, 'oversized_10mb_cv.pdf');
+
+      expect([400, 413]).toContain(res.status);
     });
   });
 
@@ -361,6 +426,29 @@ describe('S3-M02-02: CV/FileAsset Lifecycle & Ownership Verification (e2e)', () 
 
       expect(res.body.message).toContain('không có tệp tài liệu đính kèm');
     });
+
+    it('LIFECYCLE-08b: Nhà tuyển dụng chưa có hồ sơ ứng tuyển liên quan cố tải CV -> bị chặn 403 Forbidden (Contract C-04)', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/students/cvs/${createdCvAId}/download`)
+        .set('Authorization', `Bearer ${users.employer.token}`)
+        .expect(403);
+
+      expect(res.body.message).toContain('chưa có hồ sơ ứng tuyển liên quan');
+    });
+
+    it('LIFECYCLE-08c: Ngăn gắn trùng cùng một fileAssetId vào CV thứ 2 (400 FILE_ASSET_ALREADY_ATTACHED)', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/students/cvs')
+        .set('Authorization', `Bearer ${users.studentA.token}`)
+        .send({
+          title: 'CV Thứ 3 Cố Gắn Trùng File',
+          fileAssetId: uploadedFileAssetA.id,
+          skills: ['NodeJS'],
+        })
+        .expect(400);
+
+      expect(res.body.code).toBe('FILE_ASSET_ALREADY_ATTACHED');
+    });
   });
 
   // ========================================================================
@@ -407,6 +495,51 @@ describe('S3-M02-02: CV/FileAsset Lifecycle & Ownership Verification (e2e)', () 
 
       const newFileOnDisk = await storageService.exists(newStorageKey);
       expect(newFileOnDisk).toBe(true);
+    });
+
+    it('LIFECYCLE-09b: Rủi ro dọn file sau DB transaction lỗi — Không tạo file mồ côi khi lưu metadata lỗi và không mất file cũ khi update CV lỗi', async () => {
+      // 1. Khi lưu metadata trong DB bị lỗi (ví dụ ownerUserId không tồn tại gây lỗi FK constraint),
+      // FileAssetService phải tự động xóa tệp vật lý vừa ghi ra disk (0 orphan file).
+      let capturedStorageKey = '';
+      const originalStore = storageService.store.bind(storageService);
+      const storeSpy = jest.spyOn(storageService, 'store').mockImplementation(async (options) => {
+        const stored = await originalStore(options);
+        capturedStorageKey = stored.storageKey;
+        return stored;
+      });
+
+      try {
+        await expect(
+          fileAssetService.storeFileAsset({
+            ownerUserId: 'non-existent-owner-for-fk-rollback-test',
+            originalName: 'rollback_test.pdf',
+            mimeType: 'application/pdf',
+            buffer: Buffer.from('%PDF-1.7 Rollback Compensation Test'),
+            subDirectory: 'cvs',
+          }),
+        ).rejects.toThrow();
+
+        expect(capturedStorageKey).toBeTruthy();
+        // Khẳng định: Tệp vật lý vừa ghi đã được dọn sạch ngay trong khối catch của storeFileAsset
+        expect(await storageService.exists(capturedStorageKey)).toBe(false);
+      } finally {
+        storeSpy.mockRestore();
+      }
+
+      // 2. Khi PATCH /api/v1/students/cvs/:id bị lỗi transaction (ví dụ gắn fileAssetId không tồn tại),
+      // tệp hiện tại của CV (uploadedFileAssetA2) tuyệt đối không bị mất hoặc xóa nhầm.
+      await request(app.getHttpServer())
+        .patch(`/api/v1/students/cvs/${createdCvAId}`)
+        .set('Authorization', `Bearer ${users.studentA.token}`)
+        .send({ fileAssetId: '00000000-0000-0000-0000-000000000000' })
+        .expect(400);
+
+      const currentAsset = await prisma.fileAsset.findUnique({
+        where: { id: uploadedFileAssetA2.id },
+      });
+      expect(currentAsset).not.toBeNull();
+      expect(currentAsset!.status).toBe(FileAssetStatus.PERMANENT);
+      expect(await storageService.exists(uploadedFileAssetA2.storageKey)).toBe(true);
     });
   });
 
@@ -471,6 +604,178 @@ describe('S3-M02-02: CV/FileAsset Lifecycle & Ownership Verification (e2e)', () 
       // 4. Khẳng định: File vật lý đã bị xóa khỏi disk storage
       const fileOnDisk = await storageService.exists(storageKey);
       expect(fileOnDisk).toBe(false);
+    });
+
+    it('LIFECYCLE-12 (S4-M02-02): Bảo toàn FileAsset trong cvSnapshot khi CV đổi file mới hoặc bị xóa sau khi đơn kết thúc & kiểm tra quyền Employer theo Company/Job', async () => {
+      // 1. Tạo Company & JobPosting thuộc quyền quản lý của Employer
+      const company = await prisma.company.create({
+        data: {
+          name: 'Công ty Công nghệ S4-M02-02',
+          taxId: `TAX-S4M0202-${Date.now()}`,
+          members: {
+            create: {
+              userId: users.employer.id,
+              role: 'OWNER',
+              status: 'ACTIVE',
+            },
+          },
+          branches: {
+            create: {
+              branchName: 'Trụ sở chính TP.HCM',
+              addressLine: '123 Nguyễn Huệ',
+              city: 'Hồ Chí Minh',
+              isHeadquarter: true,
+            },
+          },
+        },
+        include: { branches: true },
+      });
+
+      const job = await prisma.jobPosting.create({
+        data: {
+          companyId: company.id,
+          branchId: company.branches[0].id,
+          title: 'Thực tập sinh Backend S4-M02-02',
+          description: 'Mô tả công việc kiểm thử S4-M02-02',
+          industry: 'IT',
+          type: 'INTERNSHIP',
+          quantity: 2,
+          deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          status: 'OPEN',
+        },
+      });
+
+      try {
+        // 2. Sinh viên A upload file v1 và tạo CV mới
+        const uploadV1 = await request(app.getHttpServer())
+          .post('/api/v1/students/cvs/upload')
+          .set('Authorization', `Bearer ${users.studentA.token}`)
+          .attach(
+            'file',
+            Buffer.from('%PDF-1.7 Snapshot File V1 Submitted To Employer'),
+            'snapshot_v1.pdf',
+          )
+          .expect(201);
+        const assetV1: Pick<FileAssetResult, 'id' | 'storageKey'> = uploadV1.body;
+
+        const createCvRes = await request(app.getHttpServer())
+          .post('/api/v1/students/cvs')
+          .set('Authorization', `Bearer ${users.studentA.token}`)
+          .send({
+            title: 'CV Ứng Tuyển S4-M02-02',
+            fileAssetId: assetV1.id,
+            skills: ['TypeScript', 'NestJS'],
+          })
+          .expect(201);
+        const cvId = createCvRes.body.cv.id;
+
+        // 3. Sinh viên A nộp đơn ứng tuyển vào Job của Employer (kèm cvSnapshot chứa assetV1.id)
+        const application = await prisma.application.create({
+          data: {
+            studentId: users.studentA.id,
+            jobId: job.id,
+            cvId,
+            cvSnapshot: {
+              snapshotId: 'snap-s4-m02-02',
+              originalCvId: cvId,
+              studentId: users.studentA.id,
+              title: 'CV Ứng Tuyển S4-M02-02',
+              fileAssetId: assetV1.id,
+            },
+            status: 'SUBMITTED',
+          },
+        });
+
+        // 4. Sinh viên A cập nhật CV sang file v2 mới
+        const uploadV2 = await request(app.getHttpServer())
+          .post('/api/v1/students/cvs/upload')
+          .set('Authorization', `Bearer ${users.studentA.token}`)
+          .attach(
+            'file',
+            Buffer.from('%PDF-1.7 Updated Live CV File V2'),
+            'live_v2.pdf',
+          )
+          .expect(201);
+        const assetV2: Pick<FileAssetResult, 'id' | 'storageKey'> = uploadV2.body;
+
+        await request(app.getHttpServer())
+          .patch(`/api/v1/students/cvs/${cvId}`)
+          .set('Authorization', `Bearer ${users.studentA.token}`)
+          .send({ fileAssetId: assetV2.id })
+          .expect(200);
+
+        // 5. Khẳng định: assetV1 KHÔNG bị xóa vì đang được tham chiếu bởi Application.cvSnapshot!
+        const assetV1InDb = await prisma.fileAsset.findUnique({ where: { id: assetV1.id } });
+        expect(assetV1InDb).not.toBeNull();
+        expect(assetV1InDb!.status).toBe(FileAssetStatus.PERMANENT);
+        expect(await storageService.exists(assetV1.storageKey)).toBe(true);
+
+        // 6. Employer quản lý Job tải xuống -> nhận đúng tệp snapshot V1 đã nộp!
+        const empDownloadRes = await request(app.getHttpServer())
+          .get(`/api/v1/students/cvs/${cvId}/download`)
+          .set('Authorization', `Bearer ${users.employer.token}`)
+          .expect(200);
+        expect(empDownloadRes.headers['content-disposition']).toContain('snapshot_v1.pdf');
+        expect(empDownloadRes.body.toString()).toContain('Snapshot File V1 Submitted To Employer');
+
+        // 6b. Employer B (thuộc công ty khác, không quản lý Job của đơn ứng tuyển này) cố tải CV -> bị chặn 403 Forbidden!
+        await request(app.getHttpServer())
+          .get(`/api/v1/students/cvs/${cvId}/download`)
+          .set('Authorization', `Bearer ${users.employerB.token}`)
+          .expect(403);
+
+        // 7. Đơn ứng tuyển kết thúc (ACCEPTED) -> Sinh viên A xóa CV gốc
+        await prisma.application.update({
+          where: { id: application.id },
+          data: { status: 'ACCEPTED' },
+        });
+
+        await request(app.getHttpServer())
+          .delete(`/api/v1/students/cvs/${cvId}`)
+          .set('Authorization', `Bearer ${users.studentA.token}`)
+          .expect(200);
+
+        // 8. Khẳng định:
+        // - assetV2 (không nằm trong đơn ứng tuyển nào) đã được dọn dẹp sạch khỏi DB và disk (không mồ côi)
+        expect(await prisma.fileAsset.findUnique({ where: { id: assetV2.id } })).toBeNull();
+        expect(await storageService.exists(assetV2.storageKey)).toBe(false);
+
+        // - assetV1 (nằm trong Application.cvSnapshot) vẫn được bảo toàn nguyên vẹn và cả Employer lẫn Sinh viên A đều tải lại được!
+        expect(await prisma.fileAsset.findUnique({ where: { id: assetV1.id } })).not.toBeNull();
+        expect(await storageService.exists(assetV1.storageKey)).toBe(true);
+
+        const empDownloadAfterDelete = await request(app.getHttpServer())
+          .get(`/api/v1/students/cvs/${cvId}/download`)
+          .set('Authorization', `Bearer ${users.employer.token}`)
+          .expect(200);
+        expect(empDownloadAfterDelete.body.toString()).toContain(
+          'Snapshot File V1 Submitted To Employer',
+        );
+
+        const studentDownloadAfterDelete = await request(app.getHttpServer())
+          .get(`/api/v1/students/cvs/${cvId}/download`)
+          .set('Authorization', `Bearer ${users.studentA.token}`)
+          .expect(200);
+        expect(studentDownloadAfterDelete.body.toString()).toContain(
+          'Snapshot File V1 Submitted To Employer',
+        );
+
+        // Sinh viên B vẫn bị chặn 404 (Anti-IDOR) kể cả khi tải theo cvId đã xóa có snapshot
+        await request(app.getHttpServer())
+          .get(`/api/v1/students/cvs/${cvId}/download`)
+          .set('Authorization', `Bearer ${users.studentB.token}`)
+          .expect(404);
+
+        // Cleanup
+        await prisma.application.delete({ where: { id: application.id } });
+        await storageService.delete(assetV1.storageKey).catch(() => {});
+        await prisma.fileAsset.delete({ where: { id: assetV1.id } }).catch(() => {});
+      } finally {
+        await prisma.jobPosting.deleteMany({ where: { companyId: company.id } });
+        await prisma.companyBranch.deleteMany({ where: { companyId: company.id } });
+        await prisma.companyMember.deleteMany({ where: { companyId: company.id } });
+        await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
+      }
     });
   });
 });

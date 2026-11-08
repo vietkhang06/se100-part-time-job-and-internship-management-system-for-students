@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   CertificationItemDto,
@@ -80,12 +80,35 @@ export class PrismaCvRepository implements ICvRepository {
 
         const asset = await tx.fileAsset.findUnique({
           where: { id: data.fileAssetId },
+          include: { cv: true },
         });
 
         if (!asset || asset.status === 'PENDING_DELETION') {
           throw new BadRequestException(
             'Tệp tài liệu đang trong trạng thái chờ xóa hoặc không hợp lệ.',
           );
+        }
+
+        if (asset.cv) {
+          throw new BadRequestException({
+            statusCode: 400,
+            message: 'Tệp tài liệu này đã được liên kết với một CV khác.',
+            error: 'Bad Request',
+            code: 'FILE_ASSET_ALREADY_ATTACHED',
+          });
+        }
+
+        const owningProfile = await tx.studentProfile.findUnique({
+          where: { id: data.studentProfileId },
+          select: { userId: true },
+        });
+        if (owningProfile && asset.ownerUserId !== owningProfile.userId) {
+          throw new ForbiddenException({
+            statusCode: 403,
+            message: 'Bạn không có quyền sử dụng hoặc liên kết tệp tài liệu này.',
+            error: 'Forbidden',
+            code: 'FILE_ASSET_FORBIDDEN',
+          });
         }
 
         await tx.fileAsset.update({
@@ -130,12 +153,38 @@ export class PrismaCvRepository implements ICvRepository {
 
         const asset = await tx.fileAsset.findUnique({
           where: { id: data.fileAssetId },
+          include: { cv: true },
         });
 
         if (!asset || asset.status === 'PENDING_DELETION') {
           throw new BadRequestException(
             'Tệp tài liệu đang trong trạng thái chờ xóa hoặc không hợp lệ.',
           );
+        }
+
+        if (asset.cv && asset.cv.id !== id) {
+          throw new BadRequestException({
+            statusCode: 400,
+            message: 'Tệp tài liệu này đã được liên kết với một CV khác.',
+            error: 'Bad Request',
+            code: 'FILE_ASSET_ALREADY_ATTACHED',
+          });
+        }
+
+        const existingForOwner = await tx.cv.findUnique({
+          where: { id },
+          include: { studentProfile: { select: { userId: true } } },
+        });
+        if (
+          existingForOwner?.studentProfile &&
+          asset.ownerUserId !== existingForOwner.studentProfile.userId
+        ) {
+          throw new ForbiddenException({
+            statusCode: 403,
+            message: 'Bạn không có quyền sử dụng hoặc liên kết tệp tài liệu này.',
+            error: 'Forbidden',
+            code: 'FILE_ASSET_FORBIDDEN',
+          });
         }
 
         await tx.fileAsset.update({

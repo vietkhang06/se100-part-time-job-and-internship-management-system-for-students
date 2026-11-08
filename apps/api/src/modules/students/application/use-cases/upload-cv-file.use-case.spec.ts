@@ -111,4 +111,18 @@ describe('UploadCvFileUseCase', () => {
       BadRequestException,
     );
   });
+
+  it('should reject filenames containing path traversal sequences (S4-M02-02)', async () => {
+    const traversalFile = {
+      buffer: Buffer.from('%PDF-1.7\nSample authentic PDF content'),
+      originalname: '../../etc/passwd.pdf',
+      mimetype: 'application/pdf',
+      size: 1024,
+    };
+
+    await expect(useCase.execute('user-student-1', traversalFile)).rejects.toThrow(
+      BadRequestException,
+    );
+    expect(mockFileAssetService.storeFileAsset).not.toHaveBeenCalled();
+  });
 });

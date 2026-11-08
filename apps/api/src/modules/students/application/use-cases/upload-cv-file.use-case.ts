@@ -25,6 +25,21 @@ export function validateCvFileContent(buffer: Buffer, originalname?: string): st
     throw new BadRequestException('Tệp tải lên quá nhỏ hoặc bị rỗng/hỏng.');
   }
 
+  if (
+    originalname &&
+    (originalname.includes('..') ||
+      originalname.includes('/') ||
+      originalname.includes('\\') ||
+      originalname.includes('\0') ||
+      /%2e%2e|%2f|%5c|%00/i.test(originalname))
+  ) {
+    throw new BadRequestException(
+      'Tên tệp không hợp lệ hoặc chứa ký tự đường dẫn bị cấm (path traversal).',
+    );
+  }
+
+  const ext = (originalname || '').toLowerCase();
+
   // 1. PDF Verification
   if (
     buffer.length >= 5 &&
@@ -34,7 +49,9 @@ export function validateCvFileContent(buffer: Buffer, originalname?: string): st
     buffer[3] === 0x46 &&
     buffer[4] === 0x2d
   ) {
-    return 'application/pdf';
+    if (!originalname || ext.endsWith('.pdf')) {
+      return 'application/pdf';
+    }
   }
 
   // 2. DOC (OLE2 Compound Document) Verification
@@ -49,7 +66,9 @@ export function validateCvFileContent(buffer: Buffer, originalname?: string): st
     buffer[6] === 0x1a &&
     buffer[7] === 0xe1
   ) {
-    return 'application/msword';
+    if (!originalname || ext.endsWith('.doc') || ext.endsWith('.docx')) {
+      return 'application/msword';
+    }
   }
 
   // 3. DOCX (Zip Container PK\x03\x04) Verification
@@ -60,7 +79,6 @@ export function validateCvFileContent(buffer: Buffer, originalname?: string): st
     buffer[2] === 0x03 &&
     buffer[3] === 0x04
   ) {
-    const ext = (originalname || '').toLowerCase();
     if (ext.endsWith('.docx') || ext.endsWith('.doc')) {
       return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
     }

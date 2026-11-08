@@ -192,6 +192,31 @@ export class FileAssetService implements OnApplicationBootstrap {
   }
 
   /**
+   * Checks whether any Application record references this fileAssetId in its immutable cvSnapshot.
+   * Preserves snapshot file integrity (Contract C-03 & S4-M02-02) when a CV file is replaced or deleted.
+   */
+  private async isReferencedByApplicationSnapshot(
+    client: Prisma.TransactionClient | PrismaService,
+    fileAssetId: string,
+  ): Promise<boolean> {
+    const appDelegate = (client as Partial<PrismaService>).application;
+    if (!appDelegate || typeof appDelegate.count !== 'function') {
+      return false;
+    }
+
+    const count = await appDelegate.count({
+      where: {
+        cvSnapshot: {
+          path: ['fileAssetId'],
+          equals: fileAssetId,
+        },
+      },
+    });
+
+    return count > 0;
+  }
+
+  /**
    * Safely deletes a FileAsset with atomic race protection:
    * Phase 1: In a short DB transaction, check existing references and transition status to PENDING_DELETION.
    *          Once committed to PENDING_DELETION, any concurrent attachment attempt will be rejected.
@@ -226,12 +251,19 @@ export class FileAssetService implements OnApplicationBootstrap {
       const hasCv = !!asset.cv;
       const hasDoc =
         asset.companyVerificationDocuments && asset.companyVerificationDocuments.length > 0;
+      const hasAppSnapshot = await this.isReferencedByApplicationSnapshot(tx, fileAssetId);
 
-      if (hasCv || hasDoc) {
+      if (hasCv || hasDoc || hasAppSnapshot) {
+        if (asset.status !== FileAssetStatus.PERMANENT) {
+          await tx.fileAsset.update({
+            where: { id: fileAssetId },
+            data: { status: FileAssetStatus.PERMANENT },
+          });
+        }
         return {
           outcome: 'STILL_REFERENCED' as const,
           storageKey: asset.storageKey,
-          assetStatus: asset.status as FileAssetStatus,
+          assetStatus: FileAssetStatus.PERMANENT,
         };
       }
 
@@ -282,7 +314,7 @@ export class FileAssetService implements OnApplicationBootstrap {
         assetStatus: FileAssetStatus.PERMANENT,
         status: 'IN_USE',
         reason:
-          'FileAsset is still referenced by domain entities (Cv or CompanyVerificationDocument)',
+          'FileAsset is still referenced by domain entities (Cv, Application.cvSnapshot, or CompanyVerificationDocument)',
       };
     }
 
@@ -367,9 +399,11 @@ export class FileAssetService implements OnApplicationBootstrap {
     let failed = 0;
 
     for (const asset of pendingAssets || []) {
+      const hasAppSnapshot = await this.isReferencedByApplicationSnapshot(this.prisma, asset.id);
       const isReferenced =
         !!asset.cv ||
-        (asset.companyVerificationDocuments && asset.companyVerificationDocuments.length > 0);
+        (asset.companyVerificationDocuments && asset.companyVerificationDocuments.length > 0) ||
+        hasAppSnapshot;
 
       if (isReferenced) {
         // Recover status if domain record was re-associated
@@ -397,7 +431,12 @@ export class FileAssetService implements OnApplicationBootstrap {
             return;
           }
 
-          if (current.cv || (current.companyVerificationDocuments && current.companyVerificationDocuments.length > 0)) {
+          const currentHasAppSnapshot = await this.isReferencedByApplicationSnapshot(tx, asset.id);
+          if (
+            current.cv ||
+            (current.companyVerificationDocuments && current.companyVerificationDocuments.length > 0) ||
+            currentHasAppSnapshot
+          ) {
             // Concurrent re-attachment detected: restore PERMANENT
             await tx.fileAsset.update({
               where: { id: asset.id },
@@ -438,7 +477,7 @@ export class FileAssetService implements OnApplicationBootstrap {
       where: { id: fileAssetId },
     });
 
-    if (!asset) {
+    if (!asset || asset.status === FileAssetStatus.PENDING_DELETION) {
       throw new NotFoundException('File asset không tồn tại.');
     }
 

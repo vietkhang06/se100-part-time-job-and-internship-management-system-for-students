@@ -15,6 +15,10 @@ Tài liệu này xác định ma trận ánh xạ chính thức giữa tình hu�
 | **Vượt quá số lượng CV cho phép** | `400 Bad Request` | `CV_LIMIT_EXCEEDED` | Sinh viên đã sở hữu đủ 10 CV và cố tình tạo thêm CV mới | `"Mỗi sinh viên chỉ được tạo tối đa 10 CV. Vui lòng xóa bớt CV không sử dụng."` |
 | **Không thể hủy cờ mặc định duy nhất** | `400 Bad Request` | `CANNOT_UNSET_ONLY_DEFAULT_CV` | Sinh viên cố tình gửi `isDefault: false` cho CV mặc định duy nhất của mình khi không có CV khác thay thế | `"Hệ thống yêu cầu phải luôn có một CV mặc định. Vui lòng chọn một CV khác làm mặc định thay thế."` |
 | **CV đang dùng trong đơn ứng tuyển** | `409 Conflict` | `CV_IN_USE_CANNOT_DELETE` | Sinh viên yêu cầu xóa CV đang được gắn với đơn ứng tuyển chưa hoàn tất (`SUBMITTED`, `REVIEWING`, `INTERVIEW_SCHEDULED`) | `"Không thể xóa CV đang được sử dụng trong hồ sơ ứng tuyển đang hoạt động."` |
+| **Không tìm thấy FileAsset** | `404 Not Found` | `FILE_ASSET_NOT_FOUND` | `fileAssetId` không tồn tại hoặc đang ở trạng thái chờ xóa khi tải xuống | `"Không tìm thấy tệp tài liệu tương ứng."` |
+| **Không sở hữu FileAsset** | `403 Forbidden` | `FILE_ASSET_FORBIDDEN` | Sinh viên cố tình gắn hoặc xóa `fileAssetId` thuộc sở hữu của người dùng khác (`asset.ownerUserId !== req.user.id`) | `"Bạn không có quyền sử dụng hoặc liên kết tệp tài liệu này."` |
+| **FileAsset đang chờ xóa** | `400 Bad Request` | `FILE_ASSET_PENDING_DELETION` | Sinh viên cố tình gắn `fileAssetId` đang ở trạng thái `PENDING_DELETION` | `"Tệp tài liệu này đang trong trạng thái chờ xóa và không thể sử dụng."` |
+| **FileAsset đã gắn với CV khác** | `400 Bad Request` | `FILE_ASSET_ALREADY_ATTACHED` | Sinh viên cố tình gắn một `fileAssetId` đã được liên kết với một CV khác | `"Tệp tài liệu này đã được liên kết với một CV khác."` |
 
 ---
 
@@ -80,7 +84,12 @@ Bảng quy chuẩn này là căn cứ để nghiệm thu tiêu chí: **"FE/BE th
 | `POST /students/cvs` | Tạo CV mới | Tự động gán `userId = req.user.id`, không nhận `userId` từ body | Sinh viên chỉ tạo được CV cho chính mình |
 | `PATCH /students/cvs/:id` | Cập nhật CV | Kiểm tra `cv.userId === req.user.id` | Trả về `404 Not Found` (`CV_NOT_FOUND`) |
 | `PATCH /students/cvs/:id/default` | Đặt CV mặc định | Kiểm tra `cv.userId === req.user.id` | Trả về `404 Not Found` (`CV_NOT_FOUND`) |
-| `DELETE /students/cvs/:id` | Xóa CV | Kiểm tra `cv.userId === req.user.id` | Trả về `404 Not Found` (`CV_NOT_FOUND`) |
+| `DELETE /students/cvs/:id` | Xóa CV | Kiểm tra `cv.userId === req.user.id` + kiểm tra đơn ứng tuyển hoạt động | Trả về `404 Not Found` (`CV_NOT_FOUND`) hoặc `409 Conflict` (`CV_IN_USE_CANNOT_DELETE`) |
+| `POST /students/cvs/upload` | Tải tệp CV lên | Yêu cầu vai trò `STUDENT`; gán `ownerUserId = req.user.id`; kiểm tra magic bytes, dung lượng $\le 10\text{ MB}$ và chống path traversal | `401` (chưa đăng nhập), `403` (sai vai trò), `400` (sai MIME/size/path) |
+| `POST /students/cvs` & `PATCH /students/cvs/:id` (với `fileAssetId`) | Liên kết `FileAsset` vào CV | Kiểm tra `asset.ownerUserId === req.user.id`, `asset.status !== PENDING_DELETION`, và `asset.cv` chưa gắn CV khác dưới khóa dòng `FOR UPDATE` | `403 FILE_ASSET_FORBIDDEN` (tệp người khác), `404 FILE_ASSET_NOT_FOUND`, `400 FILE_ASSET_ALREADY_ATTACHED` |
+| `GET /students/cvs/:id/download` | Tải xuống tệp CV (`STUDENT`) | Kiểm tra `cv.studentProfileId === profile.id` và `asset.ownerUserId === req.user.id` | Trả về `404 Not Found` (`CV_NOT_FOUND`) để chống IDOR |
+| `GET /students/cvs/:id/download` | Tải xuống tệp CV (`EMPLOYER` - C-04) | Kiểm tra tồn tại `Application` của `cvId` nộp vào `JobPosting` thuộc công ty mà Employer là thành viên `ACTIVE`; ưu tiên đọc `cvSnapshot.fileAssetId` | Trả về `403 Forbidden` nếu không có đơn ứng tuyển thuộc công ty của Employer |
+| `GET /students/cvs/:id/download` | Tải xuống tệp CV (`ADMIN` / `MODERATOR`) | Cho phép tải tệp từ `cv.fileAssetId` hoặc `Application.cvSnapshot.fileAssetId` phục vụ kiểm duyệt/đối soát | Trả về `404 Not Found` nếu CV và snapshot đều không có tệp |
 
 ---
 
