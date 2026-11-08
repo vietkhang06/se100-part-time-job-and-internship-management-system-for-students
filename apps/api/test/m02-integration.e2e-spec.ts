@@ -8,6 +8,7 @@ import { PasswordHasher } from '../src/modules/auth/infrastructure/security/pass
 import {
   AuthErrorCode,
   CvErrorCode,
+  StudentProfileErrorCode,
   UserRole,
   UserStatus,
   JobSeekingStatus,
@@ -356,6 +357,7 @@ describe('S2-M02-06: M02 Integration Tests (UC11–UC12, UC31–UC35, UC37–UC3
         .send({
           title: 'CV Backend Engineer - Student A',
           summary: 'Kinh nghiệm lập trình TypeScript và NestJS',
+          fileUrl: 'https://storage.campusjob.vn/cvs/student-a-backend.pdf',
           skills: ['TypeScript', 'NestJS', 'PostgreSQL'],
           educations: [
             {
@@ -364,6 +366,33 @@ describe('S2-M02-06: M02 Integration Tests (UC11–UC12, UC31–UC35, UC37–UC3
               startDate: '2021-09',
               endDate: '2025-06',
               gpa: '3.6',
+            },
+          ],
+          experiences: [
+            {
+              company: 'Công ty Công nghệ CampusJob',
+              position: 'Backend Intern',
+              startDate: '2024-06',
+              endDate: '2024-12',
+              description: 'Phát triển REST API bằng NestJS và Prisma',
+            },
+          ],
+          projects: [
+            {
+              name: 'Nền tảng Tuyển dụng Sinh viên',
+              role: 'Backend Developer',
+              startDate: '2025-01',
+              endDate: '2025-05',
+              url: 'https://github.com/campusjob/platform',
+              description: 'Xây dựng phân hệ Hồ sơ & Ứng tuyển bất biến',
+            },
+          ],
+          certifications: [
+            {
+              name: 'AWS Certified Developer',
+              issuer: 'Amazon Web Services',
+              issueDate: '2025-03',
+              url: 'https://aws.amazon.com/verification',
             },
           ],
         })
@@ -504,10 +533,10 @@ describe('S2-M02-06: M02 Integration Tests (UC11–UC12, UC31–UC35, UC37–UC3
   });
 
   // ==========================================================================
-  // NHÓM 5: LUỒNG TÍCH HỢP M02 → M04 VÀ TÍNH BẤT BIẾN SNAPSHOT (INT-17 ĐẾN INT-20)
+  // NHÓM 5: LUỒNG TÍCH HỢP M02 → M04 VÀ TÍNH BẤT BIẾN SNAPSHOT (INT-17 ĐẾN INT-21)
   // ==========================================================================
-  describe('Nhóm 5: Luồng tích hợp M02 → M04 & Tính bất biến Snapshot (C-03, UC37, UC38)', () => {
-    it('INT-17: M04 nộp đơn thành công khi tiêu thụ CvSnapshotSource từ M02', async () => {
+  describe('Nhóm 5: Luồng tích hợp M02 → M04 & Tính bất biến Snapshot (C-03, C-05, S4-M02-03)', () => {
+    it('INT-17: M04 nộp đơn thành công khi tiêu thụ CvSnapshotSource từ M02 và ghi đủ 16 trường theo C-03', async () => {
       // Sinh viên A nộp đơn ứng tuyển với cv1Id
       const application = await m04Workflow.submit(
         accounts.studentA.id,
@@ -518,21 +547,37 @@ describe('S2-M02-06: M02 Integration Tests (UC11–UC12, UC31–UC35, UC37–UC3
 
       expect(application).toBeDefined();
       expect(application.id).toBeDefined();
+      createdApplicationId = application.id;
       expect(application.studentId).toBe(accounts.studentA.id);
       expect(application.cvId).toBe(accounts.studentA.cv1Id);
 
-      // Snapshot được M04 lưu giữ trong PostgreSQL
-      expect(application.cvSnapshot).toBeDefined();
-      expect(application.cvSnapshot.originalCvId).toBe(accounts.studentA.cv1Id);
-      expect(application.cvSnapshot.title).toBe('CV Backend Engineer - Student A');
-      expect(application.cvSnapshot.skills).toContain('NestJS');
-      expect(application.cvSnapshot.capturedAt).toBeDefined();
-
-      createdApplicationId = application.id;
+      // Snapshot được M04 lưu giữ trong PostgreSQL với đầy đủ các trường chuẩn Contract C-03
+      const snap = application.cvSnapshot;
+      expect(snap).toBeDefined();
+      expect(typeof snap.snapshotId).toBe('string');
+      expect(snap.originalCvId).toBe(accounts.studentA.cv1Id);
+      expect(snap.studentId).toBe(accounts.studentA.id);
+      expect(snap.fullName).toBe('User studentA');
+      expect(snap.email).toBe(accounts.studentA.email);
+      expect(snap.phone).toBeNull();
+      expect(snap.title).toBe('CV Backend Engineer - Student A');
+      expect(snap.summary).toBe('Kinh nghiệm lập trình TypeScript và NestJS');
+      expect(snap.fileUrl).toBe('https://storage.campusjob.vn/cvs/student-a-backend.pdf');
+      expect(snap.fileAssetId).toBeNull();
+      expect(snap.skills).toEqual(['TypeScript', 'NestJS', 'PostgreSQL']);
+      expect(snap.educations).toHaveLength(1);
+      expect(snap.educations[0].school).toBe('ĐH Bách Khoa');
+      expect(snap.experiences).toHaveLength(1);
+      expect(snap.experiences[0].company).toBe('Công ty Công nghệ CampusJob');
+      expect(snap.projects).toHaveLength(1);
+      expect(snap.projects[0].name).toBe('Nền tảng Tuyển dụng Sinh viên');
+      expect(snap.certifications).toHaveLength(1);
+      expect(snap.certifications[0].name).toBe('AWS Certified Developer');
+      expect(snap.capturedAt).toBeDefined();
     });
 
-    it('INT-18: M04 từ chối khi sinh viên A cố nộp đơn bằng cvId của sinh viên B (Chống IDOR)', async () => {
-      // Sinh viên A truyền cvId của sinh viên B
+    it('INT-18: M04 từ chối và trả đúng mã lỗi Contract khi nộp CV người khác, CV không tồn tại hoặc thiếu StudentProfile', async () => {
+      // 1. Sinh viên A truyền cvId của sinh viên B -> 404 CV_NOT_FOUND (Anti-IDOR)
       await expect(
         m04Workflow.submit(
           accounts.studentA.id,
@@ -540,41 +585,133 @@ describe('S2-M02-06: M02 Integration Tests (UC11–UC12, UC31–UC35, UC37–UC3
           accounts.studentB.cvId!,
           'Nộp đơn bằng CV người khác',
         ),
-      ).rejects.toThrow();
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({
+          statusCode: 404,
+          code: CvErrorCode.CV_NOT_FOUND,
+        }),
+      });
+
+      // 2. Sinh viên A truyền cvId không tồn tại -> 404 CV_NOT_FOUND
+      await expect(
+        m04Workflow.submit(
+          accounts.studentA.id,
+          testJobId,
+          '00000000-0000-0000-0000-000000000000',
+          'Nộp đơn bằng CV không tồn tại',
+        ),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({
+          statusCode: 404,
+          code: CvErrorCode.CV_NOT_FOUND,
+        }),
+      });
+
+      // 3. Tài khoản chưa có StudentProfile (ví dụ employer.id) -> 404 STUDENT_PROFILE_NOT_FOUND
+      await expect(
+        m04Workflow.submit(
+          accounts.employer.id,
+          testJobId,
+          accounts.studentA.cv1Id!,
+          'Tài khoản không có StudentProfile',
+        ),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({
+          statusCode: 404,
+          code: StudentProfileErrorCode.STUDENT_PROFILE_NOT_FOUND,
+        }),
+      });
+
+      // 4. Tham số cvId rỗng -> 400 VALIDATION_ERROR
+      await expect(
+        m04Workflow.submit(accounts.studentA.id, testJobId, '   ', 'Thiếu cvId'),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({
+          statusCode: 400,
+          code: CvErrorCode.VALIDATION_ERROR,
+        }),
+      });
     });
 
-    it('INT-19: UC37 - Tính bất biến: Sinh viên A cập nhật CV gốc trên M02 nhưng snapshot trong đơn M04 không đổi', async () => {
-      // 1. Sinh viên A cập nhật CV gốc (thay đổi title và skills)
+    it('INT-19: UC37 - Tính bất biến: Sinh viên A cập nhật toàn bộ CV gốc trên M02 nhưng snapshot trong đơn M04 không đổi', async () => {
+      // 1. Sinh viên A cập nhật CV gốc (thay đổi title, summary, skills, educations, experiences)
       await request(app.getHttpServer())
         .patch(`/api/v1/students/cvs/${accounts.studentA.cv1Id}`)
         .set('Authorization', `Bearer ${accounts.studentA.token}`)
         .send({
           title: 'CV AI & Data Engineer (Đã đổi ngành hoàn toàn)',
+          summary: 'Tóm tắt mới đã thay đổi',
           skills: ['Python', 'PyTorch', 'TensorFlow'],
+          educations: [],
+          experiences: [],
+          projects: [],
+          certifications: [],
         })
         .expect(200);
 
-      // 2. M04 truy vấn lại chi tiết đơn ứng tuyển của sinh viên A (UC37)
+      // 2. M04 truy vấn lại chi tiết đơn ứng tuyển của sinh viên A và từ góc nhìn Nhà tuyển dụng (UC37)
       const appRecord = await m04Workflow.getMine(accounts.studentA.id, createdApplicationId);
+      const employerView = await m04Workflow.getCandidateDetail(
+        accounts.employer.id,
+        createdApplicationId,
+      );
 
       // 3. Khẳng định: Snapshot trong hồ sơ vẫn mang giá trị ban đầu tại thời điểm nộp đơn
       expect(appRecord.cvSnapshot.title).toBe('CV Backend Engineer - Student A');
-      expect(appRecord.cvSnapshot.skills).toContain('NestJS');
+      expect(appRecord.cvSnapshot.summary).toBe('Kinh nghiệm lập trình TypeScript và NestJS');
+      expect(appRecord.cvSnapshot.skills).toEqual(['TypeScript', 'NestJS', 'PostgreSQL']);
       expect(appRecord.cvSnapshot.skills).not.toContain('PyTorch');
+      expect(appRecord.cvSnapshot.educations).toHaveLength(1);
+      expect(appRecord.cvSnapshot.experiences).toHaveLength(1);
+      expect(appRecord.cvSnapshot.projects).toHaveLength(1);
+      expect(appRecord.cvSnapshot.certifications).toHaveLength(1);
+      expect(employerView.cvSnapshot).toEqual(appRecord.cvSnapshot);
     });
 
-    it('INT-20: UC37 - Tính bất biến: Đơn ứng tuyển trong M04 vẫn toàn vẹn sau khi CV gốc bị xóa', async () => {
-      // 1. Sinh viên xóa CV2 (đã tạo ở bước INT-15)
+    it('INT-20: UC35 & UC37 (S4-M02-03) - Đơn ứng tuyển trong M04 vẫn giữ nguyên toàn bộ snapshot sau khi chính CV gốc đã nộp bị xóa', async () => {
+      // 1. Khi đơn đang SUBMITTED, cố xóa chính cv1Id đang dùng ứng tuyển phải bị chặn 409 CV_IN_USE_CANNOT_DELETE
+      const conflictRes = await request(app.getHttpServer())
+        .delete(`/api/v1/students/cvs/${accounts.studentA.cv1Id}`)
+        .set('Authorization', `Bearer ${accounts.studentA.token}`)
+        .expect(409);
+      expect(conflictRes.body.code).toBe(CvErrorCode.CV_IN_USE_CANNOT_DELETE);
+
+      // 2. Sinh viên A rút đơn ứng tuyển (chuyển sang trạng thái kết thúc WITHDRAWN)
+      const withdrawn = await m04Workflow.withdraw(accounts.studentA.id, createdApplicationId);
+      expect(withdrawn.status).toBe('WITHDRAWN');
+
+      // 3. Sau khi đơn ứng tuyển đã kết thúc, sinh viên A xóa chính CV gốc (cv1Id) đã dùng để nộp đơn
       await request(app.getHttpServer())
-        .delete(`/api/v1/students/cvs/${accounts.studentA.cv2Id}`)
+        .delete(`/api/v1/students/cvs/${accounts.studentA.cv1Id}`)
         .set('Authorization', `Bearer ${accounts.studentA.token}`)
         .expect(200);
 
-      // 2. Đơn ứng tuyển ban đầu gắn với cv1Id vẫn đọc được toàn bộ snapshot bình thường
-      const appRecord = await m04Workflow.getMine(accounts.studentA.id, createdApplicationId);
-      expect(appRecord).toBeDefined();
-      expect(appRecord.cvSnapshot.title).toBe('CV Backend Engineer - Student A');
-      expect(appRecord.cvSnapshot.originalCvId).toBe(accounts.studentA.cv1Id);
+      // Xác nhận cv1Id đã bị xóa hoàn toàn khỏi bảng Cv của M02
+      await request(app.getHttpServer())
+        .get(`/api/v1/students/cvs/${accounts.studentA.cv1Id}`)
+        .set('Authorization', `Bearer ${accounts.studentA.token}`)
+        .expect(404);
+
+      // 4. Khẳng định: Đơn ứng tuyển trong M04 vẫn bảo toàn nguyên vẹn 100% dữ liệu cvSnapshot đã nộp!
+      const appRecordAfterDelete = await m04Workflow.getMineDetail(
+        accounts.studentA.id,
+        createdApplicationId,
+      );
+      expect(appRecordAfterDelete).toBeDefined();
+      expect(appRecordAfterDelete.cvSnapshot.originalCvId).toBe(accounts.studentA.cv1Id);
+      expect(appRecordAfterDelete.cvSnapshot.title).toBe('CV Backend Engineer - Student A');
+      expect(appRecordAfterDelete.cvSnapshot.summary).toBe(
+        'Kinh nghiệm lập trình TypeScript và NestJS',
+      );
+      expect(appRecordAfterDelete.cvSnapshot.skills).toEqual([
+        'TypeScript',
+        'NestJS',
+        'PostgreSQL',
+      ]);
+      expect(appRecordAfterDelete.cvSnapshot.educations).toHaveLength(1);
+      expect(appRecordAfterDelete.cvSnapshot.experiences).toHaveLength(1);
+      expect(appRecordAfterDelete.cvSnapshot.projects).toHaveLength(1);
+      expect(appRecordAfterDelete.cvSnapshot.certifications).toHaveLength(1);
     });
   });
 });

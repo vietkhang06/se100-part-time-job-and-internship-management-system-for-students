@@ -4,7 +4,7 @@
 - **Tên task:** Hoàn thiện vòng đời FileAsset và bảo vệ quyền sở hữu tệp CV
 - **Sprint:** Sprint 4
 - **Độ ưu tiên:** P1
-- **Người thực hiện:** Gia Khang
+- **Người thực hiện:** Nguyễn Thị Ngọc Huyền
 - **Ngày thực hiện:** 2026-11-08
 - **Hợp đồng liên quan:** C-03 (CV Snapshot), C-04 (Employer Safe View / Privacy), C-05 (Resource Ownership & Anti-IDOR)
 - **Task cha / Phụ thuộc:** `S2-M02-04`, `S3-M02-03`, storage adapter `W2-DO-01`

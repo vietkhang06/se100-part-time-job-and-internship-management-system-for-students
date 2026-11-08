@@ -4,7 +4,6 @@ import {
   Patch,
   Body,
   Param,
-  Inject,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -29,11 +28,6 @@ import { UpdateStudentProfileDto } from '../../application/dto/update-student-pr
 import { GetStudentProfileUseCase } from '../../application/use-cases/get-student-profile.use-case';
 import { UpdateStudentProfileUseCase } from '../../application/use-cases/update-student-profile.use-case';
 import { GetCvSnapshotUseCase } from '../../application/use-cases/get-cv-snapshot.use-case';
-import {
-  ICvRepository,
-  CV_REPOSITORY_TOKEN,
-} from '../../domain/repositories/cv.repository.interface';
-import { InMemoryCvRepository } from '../../infrastructure/persistence/in-memory-cv.repository';
 
 /**
  * StudentsController
@@ -50,8 +44,6 @@ export class StudentsController {
     private readonly getProfileUseCase: GetStudentProfileUseCase,
     private readonly updateProfileUseCase: UpdateStudentProfileUseCase,
     private readonly getCvSnapshotUseCase: GetCvSnapshotUseCase,
-    @Inject(CV_REPOSITORY_TOKEN)
-    private readonly cvRepo: ICvRepository,
   ) {}
 
   /**
@@ -99,8 +91,7 @@ export class StudentsController {
   })
   @ApiParam({
     name: 'id',
-    description:
-      'ID của CV (Dùng "cv-sample-test" để test lấy CV của mình, hoặc "cv-alien-forbidden" để test chống IDOR)',
+    description: 'ID của CV cần trích xuất snapshot thuộc quyền sở hữu của sinh viên',
   })
   @ApiResponse({ status: 200, description: 'Bản chụp Snapshot CV bất biến' })
   @ApiResponse({
@@ -111,18 +102,7 @@ export class StudentsController {
     @CurrentUser('id') userId: string,
     @Param('id') cvId: string,
   ): Promise<CvSnapshotDto> {
-    const profileRes = await this.getProfileUseCase.execute(userId);
-    const profileId = profileRes.profile.id;
-
-    // Hỗ trợ liên kết CV mẫu cho sinh viên đang kiểm thử trực tiếp
-    if (
-      cvId === 'cv-sample-test' &&
-      this.cvRepo instanceof InMemoryCvRepository
-    ) {
-      this.cvRepo.ensureSampleForProfile(profileId);
-    }
-
-    return this.getCvSnapshotUseCase.execute(userId, cvId);
+    return this.getCvSnapshotUseCase.getOwnedSnapshot(userId, cvId);
   }
 }
 

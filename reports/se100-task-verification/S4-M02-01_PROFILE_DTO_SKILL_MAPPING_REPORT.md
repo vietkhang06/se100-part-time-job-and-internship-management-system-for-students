@@ -4,7 +4,7 @@
 - **Tên task:** Đồng bộ StudentProfile fields và ánh xạ kỹ năng chuẩn hóa sang DTO
 - **Sprint:** Sprint 4
 - **Độ ưu tiên:** P1
-- **Người thực hiện:** Gia Khang
+- **Người thực hiện:** Nguyễn Thị Ngọc Huyền
 - **Ngày thực hiện:** 2026-11-05
 - **Hợp đồng liên quan:** C-03 (CV Snapshot & Student Profile Contract), C-04 (Privacy/Scoping)
 - **Task cha / Căn cứ:** `S3-M02-03`, `StudentProfileDto`, danh mục `FR-05`/`FR-06`

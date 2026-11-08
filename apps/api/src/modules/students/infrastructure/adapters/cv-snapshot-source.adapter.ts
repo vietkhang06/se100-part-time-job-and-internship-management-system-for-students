@@ -16,6 +16,6 @@ export class CvSnapshotSourceAdapter implements CvSnapshotSource {
     studentId: string,
     cvId: string,
   ): Promise<CvSnapshotDto> {
-    return this.getCvSnapshotUseCase.execute(studentId, cvId);
+    return this.getCvSnapshotUseCase.getOwnedSnapshot(studentId, cvId);
   }
 }

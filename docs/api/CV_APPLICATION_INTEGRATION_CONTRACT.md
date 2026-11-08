@@ -76,6 +76,9 @@ export interface CvSnapshotDto {
   /** Đường dẫn tệp CV đính kèm (nếu có) */
   fileUrl?: string | null;
 
+  /** Mã định danh FileAsset đính kèm tại thời điểm nộp (nếu có) */
+  fileAssetId?: string | null;
+
   /** Thời điểm chụp bản snapshot (ISO 8601 UTC) */
   capturedAt: string;
 }
@@ -85,18 +88,19 @@ export interface CvSnapshotDto {
 
 ## 3. Giao tiếp mã nguồn (Port & Adapter Interface)
 
-Để đảm bảo nguyên tắc kiến trúc Modular Monolith không bị coupling cứng qua database, hai module giao tiếp thông qua **In-Memory Port Interface**:
+Để đảm bảo nguyên tắc kiến trúc Modular Monolith không bị coupling cứng qua database, hai module giao tiếp thông qua **In-Memory Port Interface** (M02 hoàn toàn không truy xuất nội bộ DB của M04 khi cấp phát Snapshot):
 
-### 3.1 Interface do M04 công bố: `CvSnapshotSource`
-Tệp: `apps/api/src/modules/applications/application/m04-ports.ts`
+### 3.1 Interface do M04/Contracts công bố: `CvSnapshotSource`
+Tệp: `packages/contracts/src/index.ts` & `apps/api/src/modules/applications/application/m04-ports.ts`
 
 ```typescript
 export interface CvSnapshotSource {
   /**
-   * M02 kiểm tra quyền sở hữu và trả về bản chụp CV hợp lệ cho sinh viên
-   * @param studentId ID hồ sơ sinh viên
+   * M02 kiểm tra quyền sở hữu và trả về bản chụp CV bất biến (deep-cloned & frozen) cho sinh viên
+   * @param studentId ID người dùng sinh viên đã xác thực từ JWT (User.id theo C-01/C-05)
    * @param cvId ID của CV muốn nộp
-   * @throws NotFoundException Nếu không tìm thấy hoặc CV không thuộc về studentId (Anti-IDOR)
+   * @throws BadRequestException (400 VALIDATION_ERROR) Nếu tham số rỗng hoặc CV thiếu dữ liệu tối thiểu
+   * @throws NotFoundException (404 STUDENT_PROFILE_NOT_FOUND / CV_NOT_FOUND) Nếu chưa có hồ sơ hoặc CV không thuộc về sinh viên (Anti-IDOR)
    */
   getOwnedSnapshot(studentId: string, cvId: string): Promise<CvSnapshotDto>;
 }
@@ -111,12 +115,26 @@ export interface CvSnapshotSource {
 
 ## 4. Nguyên tắc bảo mật & Xử lý lỗi (Security & Error Handling)
 
-### 4.1 Chống tấn công IDOR (Insecure Direct Object Reference)
+### 4.1 Chống tấn công IDOR (Insecure Direct Object Reference — Contract C-05)
 - Một sinh viên A **tuyệt đối không thể** sử dụng `cvId` của sinh viên B để nộp hồ sơ.
-- Logic kiểm tra tại M02:
+- Logic kiểm tra tại M02 (`GetCvSnapshotUseCase`):
   ```typescript
-  const cv = await this.cvRepo.findById(cvId);
-  if (!cv || cv.studentProfileId !== studentId) {
+  const profile = await this.profileRepo.findByUserId(normalizedStudentId);
+  if (!profile) {
+    throw new NotFoundException({
+      statusCode: 404,
+      message: 'Không tìm thấy hồ sơ sinh viên.',
+      error: 'Not Found',
+      code: StudentProfileErrorCode.STUDENT_PROFILE_NOT_FOUND,
+    });
+  }
+
+  const cv = await this.cvRepo.findById(normalizedCvId);
+  if (
+    !cv ||
+    cv.studentProfileId !== profile.id ||
+    (Boolean(cv.userId) && cv.userId !== profile.userId)
+  ) {
     throw new NotFoundException({
       statusCode: 404,
       message: 'Không tìm thấy CV hoặc bạn không có quyền truy cập CV này.',
@@ -127,21 +145,21 @@ export interface CvSnapshotSource {
   ```
 - **Lý do trả về 404 thay vì 403:** Ngăn chặn kẻ tấn công dò quét (enumeration) xem `cvId` của người khác có tồn tại trên hệ thống hay không.
 
-### 4.2 Ma trận lỗi Contract C-03
+### 4.2 Ma trận lỗi Contract C-03 & C-05
 
 | Tình huống lỗi | Mã HTTP | Mã lỗi nghiệp vụ | Mô tả & Cách xử lý |
 | :--- | :---: | :--- | :--- |
 | **Không tìm thấy CV** | `404` | `CV_NOT_FOUND` | `cvId` không tồn tại trong hệ thống. |
-| **CV không thuộc sinh viên (IDOR)** | `404` | `CV_NOT_FOUND` | `cv.studentProfileId !== studentId`. Chặn ngay lập tức. |
-| **Hồ sơ sinh viên chưa tạo** | `404` | `STUDENT_PROFILE_NOT_FOUND` | Người dùng chưa có StudentProfile. |
-| **CV bị thiếu thông tin tối thiểu** | `400` | `VALIDATION_ERROR` | CV chưa có tiêu đề hoặc dữ liệu bị hỏng. |
+| **CV không thuộc sinh viên (IDOR)** | `404` | `CV_NOT_FOUND` | `cv.studentProfileId !== profile.id` hoặc `cv.userId !== profile.userId`. Chặn ngay lập tức. |
+| **Hồ sơ sinh viên chưa tạo** | `404` | `STUDENT_PROFILE_NOT_FOUND` | Người dùng chưa có `StudentProfile` tương ứng với `studentId` (`User.id`). |
+| **Tham số rỗng / CV thiếu thông tin tối thiểu** | `400` | `VALIDATION_ERROR` | `studentId`/`cvId` để trống hoặc CV chưa có tiêu đề (`title`) hợp lệ. |
 
 ---
 
-## 5. Ma trận truy vết nghiệm thu (Traceability Matrix)
+## 5. Ma trận truy vết nghiệm thu (Traceability Matrix — S2-M02-05 & S4-M02-03)
 
 | Tiêu chí nghiệm thu từ Sheet | Thành phần đảm bảo | Cách thức kiểm thử |
 | :--- | :--- | :--- |
-| **1. M04 nhận đúng CV của sinh viên** | `GetCvSnapshotUseCase` + `CvSnapshotDto` | Unit test: truyền `studentId`, `cvId` hợp lệ $\rightarrow$ trả về đúng snapshot chứa đầy đủ thông tin học vấn, kỹ năng của CV đó. |
-| **2. Không truy cập CV người khác** | Kiểm tra quyền sở hữu `cv.studentProfileId === studentId` | Unit test: Sinh viên A truyền `cvId` của sinh viên B $\rightarrow$ Ném lỗi `404 CV_NOT_FOUND`. |
-| **3. Không làm thay đổi CV đã dùng trong hồ sơ** | Cơ chế `Application.cvSnapshot` Json | Unit test/Integration test: Cập nhật CV trên M02 $\rightarrow$ Snapshot lưu trên Application của M04 vẫn giữ nguyên giá trị ban đầu. |
+| **1. M04 nhận đúng CV của sinh viên & đủ 16 trường C-03** | `GetCvSnapshotUseCase` + `CvSnapshotSourceAdapter` + `CvSnapshotDto` | Unit test & Integration test (`INT-17`): truyền `studentId`, `cvId` hợp lệ $\rightarrow$ trả về snapshot đầy đủ 16 trường (`snapshotId`, `originalCvId`, `studentId`, `fullName`, `email`, `phone`, `title`, `summary`, `educations`, `experiences`, `skills`, `projects`, `certifications`, `fileUrl`, `fileAssetId`, `capturedAt`). |
+| **2. Không truy cập CV người khác & trả lỗi đúng Contract** | Kiểm tra `profileRepo.findByUserId` + `cv.studentProfileId === profile.id` | Unit test & Integration test (`INT-14`, `INT-18`): Sinh viên A truyền `cvId` của sinh viên B $\rightarrow$ `404 CV_NOT_FOUND`; thiếu hồ sơ $\rightarrow$ `404 STUDENT_PROFILE_NOT_FOUND`; dữ liệu rỗng/thiếu tiêu đề $\rightarrow$ `400 VALIDATION_ERROR`. |
+| **3. Không làm thay đổi snapshot khi CV nguồn sửa hoặc xóa** | Deep-clone & `Object.freeze` tại `GetCvSnapshotUseCase` + cột JSON `Application.cvSnapshot` | Unit test & Integration test (`INT-19`, `INT-20`): Sửa toàn bộ CV gốc hoặc xóa chính CV gốc đã nộp (sau khi đơn kết thúc) $\rightarrow$ Snapshot lưu trên `Application` của M04 vẫn giữ nguyên 100% giá trị ban đầu. |
