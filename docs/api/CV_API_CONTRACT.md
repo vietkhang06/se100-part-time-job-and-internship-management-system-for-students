@@ -360,3 +360,37 @@ Authorization: Bearer <accessToken>
 ### 3.3 Contract C-05: M01 (Account) ← M02 (CV & Profile) — Xác thực quyền sở hữu
 - Định danh `userId` luôn được giải mã từ JWT token (`req.user.id`).
 - Module M02 gọi `User` entity qua khóa ngoại `userId` để xác thực trạng thái tài khoản `ACTIVE` trước khi cho phép thao tác CV.
+
+---
+
+## 4. Hợp đồng Vòng đời FileAsset & Tải tệp CV (`S3-M02-02` / `S4-M02-02` / `W2-DO-01`)
+
+### 4.1 Tải lên tệp tài liệu CV (`POST /api/v1/students/cvs/upload` — UC33b)
+- **Yêu cầu xác thực:** Bearer Token (`STUDENT`).
+- **Định dạng gửi:** `multipart/form-data` với trường `file` (tối đa 1 tệp, dung lượng $\le 10\text{ MB}$).
+- **Kiểm thực bảo mật đa lớp:**
+  1. **Tên tệp & chống Path Traversal:** Từ chối ngay (`400 Bad Request`) nếu tên tệp chứa `..`, `/`, `\`, hoặc byte `\0`.
+  2. **Đuôi tệp & MIME header:** Chỉ chấp nhận `.pdf`, `.doc`, `.docx`.
+  3. **Magic Bytes thực tế (`validateCvFileContent`):** Kiểm tra chữ ký nhị phân thực tế (`%PDF-`, OLE2 Compound Document `0xD0CF11E0A1B11AE1`, hoặc ZIP container `PK\x03\x04` khớp đuôi `.doc`/`.docx`). Chặn đứng tệp thực thi giả mạo đuôi `.pdf`.
+  4. **Khóa lưu trữ (`storageKey`):** Sinh khóa UUIDv4 độc lập với tên tệp người dùng (`<uuidv4>.<ext>`), ghi nguyên tử qua tệp tạm (`tempPath` $\rightarrow$ `rename`) và kiểm tra chống thoát thư mục gốc (`resolveSafePath` + `realpathSync`).
+  5. **Bù trừ khi lỗi DB (Rollback Compensation):** Nếu tạo bản ghi `FileAsset` trong PostgreSQL thất bại, `FileAssetService.storeFileAsset` tự động xóa ngay tệp vật lý vừa ghi để không sinh file mồ côi.
+- **Phản hồi thành công (`201 Created` — `FileAssetDto`):** Trả về bản ghi `FileAsset` ở trạng thái `PENDING_UPLOAD` kèm `id`, `ownerUserId`, `mimeType`, `sizeBytes`, `checksumSha256`, `storageKey`, `status`.
+
+### 4.2 Liên kết, Thay thế và Thu hồi FileAsset (`CreateCv` / `UpdateCv` / `DeleteCv`)
+- **Liên kết (`POST /students/cvs`, `PATCH /students/cvs/:id`):**
+  - Kiểm tra `verifyOwnership(fileAssetId, req.user.id)`: Tệp phải tồn tại (`404 FILE_ASSET_NOT_FOUND`), thuộc sở hữu của đúng sinh viên (`403 FILE_ASSET_FORBIDDEN`), và không ở trạng thái `PENDING_DELETION` (`400 FILE_ASSET_PENDING_DELETION`).
+  - Trong transaction tạo/cập nhật CV: Khóa dòng `SELECT 1 FROM "FileAsset" WHERE "id" = ... FOR UPDATE`, kiểm tra tệp chưa gắn với CV khác (`400 FILE_ASSET_ALREADY_ATTACHED`), và chuyển trạng thái `FileAsset` sang `PERMANENT`.
+- **Thay thế hoặc Xóa CV & Bảo toàn `Application.cvSnapshot` (`S4-M02-02`):**
+  - Khi CV đang gắn với đơn ứng tuyển hoạt động (`SUBMITTED`, `REVIEWING`, `INTERVIEW_SCHEDULED`), `DELETE /students/cvs/:id` bị chặn với `409 CV_IN_USE_CANNOT_DELETE`.
+  - Khi sinh viên thay tệp mới cho CV (`PATCH /students/cvs/:id`) hoặc xóa CV sau khi đơn ứng tuyển đã kết thúc (`ACCEPTED`, `REJECTED`, `WITHDRAWN`), `FileAssetService.deleteFileAsset` kiểm tra đồng thời 3 nguồn tham chiếu dưới khóa dòng `FOR UPDATE`:
+    1. Bản ghi `Cv` hiện hành (`asset.cv`)
+    2. Hồ sơ xác thực doanh nghiệp (`asset.companyVerificationDocuments`)
+    3. Bản chụp đơn ứng tuyển (`Application.cvSnapshot->>'fileAssetId'`)
+  - Nếu `FileAsset` còn được tham chiếu bởi bất kỳ `Application.cvSnapshot` nào, tệp được giữ nguyên trạng thái `PERMANENT` (`STILL_REFERENCED`) và **không xóa tệp vật lý**, đảm bảo đơn ứng tuyển luôn giữ nguyên snapshot và tệp tham chiếu hợp lệ.
+  - Nếu `FileAsset` hoàn toàn không còn tham chiếu nào, hệ thống chuyển sang `PENDING_DELETION`, xóa tệp vật lý và xóa bản ghi DB (nếu lỗi I/O tạm thời sẽ giữ `PENDING_DELETION` để `retryPendingDeletions` thu hồi lại, không sinh file mồ côi).
+
+### 4.3 Tải xuống tệp CV (`GET /api/v1/students/cvs/:id/download` — UC32b / Contract C-04 & C-05)
+- **Cơ chế phân quyền theo vai trò:**
+  - **`STUDENT`:** Chỉ chủ sở hữu CV (`cv.studentProfileId === profile.id` và `fileAsset.ownerUserId === req.user.id`) được tải tệp của mình. Nếu truy cập CV của sinh viên khác, trả về `404 CV_NOT_FOUND` (chống IDOR).
+  - **`EMPLOYER` (Contract C-04):** Chỉ được tải tệp khi tồn tại đơn ứng tuyển (`Application`) gắn với `cvId` nộp vào tin tuyển dụng (`JobPosting`) thuộc công ty mà `employerUserId` là thành viên `ACTIVE`. Hệ thống ưu tiên trích xuất `fileAssetId` từ `Application.cvSnapshot` để trả về đúng tệp tại thời điểm ứng tuyển ngay cả khi sinh viên đã đổi tệp mới hoặc xóa CV gốc sau khi đơn kết thúc. Nếu không có đơn ứng tuyển hợp lệ thuộc công ty của mình, trả về `403 FORBIDDEN`.
+  - **`ADMIN` / `MODERATOR`:** Được phép tải tệp phục vụ kiểm duyệt và đối soát nội dung.

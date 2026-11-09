@@ -32,7 +32,22 @@ export const cvFileFilter = (
   if (!file) {
     return callback(new BadRequestException('Không tìm thấy tệp tải lên.'), false);
   }
-  const ext = (file.originalname || '').toLowerCase();
+  const rawName = file.originalname || '';
+  if (
+    rawName.includes('..') ||
+    rawName.includes('/') ||
+    rawName.includes('\\') ||
+    rawName.includes('\0') ||
+    /%2e%2e|%2f|%5c|%00/i.test(rawName)
+  ) {
+    return callback(
+      new BadRequestException(
+        'Tên tệp không hợp lệ hoặc chứa ký tự đường dẫn bị cấm (path traversal).',
+      ),
+      false,
+    );
+  }
+  const ext = rawName.toLowerCase();
   const mime = (file.mimetype || '').toLowerCase();
 
   const isAllowedExt = ext.endsWith('.pdf') || ext.endsWith('.docx') || ext.endsWith('.doc');
@@ -115,6 +130,7 @@ export class CvsController {
   @Post('upload')
   @UseInterceptors(
     FileInterceptor('file', {
+      preservePath: true,
       limits: CV_FILE_UPLOAD_LIMITS,
       fileFilter: cvFileFilter,
     }),

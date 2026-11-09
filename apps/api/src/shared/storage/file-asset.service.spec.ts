@@ -8,11 +8,14 @@ interface FileAssetPrismaMock {
     create: jest.Mock; findUnique: jest.Mock; findMany: jest.Mock;
     update: jest.Mock; delete: jest.Mock;
   };
+  application: {
+    count: jest.Mock;
+  };
   $transaction: jest.Mock;
   $queryRaw: jest.Mock;
 }
 
-describe('FileAssetService (W2-DB-02 / W2-DO-01)', () => {
+describe('FileAssetService (W2-DB-02 / W2-DO-01 / S4-M02-02)', () => {
   let service: FileAssetService;
   let mockStorageService: jest.Mocked<IStorageService>;
   let mockPrisma: FileAssetPrismaMock;
@@ -37,6 +40,9 @@ describe('FileAssetService (W2-DB-02 / W2-DO-01)', () => {
         findMany: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
+      },
+      application: {
+        count: jest.fn().mockResolvedValue(0),
       },
       $transaction: jest.fn(async (cb: (tx: FileAssetPrismaMock) => Promise<unknown>) => cb(mockPrisma)),
       $queryRaw: jest.fn().mockResolvedValue([{ id: 'asset-1' }]),
@@ -199,6 +205,43 @@ describe('FileAssetService (W2-DB-02 / W2-DO-01)', () => {
       expect(result.outcome).toBe('STILL_REFERENCED');
       expect(result.assetStatus).toBe(FileAssetStatus.PERMANENT);
       expect(mockStorageService.delete).not.toHaveBeenCalled();
+    });
+
+    it('should not delete physical file if referenced by Application.cvSnapshot (S4-M02-02)', async () => {
+      mockPrisma.fileAsset.findUnique.mockResolvedValue({
+        id: 'asset-snapshot-1',
+        ownerUserId: 'user-1',
+        storageKey: 'key-snapshot-1.pdf',
+        status: FileAssetStatus.PERMANENT,
+        cv: null, // CV was replaced or deleted after terminal application
+        companyVerificationDocuments: [],
+      });
+      mockPrisma.application.count.mockResolvedValueOnce(1);
+
+      const result = await service.deleteFileAsset('asset-snapshot-1', 'user-1');
+      expect(result.deleted).toBe(false);
+      expect(result.outcome).toBe('STILL_REFERENCED');
+      expect(result.assetStatus).toBe(FileAssetStatus.PERMANENT);
+      expect(result.status).toBe('IN_USE');
+      expect(mockStorageService.delete).not.toHaveBeenCalled();
+      expect(mockPrisma.fileAsset.delete).not.toHaveBeenCalled();
+    });
+
+    it('should throw ForbiddenException when non-owner attempts to delete a FileAsset (S4-M02-02)', async () => {
+      mockPrisma.fileAsset.findUnique.mockResolvedValue({
+        id: 'asset-1',
+        ownerUserId: 'user-owner',
+        storageKey: 'key-1.pdf',
+        status: FileAssetStatus.PERMANENT,
+        cv: null,
+        companyVerificationDocuments: [],
+      });
+
+      await expect(service.deleteFileAsset('asset-1', 'user-attacker')).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(mockStorageService.delete).not.toHaveBeenCalled();
+      expect(mockPrisma.fileAsset.delete).not.toHaveBeenCalled();
     });
 
     it('should delete from storage and database when completely unreferenced', async () => {
