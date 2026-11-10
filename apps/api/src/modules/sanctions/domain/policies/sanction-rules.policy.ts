@@ -5,15 +5,21 @@ import {
 } from '@campusjob/contracts';
 
 /**
- * Quy tắc chế tài (C-19 — DRAFT). Các con số bên dưới là ĐỀ XUẤT, đang chờ Lead chốt (DG13:
- * "ngưỡng", "thời hạn" chưa được quy định trong đặc tả). Đổi tại đây, không rải trong use case.
+ * Chính sách chế tài M05 (S3-M05-04 / ADR-015, docs/api/M05_SANCTION_POLICY_DECISION.md).
+ * Trạng thái: ĐỀ XUẤT chờ Owner/PM duyệt. Đổi tại đây, không rải trong use case.
+ *
+ * "Lần vi phạm" N = số báo cáo về cùng sinh viên đã được kết luận SUBSTANTIATED trong cửa sổ 180 ngày
+ * (tính cả đầu mút, tính cả báo cáo đang phán quyết, bỏ báo cáo có chế tài đã bị gỡ).
+ *   N = 1  → chỉ ghi nhận (đóng không xử phạt)
+ *   N = 2  → chỉ được cảnh cáo
+ *   N >= 3 → buộc khóa quyền ứng tuyển 30–90 ngày
  */
-export const MIN_LOCK_DAYS = 1;
+export const MIN_LOCK_DAYS = 30;
 export const MAX_LOCK_DAYS = 90;
 
-/** Số cảnh cáo còn hiệu lực trong cửa sổ thời gian trước khi buộc phải khóa quyền ứng tuyển. */
-export const WARNING_ESCALATION_THRESHOLD = 3;
-export const WARNING_ESCALATION_WINDOW_DAYS = 180;
+export const VIOLATION_WINDOW_DAYS = 180;
+export const WARNING_MIN_VIOLATION = 2;
+export const LOCK_MIN_VIOLATION = 3;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -63,12 +69,47 @@ export function computeEndsAt(type: SanctionType, durationDays: number | undefin
   return null;
 }
 
-export function escalationWindowStart(now: Date): Date {
-  return new Date(now.getTime() - WARNING_ESCALATION_WINDOW_DAYS * DAY_MS);
+/** Đầu cửa sổ đếm vi phạm: đúng 180 ngày trước `now` vẫn được tính (so sánh >=). */
+export function violationWindowStart(now: Date): Date {
+  return new Date(now.getTime() - VIOLATION_WINDOW_DAYS * DAY_MS);
 }
 
-export function requiresEscalation(recentWarnings: number): boolean {
-  return recentWarnings >= WARNING_ESCALATION_THRESHOLD;
+export interface SanctionTierError {
+  code: 'SANCTION_ESCALATION_REQUIRED' | 'SANCTION_TIER_INVALID';
+  message: string;
+}
+
+/**
+ * Kiểm tra loại chế tài có đúng bậc theo số lần vi phạm N của sinh viên không.
+ * Chỉ áp dụng cho báo cáo về sinh viên; doanh nghiệp (đình chỉ) không có ngưỡng đếm.
+ */
+export function checkSanctionTier(
+  reportTarget: ViolationTargetType,
+  type: SanctionType,
+  violationCount: number,
+): SanctionTierError | null {
+  if (reportTarget !== ViolationTargetType.STUDENT) return null;
+
+  if (violationCount < WARNING_MIN_VIOLATION) {
+    return {
+      code: 'SANCTION_TIER_INVALID',
+      message: 'Đây là lần vi phạm đầu tiên trong 180 ngày: chỉ ghi nhận, chưa áp chế tài.',
+    };
+  }
+  if (violationCount < LOCK_MIN_VIOLATION) {
+    return type === SanctionType.WARNING
+      ? null
+      : {
+          code: 'SANCTION_TIER_INVALID',
+          message: 'Đây là lần vi phạm thứ hai trong 180 ngày: chỉ được cảnh cáo.',
+        };
+  }
+  return type === SanctionType.APPLICATION_LOCK
+    ? null
+    : {
+        code: 'SANCTION_ESCALATION_REQUIRED',
+        message: 'Từ lần vi phạm thứ ba trong 180 ngày cần áp dụng khóa quyền ứng tuyển.',
+      };
 }
 
 /** Mô tả ngắn hiển thị trong thông báo gửi người bị chế tài. */

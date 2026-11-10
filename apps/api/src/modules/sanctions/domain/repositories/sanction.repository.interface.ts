@@ -40,8 +40,13 @@ export interface ISanctionRepository {
     page: number,
     limit: number,
   ): Promise<{ items: SanctionEntity[]; total: number }>;
-  /** Số cảnh cáo chưa bị gỡ của đối tượng, tạo từ `since` trở đi. */
-  countRecentWarnings(targetId: string, since: Date): Promise<number>;
+  /** Trong các báo cáo đã cho, id những báo cáo có chế tài đã bị gỡ (LIFTED) — không tính vào "lần vi phạm". */
+  findLiftedReportIds(reportIds: string[]): Promise<string[]>;
+  /**
+   * Ghi SanctionEvent(EXPIRED) + AuditLog cho chế tài ACTIVE đã quá `endsAt` mà chưa có sự kiện hết hạn.
+   * Idempotent. `targetId` để chỉ xử lý một đối tượng. Trả số chế tài vừa được ghi nhận hết hạn.
+   */
+  recordExpired(now: Date, targetId?: string): Promise<number>;
   findActiveByTarget(
     targetType: SanctionTargetType,
     targetId: string,

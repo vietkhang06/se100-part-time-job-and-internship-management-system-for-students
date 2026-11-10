@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { SanctionTargetType, SanctionType } from '@campusjob/contracts';
 import {
   ISanctionRepository,
@@ -8,9 +8,17 @@ import { ApplicationLockState, ISanctionQuery } from '../ports/sanction-query.po
 
 @Injectable()
 export class SanctionQueryService implements ISanctionQuery {
+  private readonly logger = new Logger(SanctionQueryService.name);
+
   constructor(@Inject(SANCTION_REPOSITORY_TOKEN) private readonly repository: ISanctionRepository) {}
 
   async getApplicationLock(studentId: string, now: Date = new Date()): Promise<ApplicationLockState> {
+    // Hết hạn chỉ tính khi đọc; ghi SanctionEvent(EXPIRED)/AuditLog lần đầu thấy hết hạn. Lỗi ghi không chặn kiểm tra.
+    try {
+      await this.repository.recordExpired(now, studentId);
+    } catch (err: unknown) {
+      this.logger.warn(`recordExpired failed for ${studentId}: ${err instanceof Error ? err.message : String(err)}`);
+    }
     const active = await this.repository.findActiveByTarget(
       SanctionTargetType.STUDENT,
       studentId,

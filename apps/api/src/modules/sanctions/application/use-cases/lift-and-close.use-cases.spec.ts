@@ -40,7 +40,7 @@ describe('LiftSanctionUseCase', () => {
 
   beforeEach(() => {
     repo = {
-      create: jest.fn(), list: jest.fn(), listByTarget: jest.fn(), countRecentWarnings: jest.fn(),
+      create: jest.fn(), list: jest.fn(), listByTarget: jest.fn(), findLiftedReportIds: jest.fn(), recordExpired: jest.fn(),
       findActiveByTarget: jest.fn(), recordAudit: jest.fn(),
       findById: jest.fn().mockResolvedValue({ sanction: sanction(), events: [] }),
       lift: jest.fn().mockResolvedValue(sanction({ storedStatus: SanctionStatus.LIFTED, liftedAt: now })),
@@ -116,12 +116,13 @@ describe('CloseReportWithoutSanctionUseCase', () => {
 
   beforeEach(() => {
     repo = {
-      create: jest.fn(), findById: jest.fn(), list: jest.fn(), listByTarget: jest.fn(), countRecentWarnings: jest.fn(),
+      create: jest.fn(), findById: jest.fn(), list: jest.fn(), listByTarget: jest.fn(), findLiftedReportIds: jest.fn(), recordExpired: jest.fn(),
       findActiveByTarget: jest.fn(), lift: jest.fn(), recordAudit: jest.fn().mockResolvedValue(undefined),
     };
     reports = {
       findById: jest.fn().mockResolvedValue(report(RS.SUBSTANTIATED)), listByStatus: jest.fn(),
       markResolved: jest.fn().mockResolvedValue(true),
+      listViolationReportIds: jest.fn(),
     };
     notifications = { publish: jest.fn().mockResolvedValue({ outcome: 'CREATED' }), publishMany: jest.fn() };
     useCase = new CloseReportWithoutSanctionUseCase(repo, reports, notifications);
