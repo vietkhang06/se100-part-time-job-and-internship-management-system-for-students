@@ -13,7 +13,7 @@ const report = new ViolationReportEntity({
 describe('GetReportUseCase', () => {
   const repo: jest.Mocked<IViolationReportRepository> = {
     create: jest.fn(), findById: jest.fn(), listByReporter: jest.fn(), listByStatus: jest.fn(),
-    markUnderReview: jest.fn(), markResolved: jest.fn(), applyModerationOutcome: jest.fn(),
+    markUnderReview: jest.fn(), markResolved: jest.fn(), applyModerationOutcome: jest.fn(), listViolationReportIds: jest.fn(),
   };
   const useCase = new GetReportUseCase(repo);
 

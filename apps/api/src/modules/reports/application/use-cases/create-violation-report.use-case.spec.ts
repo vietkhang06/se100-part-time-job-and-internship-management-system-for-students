@@ -56,7 +56,7 @@ describe('CreateViolationReportUseCase', () => {
   beforeEach(() => {
     repo = {
       create: jest.fn(), findById: jest.fn(), listByReporter: jest.fn(), listByStatus: jest.fn(),
-      markUnderReview: jest.fn(), markResolved: jest.fn(), applyModerationOutcome: jest.fn(),
+      markUnderReview: jest.fn(), markResolved: jest.fn(), applyModerationOutcome: jest.fn(), listViolationReportIds: jest.fn(),
     };
     resolvers = new ReportTargetResolverRegistry();
     resolvers.register(T.COMPANY, {

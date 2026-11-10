@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { ViolationReportStatus } from '@campusjob/contracts';
+import { ViolationReportStatus, ViolationTargetType } from '@campusjob/contracts';
 import { PrismaService } from '../../../../shared/database/prisma.service';
 import { ViolationReportEntity } from '../../domain/entities/violation-report.entity';
 import {
@@ -144,5 +144,18 @@ export class PrismaViolationReportRepository implements IViolationReportReposito
       data: { status: ViolationReportStatus.RESOLVED, resolvedAt: at, openKey: null },
     });
     return result.count === 1;
+  }
+
+  async listViolationReportIds(targetType: ViolationTargetType, targetId: string, since: Date): Promise<string[]> {
+    const rows = await this.prisma.violationReport.findMany({
+      where: {
+        targetType,
+        targetId,
+        status: { in: [ViolationReportStatus.SUBSTANTIATED, ViolationReportStatus.RESOLVED] },
+        moderatedAt: { gte: since },
+      },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
   }
 }
