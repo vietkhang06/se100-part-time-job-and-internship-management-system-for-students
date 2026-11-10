@@ -42,7 +42,8 @@
 | TM-B3 | phát lại cùng một sự kiện (cùng dedupeKey) chỉ lưu và gửi email một lần | UC52, UC59, UC62 | C-16, C-19, C-20 | Postgres thật; email giả |
 | TM-C1 | báo cáo bị bác bỏ thì không thể áp chế tài, người báo cáo có thể gửi lại | UC52, UC59, UC62 | C-16, C-17, C-19, C-20 | Postgres thật; email giả |
 | TM-C2 | Admin đóng báo cáo không xử phạt: chỉ người báo cáo được thông báo, đối tượng không nhận gì | UC52, UC59, UC62 | C-16, C-17, C-19, C-20 | Postgres thật; email giả |
-| TM-D1 | đủ ngưỡng cảnh cáo thì buộc khóa ứng tuyển; đang bị khóa thì không khóa chồng | UC59, UC60 | C-19 | Postgres thật |
+| TM-D1 | bậc chế tài theo số lần vi phạm (lần 1 ghi nhận, lần 2 cảnh cáo, từ lần 3 buộc khóa); đang bị khóa thì không khóa chồng | UC59, UC60 | C-19 | Postgres thật |
+| TM-D3 | chế tài đã gỡ và vi phạm quá 180 ngày không tính vào số lần vi phạm | UC57, UC59 | C-19 | Postgres thật |
 | TM-D2 | thời hạn khóa ngoài khoảng cho phép bị từ chối và không ghi gì | UC59, UC60 | C-19 | Postgres thật |
 | TM-E1 | chế tài vẫn được lưu và thông báo trong ứng dụng vẫn có; email gửi lại thành công sau đó | UC59, UC62 | C-19, C-20 | Postgres thật; SMTP giả (mô phỏng lỗi) |
 | TM-F1 | chỉ hồ sơ đã có kết quả cuối mới được đánh giá, mỗi hồ sơ một đánh giá, và chỉ chủ hồ sơ mới đánh giá được | UC45, UC46, UC47, UC49, UC53 | C-16, C-17, C-18 | Postgres thật; adapter M03/M04 giả |

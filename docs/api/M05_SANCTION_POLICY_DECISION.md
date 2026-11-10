@@ -1,7 +1,7 @@
 # S3-M05-04 — Chính sách trạng thái kiểm duyệt, phán quyết và chế tài (DRAFT chờ duyệt)
 
 > Task: S3-M05-04. Contract: C-16, C-17, C-19, C-02. Reviewer (cột K sheet): Gia Khang.
-> Sản phẩm bàn giao: chính sách chế tài + ma trận chuyển trạng thái + test case. **Chưa code.** S4-M05-01 chỉ được code theo bản này sau khi Owner/PM duyệt (mục 8).
+> Sản phẩm bàn giao: chính sách chế tài + ma trận chuyển trạng thái + test case. S4-M05-01 đã được code theo bản đề xuất này (spec: SP-01…SP-20 trong `sanction-rules.policy.spec.ts`, `apply-sanction.use-case.spec.ts`, e2e TM-D1…D3); nếu Owner/PM đổi quyết định ở mục 8 thì chỉ sửa `sanction-rules.policy.ts`.
 > Ký hiệu: **[SHEET]** = lấy nguyên từ mô tả task trong sheet; **[ĐỀ XUẤT]** = nhóm tự chọn vì sheet chưa nói, cần duyệt.
 
 ## 1. Vai trò: ai làm gì
@@ -110,7 +110,7 @@ Khóa ứng tuyển được thực thi **bằng cổng `ISanctionQuery.getAppli
 | SP-22 | Admin đình chỉ doanh nghiệp, chưa có handler M03 | 503, không ghi chế tài |
 | SP-23 | Mỗi thay đổi (áp/gỡ/hết hạn) | Có `SanctionEvent` **và** `AuditLog` đủ actor/action/object/time |
 
-## 7. Ảnh hưởng tới thứ đang có (S4 sẽ phải sửa)
+## 7. Ảnh hưởng tới thứ đang có (S4-M05-01 đã sửa)
 | Vị trí | Hiện tại | Phải đổi |
 |---|---|---|
 | `sanction-rules.policy.ts` | `WARNING_ESCALATION_THRESHOLD = 3`, `MIN_LOCK_DAYS = 1` | Đếm theo N; `MIN_LOCK_DAYS = 30` |
