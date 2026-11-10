@@ -61,7 +61,7 @@ export const SANCTIONS_BY_REPORT_TARGET: Record<string, string[]> = {
   REVIEW: [],
 };
 
-export const LOCK_DAYS_MIN = 1;
+export const LOCK_DAYS_MIN = 30;
 export const LOCK_DAYS_MAX = 90;
 
 const ERROR_MESSAGE_BY_CODE: Record<string, string> = {
@@ -88,7 +88,8 @@ const ERROR_MESSAGE_BY_CODE: Record<string, string> = {
   SANCTION_TARGET_UNAVAILABLE: 'Chưa thể áp chế tài lên doanh nghiệp lúc này (module doanh nghiệp chưa kết nối).',
   SANCTION_TARGET_SYNC_FAILED: 'Không thể áp dụng lên doanh nghiệp lúc này. Vui lòng thử lại.',
   SANCTION_ALREADY_ACTIVE: 'Đối tượng này đang chịu chế tài cùng loại.',
-  SANCTION_ESCALATION_REQUIRED: 'Đã đủ ngưỡng cảnh cáo. Cần áp dụng khóa quyền ứng tuyển.',
+  SANCTION_ESCALATION_REQUIRED: 'Từ lần vi phạm thứ ba trong 180 ngày cần áp dụng khóa quyền ứng tuyển.',
+  SANCTION_TIER_INVALID: 'Loại chế tài không đúng bậc theo số lần vi phạm trong 180 ngày (lần 1 chỉ ghi nhận, lần 2 cảnh cáo).',
   SANCTION_ALREADY_APPLIED_FOR_REPORT: 'Báo cáo này đã có chế tài.',
   SANCTION_NOT_FOUND: 'Không tìm thấy chế tài.',
   SANCTION_NOT_ACTIVE: 'Chế tài này không còn hiệu lực để gỡ.',
