@@ -997,7 +997,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
 
     it('[TM-H2] loại chế tài không phù hợp với đối tượng báo cáo bị từ chối', async () => {
       const reportId = await substantiatedReport(reporter, 'COMPANY', companyId);
-      const res = await sanction(admin, { reportId, type: 'APPLICATION_LOCK', reason: 'Sai loại', durationDays: 7 }).expect(400);
+      const res = await sanction(admin, { reportId, type: 'APPLICATION_LOCK', reason: 'Sai loại', durationDays: 30 }).expect(400);
       expect(res.body.code).toBe('SANCTION_TYPE_NOT_ALLOWED');
       expect(await prisma.sanction.count({ where: { reportId } })).toBe(0);
     });
