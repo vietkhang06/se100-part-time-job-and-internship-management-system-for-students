@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import {
   CvErrorCode,
   StudentProfileErrorCode,
@@ -11,7 +11,7 @@ import { CvEntity } from '../../domain/entities/cv.entity';
 import { IStudentProfileRepository } from '../../domain/repositories/student-profile.repository.interface';
 import { InMemoryCvRepository } from '../../infrastructure/persistence/in-memory-cv.repository';
 
-describe('GetCvSnapshotUseCase – Contract C-03 (UC37–UC38)', () => {
+describe('GetCvSnapshotUseCase – Contract C-03 & C-05 (S4-M02-03 / UC37–UC38)', () => {
   let useCase: GetCvSnapshotUseCase;
   let adapter: CvSnapshotSourceAdapter;
   let mockProfileRepo: jest.Mocked<IStudentProfileRepository>;
@@ -81,6 +81,7 @@ describe('GetCvSnapshotUseCase – Contract C-03 (UC37–UC38)', () => {
     ],
     new Date('2026-02-01'),
     new Date('2026-02-15'),
+    'file-asset-uuid-100',
   );
 
   const cvOfStudentB = new CvEntity(
@@ -134,11 +135,12 @@ describe('GetCvSnapshotUseCase – Contract C-03 (UC37–UC38)', () => {
       expect(snapshot.email).toBe('nguyenvana@gmail.com');
       expect(snapshot.phone).toBe('0901234567');
 
-      // Xác minh thông tin chuyên môn của CV
+      // Xác minh thông tin chuyên môn của CV (đủ 16 trường theo Contract C-03)
       expect(snapshot.title).toBe('CV Lập trình viên Backend NestJS');
       expect(snapshot.summary).toBe('Có đam mê với kiến trúc hệ thống và microservices');
       expect(snapshot.skills).toEqual(['NestJS', 'TypeScript', 'Docker', 'Redis']);
       expect(snapshot.fileUrl).toBe('https://storage.campusjob.vn/cvs/cv100.pdf');
+      expect(snapshot.fileAssetId).toBe('file-asset-uuid-100');
 
       // Xác minh học vấn, kinh nghiệm, dự án, chứng chỉ
       expect(snapshot.educations).toHaveLength(1);
@@ -163,10 +165,11 @@ describe('GetCvSnapshotUseCase – Contract C-03 (UC37–UC38)', () => {
       expect(snapshot).toBeDefined();
       expect(snapshot.studentId).toBe(studentA.userId);
       expect(snapshot.originalCvId).toBe(cvOfStudentA.id);
+      expect(snapshot.fileAssetId).toBe('file-asset-uuid-100');
     });
   });
 
-  describe('Tiêu chí nghiệm thu 2: Không truy cập CV người khác (Anti-IDOR Security)', () => {
+  describe('Tiêu chí nghiệm thu 2: Không truy cập CV người khác & Xử lý lỗi nguồn đúng Contract (C-05, C-03)', () => {
     it('phải từ chối và ném lỗi 404 CV_NOT_FOUND khi sinh viên A cố tình nộp cvId của sinh viên B', async () => {
       // Giả sử sinh viên A đang đăng nhập (student-profile-id-1)
       mockProfileRepo.findByUserId.mockResolvedValue(studentA);
@@ -186,6 +189,31 @@ describe('GetCvSnapshotUseCase – Contract C-03 (UC37–UC38)', () => {
           message: expect.stringContaining('Không tìm thấy CV hoặc bạn không có quyền truy cập'),
         });
       }
+    });
+
+    it('phải từ chối và ném lỗi 404 CV_NOT_FOUND nếu userId trên CV không khớp với userId của StudentProfile', async () => {
+      mockProfileRepo.findByUserId.mockResolvedValue(studentA);
+      const mismatchedUserCv = new CvEntity(
+        'cv-mismatch-user',
+        studentA.id, // cùng studentProfileId nhưng userId bị sai lệch
+        'different-user-id',
+        'CV Sai Lệch User',
+        null,
+        false,
+        null,
+        [],
+        [],
+        [],
+        [],
+        [],
+        new Date(),
+        new Date(),
+      );
+      cvRepo.save(mismatchedUserCv);
+
+      await expect(
+        useCase.getOwnedSnapshot(studentA.userId, 'cv-mismatch-user'),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('phải từ chối và ném lỗi 404 khi cvId không hề tồn tại trên hệ thống', async () => {
@@ -212,9 +240,97 @@ describe('GetCvSnapshotUseCase – Contract C-03 (UC37–UC38)', () => {
         });
       }
     });
+
+    it('phải từ chối với 400 VALIDATION_ERROR khi studentId hoặc cvId bị rỗng (Contract C-03 §4.2)', async () => {
+      await expect(useCase.getOwnedSnapshot('   ', cvOfStudentA.id)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(useCase.getOwnedSnapshot(studentA.userId, '')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('phải từ chối với 400 VALIDATION_ERROR khi CV nguồn thiếu thông tin tối thiểu (title rỗng)', async () => {
+      mockProfileRepo.findByUserId.mockResolvedValue(studentA);
+      const corruptedCv = new CvEntity(
+        'cv-corrupted-empty-title',
+        studentA.id,
+        studentA.userId,
+        '   ',
+        null,
+        false,
+        null,
+        [],
+        [],
+        [],
+        [],
+        [],
+        new Date(),
+        new Date(),
+      );
+      cvRepo.save(corruptedCv);
+
+      try {
+        await useCase.getOwnedSnapshot(studentA.userId, 'cv-corrupted-empty-title');
+        fail('Should have thrown BadRequestException');
+      } catch (error: unknown) {
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect((error as BadRequestException).getResponse()).toMatchObject({
+          statusCode: 400,
+          code: CvErrorCode.VALIDATION_ERROR,
+        });
+      }
+    });
   });
 
-  describe('Tiêu chí nghiệm thu 3: Không làm thay đổi CV đã dùng trong hồ sơ (Snapshot Immutability - UC37)', () => {
+  describe('Tiêu chí nghiệm thu 3: Không làm thay đổi CV đã dùng trong hồ sơ (Snapshot Immutability - UC37 / S4-M02-03)', () => {
+    it('bản chụp snapshot phải được deep-clone và deep-freeze hoàn toàn để chống biến đổi tham chiếu trong bộ nhớ', async () => {
+      mockProfileRepo.findByUserId.mockResolvedValue(studentA);
+
+      const mutableEducations = [
+        {
+          school: 'Đại học Bách Khoa TP.HCM',
+          major: 'Khoa học Máy tính',
+          startDate: '2021-09',
+          endDate: '2025-06',
+          gpa: '3.7',
+        },
+      ];
+      const mutableSkills = ['NestJS', 'TypeScript'];
+      const mutableCv = new CvEntity(
+        'cv-mutable-test',
+        studentA.id,
+        studentA.userId,
+        'CV Kiểm Thử Deep Clone',
+        'Tóm tắt gốc',
+        false,
+        null,
+        mutableSkills,
+        mutableEducations,
+        [],
+        [],
+        [],
+        new Date(),
+        new Date(),
+      );
+      cvRepo.save(mutableCv);
+
+      const snapshot = await useCase.getOwnedSnapshot(studentA.userId, 'cv-mutable-test');
+
+      // 1. Thử thay đổi trực tiếp mảng/object gốc bên trong CvEntity sau khi đã lấy snapshot
+      mutableSkills.push('HackedSkill');
+      mutableEducations[0].school = 'Trường Đã Bị Đổi';
+
+      // Snapshot tuyệt đối không bị ảnh hưởng
+      expect(snapshot.skills).toEqual(['NestJS', 'TypeScript']);
+      expect(snapshot.educations[0].school).toBe('Đại học Bách Khoa TP.HCM');
+
+      // 2. Xác nhận đối tượng snapshot và các mảng con đã bị đóng băng (Object.isFrozen)
+      expect(Object.isFrozen(snapshot)).toBe(true);
+      expect(Object.isFrozen(snapshot.skills)).toBe(true);
+      expect(Object.isFrozen(snapshot.educations)).toBe(true);
+      expect(Object.isFrozen(snapshot.educations[0])).toBe(true);
+    });
     it('bản chụp snapshot phải giữ nguyên giá trị ban đầu ngay cả khi CV gốc bị sửa đổi', async () => {
       mockProfileRepo.findByUserId.mockResolvedValue(studentA);
 
