@@ -19,9 +19,10 @@ Report SUBSTANTIATED (UC52, C-17)
 | Hạng mục | Giá trị hiện tại | Chỉnh tại |
 |---|---|---|
 | Chế tài theo đối tượng báo cáo | STUDENT: `WARNING`, `APPLICATION_LOCK`; COMPANY: `COMPANY_SUSPENSION`; JOB/REVIEW: không có (chỉ đóng báo cáo) | `sanction-rules.policy.ts` |
-| Thời hạn khóa ứng tuyển | 1–90 ngày, bắt buộc với `APPLICATION_LOCK`, cấm với loại khác | `MIN_LOCK_DAYS`, `MAX_LOCK_DAYS` |
+| Thời hạn khóa ứng tuyển | 30–90 ngày (số nguyên), bắt buộc với `APPLICATION_LOCK`, cấm với loại khác | `MIN_LOCK_DAYS`, `MAX_LOCK_DAYS` |
 | Đình chỉ doanh nghiệp | Không thời hạn, đến khi được gỡ | — |
-| Ngưỡng leo thang | Đã có 3 cảnh cáo chưa gỡ trong 180 ngày → cảnh cáo tiếp theo bị từ chối, buộc dùng khóa ứng tuyển | `WARNING_ESCALATION_THRESHOLD`, `WARNING_ESCALATION_WINDOW_DAYS` |
+| Bậc chế tài theo số lần vi phạm N (sinh viên) | N = số báo cáo về sinh viên đã kết luận `SUBSTANTIATED` trong 180 ngày (tính cả đầu mút và báo cáo đang phán quyết, bỏ báo cáo có chế tài đã gỡ). N=1: chỉ ghi nhận (409 `SANCTION_TIER_INVALID` nếu áp chế tài); N=2: chỉ `WARNING` (khóa → 409 `SANCTION_TIER_INVALID`); N≥3: chỉ `APPLICATION_LOCK` (cảnh cáo → 409 `SANCTION_ESCALATION_REQUIRED`). Đình chỉ doanh nghiệp không có ngưỡng. Xem `M05_SANCTION_POLICY_DECISION.md` (ADR-015, chờ duyệt) | `VIOLATION_WINDOW_DAYS`, `WARNING_MIN_VIOLATION`, `LOCK_MIN_VIOLATION`, `checkSanctionTier` |
+| Hết hạn | Chế tài `ACTIVE` quá `endsAt` coi là `EXPIRED` khi đọc; lần đầu `getApplicationLock` thấy hết hạn thì ghi `SanctionEvent(EXPIRED)` + `AuditLog(SANCTION_EXPIRED)` (một lần, idempotent) | `recordExpired` |
 | Một chế tài / báo cáo | `Sanction.reportId` UNIQUE (chống hai Admin cùng bấm) | schema |
 | Không chồng chế tài | Đang có khóa/đình chỉ cùng loại → 409 `SANCTION_ALREADY_ACTIVE` | use case |
 | Hết hạn | Tính từ `endsAt` khi đọc (`EXPIRED`), không cần job nền | `SanctionEntity.effectiveStatus` |
@@ -60,7 +61,7 @@ Chưa có handler → áp/gỡ đình chỉ trả 503 `SANCTION_TARGET_UNAVAILAB
 | POST | `/sanctions/:id/lift` | Admin | UC57 — gỡ chế tài: `{ reason }` |
 | GET | `/sanctions/mine?page&limit` | Student | Chế tài áp lên tài khoản của tôi |
 
-Mã lỗi chính: `SANCTION_REPORT_NOT_SUBSTANTIATED`, `SANCTION_REPORT_ALREADY_RESOLVED`, `SANCTION_TYPE_NOT_ALLOWED`, `SANCTION_DURATION_INVALID`, `SANCTION_ESCALATION_REQUIRED`, `SANCTION_ALREADY_ACTIVE`, `SANCTION_ALREADY_APPLIED_FOR_REPORT`, `SANCTION_TARGET_NOT_FOUND`, `SANCTION_TARGET_UNAVAILABLE`, `SANCTION_NOT_ACTIVE`, `SANCTION_REASON_REQUIRED`.
+Mã lỗi chính: `SANCTION_REPORT_NOT_SUBSTANTIATED`, `SANCTION_REPORT_ALREADY_RESOLVED`, `SANCTION_TYPE_NOT_ALLOWED`, `SANCTION_DURATION_INVALID`, `SANCTION_ESCALATION_REQUIRED`, `SANCTION_TIER_INVALID`, `SANCTION_ALREADY_ACTIVE`, `SANCTION_ALREADY_APPLIED_FOR_REPORT`, `SANCTION_TARGET_NOT_FOUND`, `SANCTION_TARGET_UNAVAILABLE`, `SANCTION_NOT_ACTIVE`, `SANCTION_REASON_REQUIRED`.
 
 ## 5. Thông báo (C-20)
 
@@ -73,7 +74,7 @@ Mã lỗi chính: `SANCTION_REPORT_NOT_SUBSTANTIATED`, `SANCTION_REPORT_ALREADY_
 
 ## 7. Câu hỏi mở
 
-1. Ngưỡng và thời hạn ở mục 2 có đúng ý nhóm không? (đặc tả DG13 chưa quy định)
+1. Ngưỡng và thời hạn ở mục 2 đã khớp ADR-015 (đề xuất, chờ Owner/PM duyệt); nếu bị đổi chỉ sửa `sanction-rules.policy.ts`.
 2. Một báo cáo chỉ một chế tài (hiện tại). Có cần vừa cảnh cáo vừa khóa không?
 3. UC57 "gỡ cờ cảnh báo" có nghĩa là gỡ chế tài (như đang làm) hay một khái niệm riêng cho doanh nghiệp?
 4. Có cho sinh viên khiếu nại chế tài không? (chưa có trong đặc tả nên chưa làm)

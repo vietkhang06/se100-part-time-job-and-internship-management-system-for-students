@@ -25,10 +25,10 @@ import {
   allowedSanctionTypes,
   computeEndsAt,
   describeSanction,
-  escalationWindowStart,
-  requiresEscalation,
+  checkSanctionTier,
   sanctionTargetType,
   validateDuration,
+  violationWindowStart,
 } from '../../domain/policies/sanction-rules.policy';
 import { CompanySanctionHandlerRegistry } from '../ports/company-sanction-handler.port';
 import { ApplySanctionDto } from '../dto/sanction.dto';
@@ -98,20 +98,21 @@ export class ApplySanctionUseCase {
     const targetType = sanctionTargetType(input.type);
     const target = await this.resolveTarget(report.targetType, report.targetId);
 
+    // Bậc chế tài theo số lần vi phạm (ADR-015): lần 1 chỉ ghi nhận, lần 2 cảnh cáo, từ lần 3 khóa.
+    if (report.targetType === ViolationTargetType.STUDENT) {
+      const violationCount = await this.countViolations(report.targetId, report.id, now);
+      const tierError = checkSanctionTier(report.targetType, input.type, violationCount);
+      if (tierError) {
+        throw new ConflictException({ message: tierError.message, code: tierError.code });
+      }
+    }
+
     if (input.type !== SanctionType.WARNING) {
       const active = await this.repository.findActiveByTarget(targetType, report.targetId, input.type, now);
       if (active) {
         throw new ConflictException({
           message: 'Đối tượng này đang chịu chế tài cùng loại.',
           code: 'SANCTION_ALREADY_ACTIVE',
-        });
-      }
-    } else {
-      const recent = await this.repository.countRecentWarnings(report.targetId, escalationWindowStart(now));
-      if (requiresEscalation(recent)) {
-        throw new ConflictException({
-          message: 'Đã đủ ngưỡng cảnh cáo, cần áp dụng khóa quyền ứng tuyển.',
-          code: 'SANCTION_ESCALATION_REQUIRED',
         });
       }
     }
@@ -158,6 +159,22 @@ export class ApplySanctionUseCase {
 
     const found = await this.repository.findById(sanction.id);
     return toSanctionDetailDto(sanction, found?.events ?? [], now);
+  }
+
+  /**
+   * Số lần vi phạm N của sinh viên tại thời điểm phán quyết: báo cáo đã kết luận có căn cứ trong 180 ngày
+   * (kể cả đầu mút), trừ báo cáo có chế tài đã bị gỡ; báo cáo đang phán quyết luôn được tính.
+   */
+  private async countViolations(studentId: string, currentReportId: string, now: Date): Promise<number> {
+    const ids = await this.reports.listViolationReportIds(
+      ViolationTargetType.STUDENT,
+      studentId,
+      violationWindowStart(now),
+    );
+    const lifted = new Set(await this.repository.findLiftedReportIds(ids));
+    const counted = new Set(ids.filter((id) => !lifted.has(id)));
+    counted.add(currentReportId);
+    return counted.size;
   }
 
   private async resolveTarget(

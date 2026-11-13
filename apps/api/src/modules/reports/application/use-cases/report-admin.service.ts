@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ViolationReportStatus } from '@campusjob/contracts';
+import { ViolationReportStatus, ViolationTargetType } from '@campusjob/contracts';
 import {
   IViolationReportRepository,
   VIOLATION_REPORT_REPOSITORY_TOKEN,
@@ -24,5 +24,9 @@ export class ReportAdminService implements IReportAdmin {
 
   markResolved(id: string, at: Date): Promise<boolean> {
     return this.repository.markResolved(id, at);
+  }
+
+  listViolationReportIds(targetType: ViolationTargetType, targetId: string, since: Date): Promise<string[]> {
+    return this.repository.listViolationReportIds(targetType, targetId, since);
   }
 }

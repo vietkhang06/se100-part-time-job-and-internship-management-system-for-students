@@ -217,6 +217,22 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
     return created.body.id as string;
   }
 
+  /**
+   * Tạo `count` lần vi phạm đã được ghi nhận trước đó (báo cáo từ người báo cáo khác, đã kết luận có căn cứ và
+   * đóng không xử phạt) để báo cáo kế tiếp của sinh viên là lần vi phạm thứ count+1 (ADR-015).
+   */
+  async function priorViolations(targetId: string, count: number, tag: string) {
+    const priorReporter = await newUser(`${tag}-prior-employer`, UserRole.EMPLOYER, true);
+    for (let i = 0; i < count; i++) {
+      const id = await substantiatedReport(priorReporter, 'STUDENT', targetId);
+      await api()
+        .post(`/api/v1/sanctions/reports/${id}/close`)
+        .set(bearer(admin.token))
+        .send({ reason: `Ghi nhận lần vi phạm trước #${i + 1}` })
+        .expect(200);
+    }
+  }
+
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(NOTIFICATION_EMAIL_SENDER_TOKEN)
@@ -259,6 +275,8 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       reporter = await newUser('a-employer', UserRole.EMPLOYER, true);
       target = await newUser('a-student', UserRole.STUDENT, true);
       bystander = await newUser('a-bystander', UserRole.STUDENT, true);
+      // Báo cáo của kịch bản A là lần vi phạm thứ 3 → được khóa ứng tuyển.
+      await priorViolations(target.id, 2, 'a');
     });
 
     it('[TM-A1] nhà tuyển dụng báo cáo sinh viên → 201, chờ thẩm tra, người báo cáo nhận đúng 1 thông báo REPORT_RECEIVED', async () => {
@@ -362,7 +380,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
         reportId,
         type: 'APPLICATION_LOCK',
         reason: 'Khai gian thông tin hồ sơ',
-        durationDays: 7,
+        durationDays: 30,
       }).expect(201);
       sanctionId = res.body.id;
 
@@ -492,6 +510,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
     it('[TM-B2] hai Admin áp chế tài cùng lúc cho một báo cáo: một chế tài, mỗi bên nhận đúng một thông báo', async () => {
       const reporter = await newUser('b2-employer', UserRole.EMPLOYER, true);
       const target = await newUser('b2-student', UserRole.STUDENT);
+      await priorViolations(target.id, 1, 'b2');
       const reportId = await substantiatedReport(reporter, 'STUDENT', target.id);
 
       const body = { reportId, type: 'WARNING', reason: 'Cảnh cáo vì vi phạm' };
@@ -575,44 +594,80 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
 
   // =====================================================================================
   describe('D. Ngưỡng cảnh cáo và không chồng chế tài', () => {
-    it('[TM-D1] đủ ngưỡng cảnh cáo thì buộc khóa ứng tuyển; đang bị khóa thì không khóa chồng', async () => {
+    it('[TM-D1] bậc chế tài theo số lần vi phạm: lần 1 ghi nhận, lần 2 cảnh cáo, từ lần 3 buộc khóa; đang bị khóa thì không khóa chồng', async () => {
       const reporter = await newUser('d-employer', UserRole.EMPLOYER, true);
       const target = await newUser('d-student', UserRole.STUDENT);
 
-      for (let i = 1; i <= 3; i++) {
-        const reportId = await substantiatedReport(reporter, 'STUDENT', target.id);
-        await sanction(admin, { reportId, type: 'WARNING', reason: `Cảnh cáo lần ${i}` }).expect(201);
-      }
+      // Lần 1: không được cảnh cáo/khóa; báo cáo vẫn chờ phán quyết (vẫn tính là 1 lần vi phạm).
+      const firstId = await substantiatedReport(reporter, 'STUDENT', target.id);
+      const tooEarly = await sanction(admin, { reportId: firstId, type: 'WARNING', reason: 'Lần 1' }).expect(409);
+      expect(tooEarly.body.code).toBe('SANCTION_TIER_INVALID');
+      expect((await prisma.violationReport.findUniqueOrThrow({ where: { id: firstId } })).status).toBe('SUBSTANTIATED');
+      expect(await prisma.sanction.count({ where: { reportId: firstId } })).toBe(0);
 
-      const fourthId = await substantiatedReport(reporter, 'STUDENT', target.id);
-      const escalated = await sanction(admin, { reportId: fourthId, type: 'WARNING', reason: 'Cảnh cáo lần 4' }).expect(409);
+      // Lần 2: chỉ được cảnh cáo, không được khóa.
+      const secondId = await substantiatedReport(await newUser('d-employer2', UserRole.EMPLOYER, true), 'STUDENT', target.id);
+      const lockTooSoon = await sanction(admin, {
+        reportId: secondId, type: 'APPLICATION_LOCK', reason: 'Lần 2', durationDays: 30,
+      }).expect(409);
+      expect(lockTooSoon.body.code).toBe('SANCTION_TIER_INVALID');
+      await sanction(admin, { reportId: secondId, type: 'WARNING', reason: 'Cảnh cáo lần 2' }).expect(201);
+
+      // Lần 3: buộc khóa, cảnh cáo bị từ chối.
+      const thirdId = await substantiatedReport(await newUser('d-employer3', UserRole.EMPLOYER, true), 'STUDENT', target.id);
+      const escalated = await sanction(admin, { reportId: thirdId, type: 'WARNING', reason: 'Lần 3' }).expect(409);
       expect(escalated.body.code).toBe('SANCTION_ESCALATION_REQUIRED');
-      expect((await prisma.violationReport.findUniqueOrThrow({ where: { id: fourthId } })).status).toBe('SUBSTANTIATED');
+      expect((await prisma.violationReport.findUniqueOrThrow({ where: { id: thirdId } })).status).toBe('SUBSTANTIATED');
+      await sanction(admin, { reportId: thirdId, type: 'APPLICATION_LOCK', reason: 'Vi phạm lặp lại', durationDays: 30 }).expect(201);
 
-      await sanction(admin, { reportId: fourthId, type: 'APPLICATION_LOCK', reason: 'Vi phạm lặp lại', durationDays: 30 }).expect(201);
-
-      const fifthId = await substantiatedReport(reporter, 'STUDENT', target.id);
+      // Lần 4: đang bị khóa thì không khóa chồng; cảnh cáo vẫn bị chặn bởi bậc.
+      const fourthId = await substantiatedReport(await newUser('d-employer4', UserRole.EMPLOYER, true), 'STUDENT', target.id);
       const stacked = await sanction(admin, {
-        reportId: fifthId,
-        type: 'APPLICATION_LOCK',
-        reason: 'Khóa chồng',
-        durationDays: 30,
+        reportId: fourthId, type: 'APPLICATION_LOCK', reason: 'Khóa chồng', durationDays: 30,
       }).expect(409);
       expect(stacked.body.code).toBe('SANCTION_ALREADY_ACTIVE');
-
-      // Cảnh cáo vẫn bị chặn bởi ngưỡng (3 cảnh cáo còn hiệu lực), không phải bởi khóa.
-      const warning = await sanction(admin, { reportId: fifthId, type: 'WARNING', reason: 'Cảnh cáo thêm' }).expect(409);
+      const warning = await sanction(admin, { reportId: fourthId, type: 'WARNING', reason: 'Cảnh cáo thêm' }).expect(409);
       expect(warning.body.code).toBe('SANCTION_ESCALATION_REQUIRED');
     });
 
-    it('[TM-D2] thời hạn khóa ngoài khoảng cho phép bị từ chối và không ghi gì', async () => {
+    it('[TM-D2] thời hạn khóa ngoài 30–90 ngày bị từ chối và không ghi gì', async () => {
       const reporter = await newUser('d2-employer', UserRole.EMPLOYER, true);
       const target = await newUser('d2-student', UserRole.STUDENT);
+      await priorViolations(target.id, 2, 'd2');
       const reportId = await substantiatedReport(reporter, 'STUDENT', target.id);
 
       await sanction(admin, { reportId, type: 'APPLICATION_LOCK', reason: 'Thiếu thời hạn' }).expect(400);
-      await sanction(admin, { reportId, type: 'APPLICATION_LOCK', reason: 'Quá dài', durationDays: 365 }).expect(400);
+      for (const durationDays of [29, 91, 365]) {
+        await sanction(admin, { reportId, type: 'APPLICATION_LOCK', reason: 'Ngoài khoảng', durationDays }).expect(400);
+      }
       expect(await prisma.sanction.count({ where: { reportId } })).toBe(0);
+    });
+
+    it('[TM-D3] chế tài đã gỡ không tính vào số lần vi phạm; vi phạm quá 180 ngày không tính', async () => {
+      const target = await newUser('d3-student', UserRole.STUDENT);
+      await priorViolations(target.id, 1, 'd3');
+      const reporter = await newUser('d3-employer', UserRole.EMPLOYER, true);
+
+      // Lần 2 → cảnh cáo, sau đó gỡ: lần này không còn tính.
+      const secondId = await substantiatedReport(reporter, 'STUDENT', target.id);
+      const warned = await sanction(admin, { reportId: secondId, type: 'WARNING', reason: 'Cảnh cáo lần 2' }).expect(201);
+      await api()
+        .post(`/api/v1/sanctions/${warned.body.id}/lift`)
+        .set(bearer(admin.token))
+        .send({ reason: 'Cảnh cáo nhầm' })
+        .expect(200);
+
+      // Đẩy vi phạm đầu tiên ra ngoài cửa sổ 180 ngày (moderatedAt cách 180 ngày + 1 phút).
+      const old = new Date(Date.now() - (180 * 24 * 60 + 1) * 60 * 1000);
+      await prisma.violationReport.updateMany({
+        where: { targetId: target.id, status: 'RESOLVED', moderatedAt: { not: null }, id: { not: secondId } },
+        data: { moderatedAt: old },
+      });
+
+      // Báo cáo mới giờ là lần 1 (cảnh cáo cũ đã gỡ, vi phạm cũ ngoài cửa sổ).
+      const thirdId = await substantiatedReport(await newUser('d3-employer2', UserRole.EMPLOYER, true), 'STUDENT', target.id);
+      const res = await sanction(admin, { reportId: thirdId, type: 'WARNING', reason: 'Thử cảnh cáo' }).expect(409);
+      expect(res.body.code).toBe('SANCTION_TIER_INVALID');
     });
   });
 
@@ -622,6 +677,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
       emailSender.reset();
       const reporter = await newUser('e-employer', UserRole.EMPLOYER, true);
       const target = await newUser('e-student', UserRole.STUDENT);
+      await priorViolations(target.id, 1, 'e');
       const reportId = await substantiatedReport(reporter, 'STUDENT', target.id);
 
       emailSender.failing = true;
@@ -941,7 +997,7 @@ describe('S2-M05-06: Trust Integration (report → moderation → sanction → n
 
     it('[TM-H2] loại chế tài không phù hợp với đối tượng báo cáo bị từ chối', async () => {
       const reportId = await substantiatedReport(reporter, 'COMPANY', companyId);
-      const res = await sanction(admin, { reportId, type: 'APPLICATION_LOCK', reason: 'Sai loại', durationDays: 7 }).expect(400);
+      const res = await sanction(admin, { reportId, type: 'APPLICATION_LOCK', reason: 'Sai loại', durationDays: 30 }).expect(400);
       expect(res.body.code).toBe('SANCTION_TYPE_NOT_ALLOWED');
       expect(await prisma.sanction.count({ where: { reportId } })).toBe(0);
     });

@@ -2,7 +2,7 @@ import { SanctionStatus, SanctionTargetType, SanctionType } from '@campusjob/con
 
 export interface SanctionEventProps {
   id: string;
-  action: 'APPLIED' | 'LIFTED';
+  action: 'APPLIED' | 'LIFTED' | 'EXPIRED';
   actorId: string;
   note: string | null;
   createdAt: Date;

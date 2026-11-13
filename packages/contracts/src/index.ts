@@ -1046,7 +1046,7 @@ export enum SanctionStatus {
 
 export interface SanctionEventDto {
   id: string;
-  action: 'APPLIED' | 'LIFTED';
+  action: 'APPLIED' | 'LIFTED' | 'EXPIRED';
   actorId: string;
   note: string | null;
   createdAt: string;

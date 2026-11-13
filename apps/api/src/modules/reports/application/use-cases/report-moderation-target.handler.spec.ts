@@ -19,7 +19,7 @@ describe('ReportModerationTargetHandler', () => {
   beforeEach(() => {
     repo = {
       create: jest.fn(), findById: jest.fn(), listByReporter: jest.fn(), listByStatus: jest.fn(),
-      markUnderReview: jest.fn(), markResolved: jest.fn(), applyModerationOutcome: jest.fn().mockResolvedValue(true),
+      markUnderReview: jest.fn(), markResolved: jest.fn(), applyModerationOutcome: jest.fn().mockResolvedValue(true), listViolationReportIds: jest.fn(),
     };
     handler = new ReportModerationTargetHandler(repo);
   });

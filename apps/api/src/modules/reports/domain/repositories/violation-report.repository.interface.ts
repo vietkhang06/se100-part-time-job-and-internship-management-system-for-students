@@ -39,6 +39,8 @@ export interface IViolationReportRepository {
    * còn ở SUBSTANTIATED (đã xử lý rồi hoặc chưa có căn cứ).
    */
   markResolved(id: string, at: Date): Promise<boolean>;
+  /** Id báo cáo đã kết luận có căn cứ (SUBSTANTIATED/RESOLVED) về đối tượng, moderatedAt >= since. */
+  listViolationReportIds(targetType: ViolationTargetType, targetId: string, since: Date): Promise<string[]>;
   /** Idempotent: đặt trạng thái kết luận, đóng openKey. */
   applyModerationOutcome(
     id: string,

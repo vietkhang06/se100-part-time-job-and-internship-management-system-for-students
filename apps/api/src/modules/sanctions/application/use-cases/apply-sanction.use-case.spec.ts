@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   BadRequestException,
   ConflictException,
+  HttpException,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -20,7 +21,7 @@ import { ApplySanctionUseCase } from './apply-sanction.use-case';
 import { CompanySanctionHandlerRegistry } from '../ports/company-sanction-handler.port';
 import { SanctionEntity } from '../../domain/entities/sanction.entity';
 import { ViolationReportEntity } from '../../../reports/domain/entities/violation-report.entity';
-import { WARNING_ESCALATION_THRESHOLD } from '../../domain/policies/sanction-rules.policy';
+import { violationWindowStart } from '../../domain/policies/sanction-rules.policy';
 import { ISanctionRepository, CreateSanctionData } from '../../domain/repositories/sanction.repository.interface';
 import { IReportAdmin } from '../../../reports/application/ports/report-admin.port';
 import { IUserRepository } from '../../../users/domain/repositories/user.repository.interface';
@@ -56,11 +57,18 @@ describe('ApplySanctionUseCase', () => {
     repo = {
       list: jest.fn(), listByTarget: jest.fn(), lift: jest.fn(), recordAudit: jest.fn(),
       findActiveByTarget: jest.fn().mockResolvedValue(null),
-      countRecentWarnings: jest.fn().mockResolvedValue(0),
+      findLiftedReportIds: jest.fn().mockResolvedValue([]),
+      recordExpired: jest.fn(),
       create: jest.fn().mockImplementation(async (d: CreateSanctionData) => ({ sanction: saved(d.type, d.endsAt), duplicate: false })),
       findById: jest.fn().mockResolvedValue({ sanction: saved(S.WARNING, null), events: [] }),
     };
-    reports = { findById: jest.fn().mockResolvedValue(report()), listByStatus: jest.fn(), markResolved: jest.fn().mockResolvedValue(true) };
+    // Mặc định: sinh viên có 2 lần vi phạm (r1 đang phán quyết + 1 lần trước) → được cảnh cáo.
+    reports = {
+      findById: jest.fn().mockResolvedValue(report()),
+      listByStatus: jest.fn(),
+      markResolved: jest.fn().mockResolvedValue(true),
+      listViolationReportIds: jest.fn().mockResolvedValue(['r1', 'prev1']),
+    };
     users = {
       findById: jest.fn().mockResolvedValue({ id: 'stu1', role: UserRole.STUDENT }), findByEmail: jest.fn(),
       create: jest.fn(), createWithVerificationToken: jest.fn(), updateStatus: jest.fn(), updatePassword: jest.fn(),
@@ -70,6 +78,9 @@ describe('ApplySanctionUseCase', () => {
     handlers = new CompanySanctionHandlerRegistry();
     useCase = new ApplySanctionUseCase(repo, reports, users, notifications, handlers);
   });
+
+  const violations = (n: number) =>
+    reports.listViolationReportIds.mockResolvedValue(['r1', ...Array.from({ length: n - 1 }, (_, i) => `prev${i + 1}`)]);
 
   const input = (over: Partial<ApplySanctionDto> = {}): ApplySanctionDto => ({ reportId: 'r1', type: S.WARNING, reason: '  Gian lận  ', ...over });
 
@@ -104,9 +115,10 @@ describe('ApplySanctionUseCase', () => {
   });
 
   it('applies a time-limited application lock', async () => {
-    await useCase.execute(admin, input({ type: S.APPLICATION_LOCK, durationDays: 7 }), now);
+    violations(3);
+    await useCase.execute(admin, input({ type: S.APPLICATION_LOCK, durationDays: 30 }), now);
     expect(repo.create).toHaveBeenCalledWith(
-      expect.objectContaining({ type: S.APPLICATION_LOCK, endsAt: new Date('2026-10-22T00:00:00.000Z') }),
+      expect.objectContaining({ type: S.APPLICATION_LOCK, endsAt: new Date('2026-11-14T00:00:00.000Z') }),
     );
   });
 
@@ -142,9 +154,12 @@ describe('ApplySanctionUseCase', () => {
     await expect(useCase.execute(admin, input({ type: S.APPLICATION_LOCK }), now)).rejects.toBeInstanceOf(
       BadRequestException,
     );
-    await expect(
-      useCase.execute(admin, input({ type: S.APPLICATION_LOCK, durationDays: 365 }), now),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    for (const durationDays of [29, 91, 365, 45.5]) {
+      await expect(
+        useCase.execute(admin, input({ type: S.APPLICATION_LOCK, durationDays }), now),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    }
+    expect(repo.create).not.toHaveBeenCalled();
   });
 
   it('returns 404 when the sanctioned student no longer exists or is not a student', async () => {
@@ -157,18 +172,72 @@ describe('ApplySanctionUseCase', () => {
   });
 
   it('blocks stacking a second active lock on the same student', async () => {
+    violations(3);
     repo.findActiveByTarget.mockResolvedValue(saved(S.APPLICATION_LOCK, new Date('2026-12-01T00:00:00Z')));
     await expect(
-      useCase.execute(admin, input({ type: S.APPLICATION_LOCK, durationDays: 7 }), now),
+      useCase.execute(admin, input({ type: S.APPLICATION_LOCK, durationDays: 30 }), now),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('forces escalation to a lock once the warning threshold is reached', async () => {
-    repo.countRecentWarnings.mockResolvedValue(WARNING_ESCALATION_THRESHOLD);
-    await expect(useCase.execute(admin, input(), now)).rejects.toBeInstanceOf(ConflictException);
-    await expect(
-      useCase.execute(admin, input({ type: S.APPLICATION_LOCK, durationDays: 14 }), now),
-    ).resolves.toBeDefined();
+  describe('sanction tier by violation count (ADR-015)', () => {
+    const code = async (over: Partial<ApplySanctionDto>): Promise<string> => {
+      try {
+        await useCase.execute(admin, input(over), now);
+        return 'OK';
+      } catch (e: unknown) {
+        if (e instanceof HttpException) return (e.getResponse() as { code: string }).code;
+        throw e;
+      }
+    };
+
+    it('1st violation: neither warning nor lock may be applied, nothing is written (SP-01)', async () => {
+      violations(1);
+      expect(await code({})).toBe('SANCTION_TIER_INVALID');
+      expect(await code({ type: S.APPLICATION_LOCK, durationDays: 30 })).toBe('SANCTION_TIER_INVALID');
+      expect(repo.create).not.toHaveBeenCalled();
+      expect(reports.markResolved).not.toHaveBeenCalled();
+    });
+
+    it('2nd violation: warning only (SP-03, SP-04)', async () => {
+      violations(2);
+      expect(await code({})).toBe('OK');
+      expect(await code({ type: S.APPLICATION_LOCK, durationDays: 30 })).toBe('SANCTION_TIER_INVALID');
+    });
+
+    it('3rd violation and later: lock only, warning forces escalation (SP-05, SP-06)', async () => {
+      for (const n of [3, 4]) {
+        violations(n);
+        expect(await code({})).toBe('SANCTION_ESCALATION_REQUIRED');
+        expect(await code({ type: S.APPLICATION_LOCK, durationDays: 90 })).toBe('OK');
+      }
+    });
+
+    it('counts the report being judged even if the report list does not return it', async () => {
+      reports.listViolationReportIds.mockResolvedValue(['prev1']);
+      expect(await code({})).toBe('OK'); // prev1 + r1 = 2 lần
+    });
+
+    it('counts the window from exactly 180 days before now (SP-09, SP-10)', async () => {
+      await useCase.execute(admin, input(), now);
+      expect(reports.listViolationReportIds).toHaveBeenCalledWith(
+        V.STUDENT,
+        'stu1',
+        violationWindowStart(now),
+      );
+      expect(violationWindowStart(now)).toEqual(new Date('2026-04-18T00:00:00.000Z'));
+    });
+
+    it('does not count violations whose sanction was lifted (SP-14)', async () => {
+      violations(3);
+      repo.findLiftedReportIds.mockResolvedValue(['prev1']); // còn r1 + prev2 = 2 lần
+      expect(await code({})).toBe('OK');
+      expect(await code({ type: S.APPLICATION_LOCK, durationDays: 30 })).toBe('SANCTION_TIER_INVALID');
+    });
+
+    it('does not count violations of other students (query is scoped to the target)', async () => {
+      await useCase.execute(admin, input(), now);
+      expect(reports.listViolationReportIds.mock.calls[0][1]).toBe('stu1');
+    });
   });
 
   it('returns 409 when another admin already sanctioned the same report', async () => {
@@ -193,6 +262,12 @@ describe('ApplySanctionUseCase', () => {
         suspend: jest.fn().mockResolvedValue(undefined),
         unsuspend: jest.fn(),
       };
+    });
+
+    it('has no violation-count threshold for company suspension (SP-21 phần Admin)', async () => {
+      handlers.register(handler);
+      await useCase.execute(admin, input({ type: S.COMPANY_SUSPENSION }), now);
+      expect(reports.listViolationReportIds).not.toHaveBeenCalled();
     });
 
     it('fails closed (503) when M03 has not registered a handler', async () => {

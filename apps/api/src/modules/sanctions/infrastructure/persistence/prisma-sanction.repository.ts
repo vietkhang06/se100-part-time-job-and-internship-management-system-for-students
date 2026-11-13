@@ -92,7 +92,7 @@ export class PrismaSanctionRepository implements ISanctionRepository {
       sanction: this.toDomain(raw),
       events: raw.events.map((e) => ({
         id: e.id,
-        action: e.action as 'APPLIED' | 'LIFTED',
+        action: e.action as 'APPLIED' | 'LIFTED' | 'EXPIRED',
         actorId: e.actorId,
         note: e.note ?? null,
         createdAt: e.createdAt,
@@ -147,10 +147,55 @@ export class PrismaSanctionRepository implements ISanctionRepository {
     return { items: rows.map((r) => this.toDomain(r)), total };
   }
 
-  countRecentWarnings(targetId: string, since: Date): Promise<number> {
-    return this.prisma.sanction.count({
-      where: { targetId, type: SanctionType.WARNING, status: 'ACTIVE', createdAt: { gte: since } },
+  async findLiftedReportIds(reportIds: string[]): Promise<string[]> {
+    if (reportIds.length === 0) return [];
+    const rows = await this.prisma.sanction.findMany({
+      where: { reportId: { in: reportIds }, status: 'LIFTED' },
+      select: { reportId: true },
     });
+    return rows.map((r) => r.reportId);
+  }
+
+  async recordExpired(now: Date, targetId?: string): Promise<number> {
+    const due = await this.prisma.sanction.findMany({
+      where: {
+        status: 'ACTIVE',
+        endsAt: { lte: now },
+        events: { none: { action: 'EXPIRED' } },
+        ...(targetId ? { targetId } : {}),
+      },
+      select: { id: true, type: true, targetType: true, targetId: true, endsAt: true },
+      take: 200,
+    });
+
+    let recorded = 0;
+    for (const s of due) {
+      const done = await this.prisma.$transaction(async (tx) => {
+        // Kiểm lại trong transaction để hai lần gọi song song không ghi trùng sự kiện.
+        const exists = await tx.sanctionEvent.count({ where: { sanctionId: s.id, action: 'EXPIRED' } });
+        if (exists > 0) return false;
+        await tx.sanctionEvent.create({
+          data: { sanctionId: s.id, action: 'EXPIRED', actorId: 'SYSTEM', note: 'Hết thời hạn chế tài' },
+        });
+        await tx.auditLog.create({
+          data: {
+            actorId: null,
+            action: 'SANCTION_EXPIRED',
+            entityType: 'Sanction',
+            entityId: s.id,
+            metadata: {
+              type: s.type,
+              targetType: s.targetType,
+              targetId: s.targetId,
+              endsAt: s.endsAt ? s.endsAt.toISOString() : null,
+            },
+          },
+        });
+        return true;
+      });
+      if (done) recorded += 1;
+    }
+    return recorded;
   }
 
   async findActiveByTarget(
