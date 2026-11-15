@@ -21,7 +21,7 @@ describe('JwtStrategy', () => {
       changePasswordAndRevokeSessions: jest.fn(),
     };
 
-    configService = new ConfigService({ JWT_ACCESS_SECRET: 'test_jwt_secret_key_12345' });
+    configService = new ConfigService({ JWT_ACCESS_SECRET: 'test_jwt_secret_key_for_unit_tests_only' });
 
     strategy = new JwtStrategy(configService, userRepository);
   });

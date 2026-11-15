@@ -22,6 +22,7 @@ import { PASSWORD_RESET_TOKEN_REPOSITORY_TOKEN } from './domain/repositories/pas
 import { PrismaPasswordResetTokenRepository } from './infrastructure/persistence/prisma-password-reset-token.repository';
 import { AUTH_SESSION_REPOSITORY_TOKEN } from './domain/repositories/auth-session.repository.interface';
 import { PrismaAuthSessionRepository } from './infrastructure/persistence/prisma-auth-session.repository';
+import { getAccessTokenSecret } from './infrastructure/config/access-token-secret';
 import { JwtStrategy } from './infrastructure/security/jwt.strategy';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { RolesGuard } from '../../shared/guards/roles.guard';
@@ -55,7 +56,7 @@ export function parseJwtExpiration(value: string | undefined): JwtExpiration {
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
+        secret: getAccessTokenSecret(configService),
         signOptions: {
           expiresIn: parseJwtExpiration(
             configService.get<string>('JWT_ACCESS_EXPIRES_IN', '15m'),

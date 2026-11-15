@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { ForbiddenException, Injectable } from '@nestjs/common';
+import { Prisma, UserRole, UserStatus } from '@prisma/client';
 import type { ModerationDecision, ModerationItem } from '@prisma/client';
 import { ModerationStatus } from '@campusjob/contracts';
+import { lockUserRow } from '../../../../shared/database/lock-user-row';
 import { PrismaService } from '../../../../shared/database/prisma.service';
 import {
   ModerationDecisionEntity,
@@ -114,31 +115,55 @@ export class PrismaModerationRepository implements IModerationRepository {
     return { items: rows.map((r) => this.toItem(r)), total };
   }
 
+  private async lockReviewer(tx: Prisma.TransactionClient, actorId: string) {
+    // Role revocation takes the same lock before checking pending assignments.
+    await lockUserRow(tx, actorId);
+    const actor = await tx.user.findUnique({
+      where: { id: actorId },
+      select: { role: true, status: true },
+    });
+    if (actor?.status !== UserStatus.ACTIVE ||
+        (actor.role !== UserRole.ADMIN && actor.role !== UserRole.MODERATOR)) {
+      throw new ForbiddenException('The account can no longer process moderation items.');
+    }
+    return actor.role;
+  }
+
   async claim(
     id: string,
     actorId: string,
     now: Date,
     force: boolean,
   ): Promise<ModerationItemEntity | null> {
-    const result = await this.prisma.moderationItem.updateMany({
-      where: {
-        id,
-        status: ModerationStatus.PENDING,
-        ...(force ? {} : { OR: [{ assigneeId: null }, { assigneeId: actorId }] }),
-      },
-      data: { assigneeId: actorId, assignedAt: now },
+    return this.prisma.$transaction(async (tx) => {
+      const actorRole = await this.lockReviewer(tx, actorId);
+      const result = await tx.moderationItem.updateMany({
+        where: {
+          id,
+          status: ModerationStatus.PENDING,
+          ...(force && actorRole === UserRole.ADMIN ? {} : { OR: [{ assigneeId: null }, { assigneeId: actorId }] }),
+        },
+        data: { assigneeId: actorId, assignedAt: now },
+      });
+      if (result.count !== 1) return null;
+      const raw = await tx.moderationItem.findUnique({ where: { id } });
+      return raw ? this.toItem(raw) : null;
     });
-    if (result.count !== 1) return null;
-    const raw = await this.prisma.moderationItem.findUnique({ where: { id } });
-    return raw ? this.toItem(raw) : null;
   }
 
   async decide(
     data: DecideData,
   ): Promise<{ item: ModerationItemEntity; decision: ModerationDecisionEntity } | null> {
     return this.prisma.$transaction(async (tx) => {
+      const actorRole = await this.lockReviewer(tx, data.reviewerId);
       const updated = await tx.moderationItem.updateMany({
-        where: { id: data.itemId, status: ModerationStatus.PENDING },
+        where: {
+          id: data.itemId,
+          status: ModerationStatus.PENDING,
+          ...(actorRole === UserRole.ADMIN
+            ? {}
+            : { OR: [{ assigneeId: null }, { assigneeId: data.reviewerId }] }),
+        },
         data: {
           status: data.newStatus,
           decidedAt: data.now,

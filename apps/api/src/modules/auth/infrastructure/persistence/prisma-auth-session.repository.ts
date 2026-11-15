@@ -1,5 +1,7 @@
-import { Injectable } from '@nestjs/common';
-import type { AuthSession } from '@prisma/client';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { AuthSession, Prisma, UserStatus } from '@prisma/client';
+import { AuthErrorCode } from '@campusjob/contracts';
+import { lockUserRow } from '../../../../shared/database/lock-user-row';
 import { PrismaService } from '../../../../shared/database/prisma.service';
 import {
   IAuthSessionRepository,
@@ -25,8 +27,22 @@ export class PrismaAuthSessionRepository implements IAuthSessionRepository {
     );
   }
 
-  async create(data: CreateAuthSessionData): Promise<AuthSessionEntity> {
-    const raw = await this.prisma.authSession.create({
+  private async requireCurrentAccount(tx: Prisma.TransactionClient, data: CreateAuthSessionData) {
+    await lockUserRow(tx, data.userId);
+    const account = await tx.user.findUnique({
+      where: { id: data.userId },
+      select: { status: true, accessTokenVersion: true },
+    });
+    if (account?.status !== UserStatus.ACTIVE || account.accessTokenVersion !== data.accessTokenVersion) {
+      throw new UnauthorizedException({
+        message: 'Phiên đăng nhập không còn hợp lệ. Vui lòng đăng nhập lại.',
+        code: AuthErrorCode.UNAUTHORIZED,
+      });
+    }
+  }
+
+  private createSession(tx: Prisma.TransactionClient, data: CreateAuthSessionData) {
+    return tx.authSession.create({
       data: {
         userId: data.userId,
         tokenHash: data.tokenHash,
@@ -36,7 +52,13 @@ export class PrismaAuthSessionRepository implements IAuthSessionRepository {
         ipAddress: data.ipAddress ?? null,
       },
     });
-    return this.toDomain(raw);
+  }
+
+  async create(data: CreateAuthSessionData): Promise<AuthSessionEntity> {
+    return this.prisma.$transaction(async (tx) => {
+      await this.requireCurrentAccount(tx, data);
+      return this.toDomain(await this.createSession(tx, data));
+    });
   }
 
   async findByTokenHash(tokenHash: string): Promise<AuthSessionEntity | null> {
@@ -78,25 +100,21 @@ export class PrismaAuthSessionRepository implements IAuthSessionRepository {
     oldSessionId: string,
     newSessionData: CreateAuthSessionData,
   ): Promise<AuthSessionEntity> {
-    const now = new Date();
-    return await this.prisma.$transaction(async (tx) => {
-      await tx.authSession.update({
-        where: { id: oldSessionId },
+    return this.prisma.$transaction(async (tx) => {
+      await this.requireCurrentAccount(tx, newSessionData);
+      const now = new Date();
+      const revoked = await tx.authSession.updateMany({
+        where: { id: oldSessionId, userId: newSessionData.userId, revokedAt: null, expiresAt: { gt: now } },
         data: { revokedAt: now },
       });
+      if (revoked.count !== 1) {
+        throw new UnauthorizedException({
+          message: 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.',
+          code: AuthErrorCode.REFRESH_TOKEN_INVALID,
+        });
+      }
 
-      const raw = await tx.authSession.create({
-        data: {
-          userId: newSessionData.userId,
-          tokenHash: newSessionData.tokenHash,
-          tokenFamily: newSessionData.tokenFamily,
-          expiresAt: newSessionData.expiresAt,
-          userAgent: newSessionData.userAgent ?? null,
-          ipAddress: newSessionData.ipAddress ?? null,
-        },
-      });
-
-      return this.toDomain(raw);
+      return this.toDomain(await this.createSession(tx, newSessionData));
     });
   }
 }

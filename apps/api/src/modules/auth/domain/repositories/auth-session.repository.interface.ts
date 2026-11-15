@@ -4,6 +4,7 @@ export const AUTH_SESSION_REPOSITORY_TOKEN = Symbol('AUTH_SESSION_REPOSITORY_TOK
 
 export interface CreateAuthSessionData {
   userId: string;
+  accessTokenVersion: number;
   tokenHash: string;
   tokenFamily: string;
   expiresAt: Date;

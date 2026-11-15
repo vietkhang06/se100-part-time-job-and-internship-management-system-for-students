@@ -66,6 +66,8 @@ model User {
   fullName                     String
   phone                        String?
   role                         UserRole
+  roleBeforeModeration         UserRole?
+  accessTokenVersion           Int                      @default(0)
   status                       UserStatus               @default(PENDING_VERIFICATION)
   emailVerifiedAt              DateTime?
   createdAt                    DateTime                 @default(now())

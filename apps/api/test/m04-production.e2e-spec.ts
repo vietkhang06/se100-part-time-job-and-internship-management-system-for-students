@@ -195,4 +195,26 @@ describe('S6-M04-01 production AppModule E2E', () => {
       studentId: ids.student, status: { in: ['SUBMITTED', 'REVIEWING', 'INTERVIEW_SCHEDULED'] },
     } })).toBe(5);
   });
+
+  it.each([
+    [UserStatus.SUSPENDED, 'ACCOUNT_SUSPENDED'],
+    [UserStatus.LOCKED, 'ACCOUNT_LOCKED'],
+  ])('blocks %s accounts on the production M03, M04 and M05 routes', async (status, code) => {
+    const studentToken = await login(`${tag}-student-2@example.test`);
+    await prisma.user.update({ where: { id: ids.otherStudent }, data: { status } });
+    try {
+      const http = request(app.getHttpServer());
+      const results = await Promise.all([
+        http.get('/api/v1/student/saved-jobs').set(auth(studentToken)).expect(403),
+        http.post(`/api/v1/jobs/${primaryJobId}/apply`)
+          .set(auth(studentToken)).send({ cvId: otherCvId }).expect(403),
+        http.get('/api/v1/notifications').set(auth(studentToken)).expect(403),
+      ]);
+      expect(results.map((result) => result.body.code)).toEqual([code, code, code]);
+    } finally {
+      await prisma.user.update({
+        where: { id: ids.otherStudent }, data: { status: UserStatus.ACTIVE },
+      });
+    }
+  });
 });

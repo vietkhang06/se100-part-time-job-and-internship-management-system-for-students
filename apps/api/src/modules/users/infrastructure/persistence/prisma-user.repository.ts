@@ -21,6 +21,7 @@ export class PrismaUserRepository implements IUserRepository {
       raw.emailVerifiedAt,
       raw.createdAt,
       raw.updatedAt,
+      raw.accessTokenVersion,
     );
   }
 

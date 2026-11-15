@@ -8,11 +8,14 @@ import {
   IUserRepository,
 } from '../../../users/domain/repositories/user.repository.interface';
 
+import { getAccessTokenSecret } from '../config/access-token-secret';
+
 export interface JwtPayload {
   sub: string;
   email: string;
   role: string;
   sessionId?: string;
+  accessTokenVersion?: number;
 }
 
 @Injectable()
@@ -25,10 +28,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>(
-        'JWT_ACCESS_SECRET',
-        'replace_with_long_random_access_secret',
-      ),
+      secretOrKey: getAccessTokenSecret(configService),
     });
   }
 
@@ -61,6 +61,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         message:
           'Tài khoản chưa được xác minh email. Vui lòng kiểm tra email để kích hoạt hoặc yêu cầu gửi lại mã.',
         code: AuthErrorCode.ACCOUNT_PENDING_VERIFICATION,
+      });
+    }
+
+    if ((payload.accessTokenVersion ?? 0) !== user.accessTokenVersion) {
+      throw new UnauthorizedException({
+        message: 'Phiên đăng nhập không còn hợp lệ. Vui lòng đăng nhập lại.',
+        code: AuthErrorCode.UNAUTHORIZED,
       });
     }
 

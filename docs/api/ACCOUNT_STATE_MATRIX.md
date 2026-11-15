@@ -71,8 +71,9 @@ Các quy định về trạng thái người dùng trong hệ thống CampusJob 
 3. **Bổ sung kiểm tra trạng thái tài khoản trong `ResendVerificationUseCase`:**
    - Chặn người dùng `SUSPENDED` và `LOCKED` gửi yêu cầu cấp lại mã kích hoạt, trả về mã lỗi 403 tương ứng.
 
-### 3.4 Vấn đề chính sách chưa giải quyết / Cần quyết định từ PM (Unresolved Policy Decisions)
-- **Thu hồi chủ động tất cả Refresh Session khi tài khoản bị khóa (`SUSPENDED` / `LOCKED`):** Hiện tại, khi Admin đổi trạng thái người dùng trong DB, `JwtStrategy` và `RefreshUseCase` sẽ chặn ngay lập tức mọi request kế tiếp. Tuy nhiên, nếu muốn xóa cứng/thu hồi ngay lập tức toàn bộ record trong bảng `AuthSession` ngay thời điểm Admin thao tác, cần triển khai hook/event tại module Quản trị người dùng (Admin Users) (mã Use Case cho phân hệ Quản trị người dùng & Audit Log hiện đang chờ xác định chính thức / pending identification; lưu ý UC21 theo danh mục chuẩn là Quản lý chi nhánh doanh nghiệp). Quyết định này thuộc phạm vi module Quản trị người dùng & Audit Log.
+### 3.4 Thu hồi phiên qua API quản trị
+
+Khi ADMIN chuyển trạng thái qua API quản trị sang `SUSPENDED` hoặc `LOCKED`, ứng dụng thu hồi refresh session và vô hiệu hóa access token trong cùng giao dịch. Các dòng kiểm thử đổi thẳng trạng thái trong DB ở trên mô tả hành vi của guard và refresh khi phiên chưa bị thu hồi. Xem [Admin Users API](ADMIN_USERS_API_CONTRACT.md).
 
 ---
 
