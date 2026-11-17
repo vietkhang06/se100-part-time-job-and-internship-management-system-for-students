@@ -100,6 +100,7 @@ export class LoginUseCase {
 
     const session = await this.authSessionRepository.create({
       userId: user.id,
+      accessTokenVersion: user.accessTokenVersion,
       tokenHash,
       tokenFamily,
       userAgent: userAgent ?? null,
@@ -112,6 +113,7 @@ export class LoginUseCase {
       email: user.email,
       role: user.role,
       sessionId: session.id,
+      ...(user.accessTokenVersion ? { accessTokenVersion: user.accessTokenVersion } : {}),
     });
 
     this.logger.log(`User logged in successfully: ${user.id} (${user.email})`);

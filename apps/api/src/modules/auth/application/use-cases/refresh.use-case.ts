@@ -126,6 +126,7 @@ export class RefreshUseCase {
       session.id,
       {
         userId: session.userId,
+        accessTokenVersion: user.accessTokenVersion,
         tokenHash: newTokenHash,
         tokenFamily: session.tokenFamily,
         userAgent: userAgent ?? null,
@@ -139,6 +140,7 @@ export class RefreshUseCase {
       email: user.email,
       role: user.role,
       sessionId: newSession.id,
+      ...(user.accessTokenVersion ? { accessTokenVersion: user.accessTokenVersion } : {}),
     });
 
     this.logger.log(`Session refreshed successfully for user: ${user.id}`);

@@ -12,6 +12,7 @@ export class UserEntity {
     public readonly emailVerifiedAt?: Date | null,
     public readonly createdAt?: Date,
     public readonly updatedAt?: Date,
+    public readonly accessTokenVersion = 0,
   ) {}
 
   isActive(): boolean {

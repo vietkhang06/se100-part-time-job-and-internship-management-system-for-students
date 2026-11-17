@@ -136,6 +136,17 @@ copy .env.example .env
 cp .env.example .env
 ```
 
+Điền giá trị ngẫu nhiên vào `JWT_ACCESS_SECRET` trong `.env` trước khi chạy API.
+Lệnh sau tạo một giá trị bằng Node.js, dùng được trên PowerShell, CMD và Bash.
+
+```bash
+node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+API dừng khi thiếu secret, secret ngắn hơn 32 byte hoặc còn dùng giá trị mẫu cũ.
+Refresh token hiện là token ngẫu nhiên lưu hash trong PostgreSQL. Biến
+`JWT_REFRESH_SECRET` trong tệp mẫu không được luồng refresh sử dụng.
+
 > **LƯU Ý:** Tuyệt đối không commit tệp `.env` lên Git. `.env` đã được cấu hình trong `.gitignore`.
 
 ---
