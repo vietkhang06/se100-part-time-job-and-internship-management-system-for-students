@@ -50,7 +50,7 @@ publish({ eventType, recipientId, payload?, dedupeKey? }): Promise<{ outcome, no
 
 - Gửi thất bại → `FAILED`, lịch thử lại 1 → 5 → 15 → 60 phút, tối đa 5 lần (kể cả lần đầu). Hết lượt thì `emailNextRetryAt = null`.
 - Chống gửi trùng bằng lease (`emailNextRetryAt` được đẩy 5 phút khi đang gửi).
-- `RetryPendingNotificationEmailsUseCase` xử lý hàng đợi; **chưa gắn scheduler** vì chưa chốt ai sở hữu UC61/UC68.
+- `EmailRetrySchedulerService` (R-M05-03) tự động kích hoạt `RetryPendingNotificationEmailsUseCase` định kỳ (mặc định 60 giây), có cơ chế chống chạy đè và quản lý vòng đời ứng dụng an toàn. Có thể gọi trực tiếp `execute()` từ maintenance job/endpoint nếu cần.
 
 ## 5. Câu hỏi mở
 
