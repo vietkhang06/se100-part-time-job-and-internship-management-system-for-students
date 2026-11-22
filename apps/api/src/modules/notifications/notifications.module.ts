@@ -14,6 +14,7 @@ import { ListMyNotificationsUseCase } from './application/use-cases/list-my-noti
 import { GetUnreadCountUseCase } from './application/use-cases/get-unread-count.use-case';
 import { MarkNotificationReadUseCase } from './application/use-cases/mark-notification-read.use-case';
 import { MarkAllNotificationsReadUseCase } from './application/use-cases/mark-all-notifications-read.use-case';
+import { EmailRetrySchedulerService } from './application/services/email-retry-scheduler.service';
 
 @Module({
   imports: [DatabaseModule, UsersModule],
@@ -22,6 +23,7 @@ import { MarkAllNotificationsReadUseCase } from './application/use-cases/mark-al
     PublishNotificationUseCase,
     DispatchNotificationEmailUseCase,
     RetryPendingNotificationEmailsUseCase,
+    EmailRetrySchedulerService,
     ListMyNotificationsUseCase,
     GetUnreadCountUseCase,
     MarkNotificationReadUseCase,
@@ -31,6 +33,10 @@ import { MarkAllNotificationsReadUseCase } from './application/use-cases/mark-al
     { provide: NOTIFICATION_PUBLISHER_TOKEN, useExisting: PublishNotificationUseCase },
   ],
   // Module M03/M04/M05-xx inject NOTIFICATION_PUBLISHER_TOKEN để phát sự kiện (C-20).
-  exports: [NOTIFICATION_PUBLISHER_TOKEN, RetryPendingNotificationEmailsUseCase],
+  exports: [
+    NOTIFICATION_PUBLISHER_TOKEN,
+    RetryPendingNotificationEmailsUseCase,
+    EmailRetrySchedulerService,
+  ],
 })
 export class NotificationsModule {}
