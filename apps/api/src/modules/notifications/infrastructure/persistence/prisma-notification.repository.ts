@@ -147,6 +147,16 @@ export class PrismaNotificationRepository implements INotificationRepository {
     });
   }
 
+  async markEmailNotRequired(id: string): Promise<void> {
+    await this.prisma.notification.update({
+      where: { id },
+      data: {
+        emailStatus: NotificationEmailStatus.NOT_REQUIRED,
+        emailNextRetryAt: null,
+      },
+    });
+  }
+
   async markEmailFailed(
     id: string,
     data: { attempts: number; error: string; nextRetryAt: Date | null },

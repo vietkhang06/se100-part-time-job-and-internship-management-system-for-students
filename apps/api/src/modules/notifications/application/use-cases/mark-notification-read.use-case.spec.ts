@@ -30,7 +30,7 @@ describe('MarkNotificationReadUseCase', () => {
     repo = {
       create: jest.fn(), findById: jest.fn(), findByIdForRecipient: jest.fn(), list: jest.fn(), countUnread: jest.fn(),
       markRead: jest.fn(), markAllRead: jest.fn(), claimForEmailDispatch: jest.fn(), markEmailSent: jest.fn(),
-      markEmailFailed: jest.fn(), findEmailDispatchable: jest.fn(),
+      markEmailNotRequired: jest.fn(), markEmailFailed: jest.fn(), findEmailDispatchable: jest.fn(),
     };
     useCase = new MarkNotificationReadUseCase(repo);
   });

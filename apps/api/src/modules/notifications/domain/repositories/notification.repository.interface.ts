@@ -36,6 +36,7 @@ export interface INotificationRepository {
    */
   claimForEmailDispatch(id: string, now: Date, leaseUntil: Date): Promise<boolean>;
   markEmailSent(id: string, at: Date): Promise<void>;
+  markEmailNotRequired(id: string): Promise<void>;
   markEmailFailed(
     id: string,
     data: { attempts: number; error: string; nextRetryAt: Date | null },

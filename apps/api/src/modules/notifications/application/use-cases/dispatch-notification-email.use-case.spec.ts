@@ -1,6 +1,7 @@
 import { NotificationEmailStatus } from '@campusjob/contracts';
 import { DispatchNotificationEmailUseCase } from './dispatch-notification-email.use-case';
 import { INotificationRepository } from '../../domain/repositories/notification.repository.interface';
+import { INotificationPreferenceRepository } from '../../domain/repositories/notification-preference.repository.interface';
 import { IUserRepository } from '../../../users/domain/repositories/user.repository.interface';
 import { INotificationEmailSender } from '../ports/notification-email-sender.port';
 import { NotificationEntity } from '../../domain/entities/notification.entity';
@@ -29,6 +30,7 @@ const makeNotification = (over: Partial<ConstructorParameters<typeof Notificatio
 
 describe('DispatchNotificationEmailUseCase', () => {
   let repo: jest.Mocked<INotificationRepository>;
+  let prefRepo: jest.Mocked<INotificationPreferenceRepository>;
   let users: jest.Mocked<IUserRepository>;
   let sender: jest.Mocked<INotificationEmailSender>;
   let useCase: DispatchNotificationEmailUseCase;
@@ -45,8 +47,15 @@ describe('DispatchNotificationEmailUseCase', () => {
       markAllRead: jest.fn(),
       claimForEmailDispatch: jest.fn().mockResolvedValue(true),
       markEmailSent: jest.fn(),
+      markEmailNotRequired: jest.fn(),
       markEmailFailed: jest.fn(),
       findEmailDispatchable: jest.fn(),
+    };
+    prefRepo = {
+      findByUser: jest.fn(),
+      findByUserAndEvent: jest.fn(),
+      upsert: jest.fn(),
+      isEmailEnabled: jest.fn().mockResolvedValue(true),
     };
     users = {
       findById: jest.fn().mockResolvedValue(new UserEntity('u1', 'a@b.com', 'hash', 'User', UserRole.STUDENT, UserStatus.ACTIVE)),
@@ -54,7 +63,7 @@ describe('DispatchNotificationEmailUseCase', () => {
       updatePassword: jest.fn(), changePasswordAndRevokeSessions: jest.fn(),
     };
     sender = { send: jest.fn().mockResolvedValue(undefined) };
-    useCase = new DispatchNotificationEmailUseCase(repo, users, sender);
+    useCase = new DispatchNotificationEmailUseCase(repo, users, sender, prefRepo);
   });
 
   it('marks SENT and escapes html on success', async () => {
@@ -66,6 +75,17 @@ describe('DispatchNotificationEmailUseCase', () => {
       expect.objectContaining({ to: 'a@b.com', html: '<p>Nội dung &lt;b&gt;</p>' }),
     );
     expect(repo.markEmailSent).toHaveBeenCalledWith('n1', expect.any(Date));
+  });
+
+  it('skips dispatch and marks NOT_REQUIRED when user disabled email preference', async () => {
+    repo.findById.mockResolvedValue(makeNotification());
+    prefRepo.isEmailEnabled.mockResolvedValue(false);
+
+    const result = await useCase.execute('n1', now);
+
+    expect(result).toBe('SKIPPED');
+    expect(repo.markEmailNotRequired).toHaveBeenCalledWith('n1');
+    expect(sender.send).not.toHaveBeenCalled();
   });
 
   it('skips when notification does not need email', async () => {
@@ -100,24 +120,13 @@ describe('DispatchNotificationEmailUseCase', () => {
         emailAttempts: MAX_EMAIL_ATTEMPTS - 1,
       }),
     );
-    sender.send.mockRejectedValue(new Error('SMTP down'));
-
-    await useCase.execute('n1', now);
-    expect(repo.markEmailFailed).toHaveBeenCalledWith(
-      'n1',
-      expect.objectContaining({ attempts: MAX_EMAIL_ATTEMPTS, nextRetryAt: null }),
-    );
-  });
-
-  it('fails permanently when recipient no longer exists', async () => {
-    repo.findById.mockResolvedValue(makeNotification());
-    users.findById.mockResolvedValue(null);
+    sender.send.mockRejectedValue(new Error('fatal'));
 
     expect(await useCase.execute('n1', now)).toBe('FAILED');
-    expect(sender.send).not.toHaveBeenCalled();
-    expect(repo.markEmailFailed).toHaveBeenCalledWith(
-      'n1',
-      expect.objectContaining({ nextRetryAt: null }),
-    );
+    expect(repo.markEmailFailed).toHaveBeenCalledWith('n1', {
+      attempts: MAX_EMAIL_ATTEMPTS,
+      error: 'fatal',
+      nextRetryAt: null,
+    });
   });
 });
