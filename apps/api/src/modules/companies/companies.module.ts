@@ -20,6 +20,7 @@ import { StorageModule } from '../../shared/storage/storage.module';
 import { ModerationModule } from '../moderation/moderation.module';
 import { ModerationTargetHandlerRegistry } from '../moderation/application/ports/moderation-target-handler.port';
 import { ReviewSourcesRegistry } from '../reviews/application/ports/review-sources.port';
+import { ReviewsModule } from '../reviews/reviews.module';
 
 import { CompaniesController } from './presentation/controllers/companies.controller';
 import { CompanyBranchesController } from './presentation/controllers/company-branches.controller';
@@ -73,10 +74,10 @@ import { CompanyDirectoryAdapter } from './infrastructure/adapters/company-direc
 import { M04_JOB_SOURCE } from '../applications/m04.module';
 
 @Module({
-  imports: [DatabaseModule, StorageModule, ModerationModule, MailModule],
+  imports: [DatabaseModule, StorageModule, ModerationModule, MailModule, ReviewsModule],
   controllers: [
-    CompaniesController,
     CompanyBranchesController,
+    CompaniesController,
     JobsController,
     PublicJobsController,
     PublicCompaniesController,
