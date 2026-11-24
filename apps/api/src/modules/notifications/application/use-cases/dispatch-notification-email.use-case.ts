@@ -4,6 +4,10 @@ import {
   NOTIFICATION_REPOSITORY_TOKEN,
 } from '../../domain/repositories/notification.repository.interface';
 import {
+  INotificationPreferenceRepository,
+  NOTIFICATION_PREFERENCE_REPOSITORY_TOKEN,
+} from '../../domain/repositories/notification-preference.repository.interface';
+import {
   IUserRepository,
   USER_REPOSITORY_TOKEN,
 } from '../../../users/domain/repositories/user.repository.interface';
@@ -29,6 +33,8 @@ export class DispatchNotificationEmailUseCase {
     private readonly userRepository: IUserRepository,
     @Inject(NOTIFICATION_EMAIL_SENDER_TOKEN)
     private readonly emailSender: INotificationEmailSender,
+    @Inject(NOTIFICATION_PREFERENCE_REPOSITORY_TOKEN)
+    private readonly preferenceRepository: INotificationPreferenceRepository,
   ) {}
 
   /**
@@ -38,6 +44,16 @@ export class DispatchNotificationEmailUseCase {
   async execute(notificationId: string, now: Date = new Date()): Promise<DispatchEmailOutcome> {
     const notification = await this.notificationRepository.findById(notificationId);
     if (!notification || !notification.needsEmailDispatch()) {
+      return 'SKIPPED';
+    }
+
+    // Kiểm tra kép trước khi gửi (đặc biệt khi retry): nếu người nhận đã tắt email, bỏ qua gửi
+    const emailEnabled = await this.preferenceRepository.isEmailEnabled(
+      notification.recipientId,
+      notification.eventType,
+    );
+    if (!emailEnabled) {
+      await this.notificationRepository.markEmailNotRequired(notification.id);
       return 'SKIPPED';
     }
 

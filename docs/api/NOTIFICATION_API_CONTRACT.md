@@ -41,8 +41,21 @@ publish({ eventType, recipientId, payload?, dedupeKey? }): Promise<{ outcome, no
 |---|---|---|
 | GET | `/notifications?page&limit&unreadOnly` | UC62 — danh sách của chính mình, mới nhất trước (limit tối đa 50) |
 | GET | `/notifications/unread-count` | Số chưa đọc |
+| GET | `/notifications/preferences` | S6-M05-03 — Danh sách tùy chọn nhận email thông báo của chính mình |
+| PATCH | `/notifications/preferences` | S6-M05-03 — Cập nhật tùy chọn email theo loại thông báo (`{ eventType, emailEnabled }`) |
 | PATCH | `/notifications/read-all` | UC63 — đọc tất cả |
 | PATCH | `/notifications/:id/read` | UC63 — đọc một thông báo (idempotent). Không thuộc về mình → 404 `NOTIFICATION_NOT_FOUND` |
+
+## 4. Tùy chọn nhận email (S6-M05-03)
+
+- Bảng dữ liệu: `NotificationEmailPreference` (id, userId, eventType, emailEnabled, createdAt, updatedAt) với unique `(userId, eventType)`.
+- Giá trị mặc định khi chưa cấu hình: `true` (cho tất cả 11 loại sự kiện có hỗ trợ gửi email).
+- Khi người dùng tắt email (`emailEnabled = false`):
+  - Thông báo trong ứng dụng vẫn được lưu và tăng số chưa đọc (`unreadCount`).
+  - Trạng thái email được đặt là `NOT_REQUIRED`.
+  - Không gửi email đến hộp thư người dùng.
+- Kiểm tra kép (dual-check): kiểm tra lúc `publish` để bỏ qua dispatch; và kiểm tra lúc `dispatch` (hàng đợi/retry) để hủy gửi nếu người dùng vừa tắt tùy chọn.
+- Phân quyền & sở hữu: API luôn lấy `userId` từ `AuthContext` (JWT token đã xác thực), không nhận `userId` từ client parameter để chống sửa chéo dữ liệu.
 
 ## 4. Trạng thái email
 
