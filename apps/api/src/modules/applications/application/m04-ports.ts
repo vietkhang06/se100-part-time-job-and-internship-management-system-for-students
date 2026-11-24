@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import {
   ApplicationJobContextDto, CvSnapshotDto, JobAccessSource as ContractJobAccessSource,
   NotificationEventType,
@@ -89,7 +90,7 @@ export interface M04Repository {
     cvId: string;
     cvSnapshot: CvSnapshotDto;
     coverLetter: string | null;
-  }, events?: readonly M04EventDraft[]): Promise<ApplicationRecord>;
+  }, events?: readonly M04EventDraft[], assertAllowed?: (transaction: Prisma.TransactionClient) => Promise<void>): Promise<ApplicationRecord>;
   getApplication(id: string): Promise<ApplicationRecord | null>;
   getApplicationHistory(id: string): Promise<ApplicationHistoryRecord[]>;
   listStudentApplications(studentId: string): Promise<ApplicationRecord[]>;
@@ -144,7 +145,9 @@ export class M04WorkflowError extends Error {
       | 'INVALID_INPUT'
       | 'DUPLICATE_APPLICATION'
       | 'QUOTA_EXCEEDED'
-      | 'CONCURRENT_CHANGE',
+      | 'CONCURRENT_CHANGE'
+      | 'APPLICATION_LOCKED',
+    readonly lockedUntil?: Date,
   ) {
     super(code);
     this.name = 'M04WorkflowError';

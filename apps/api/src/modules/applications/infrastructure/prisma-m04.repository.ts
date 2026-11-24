@@ -14,10 +14,12 @@ export class PrismaM04Repository implements M04Repository {
 
   async createApplication(input: {
     studentId: string; jobId: string; cvId: string; cvSnapshot: CvSnapshotDto; coverLetter: string | null;
-  }, events: readonly M04EventDraft[] = []): Promise<ApplicationRecord> {
+  }, events: readonly M04EventDraft[] = [], assertAllowed?: (transaction: Prisma.TransactionClient) => Promise<void>): Promise<ApplicationRecord> {
     try {
       const row = await this.prisma.$transaction(async (tx) => {
+        // M05 activation uses the same User.id key; recheck on this connection before writing.
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.studentId}))`;
+        await assertAllowed?.(tx);
 
         const activeCount = await tx.application.count({
           where: {
@@ -39,7 +41,7 @@ export class PrismaM04Repository implements M04Repository {
         } });
         await this.enqueueEvents(tx, events, application.id, { applicationId: application.id });
         return application;
-      });
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
       return this.application(row);
     } catch (error) {
       if (this.isUnique(error)) throw new M04WorkflowError('DUPLICATE_APPLICATION');

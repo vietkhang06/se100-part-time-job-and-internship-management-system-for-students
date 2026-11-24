@@ -7,6 +7,12 @@ import { M04Workflow } from './application/m04-workflow';
 import { M04_CV_SOURCE, M04_JOB_SOURCE } from './application/m04-ports';
 
 describe('S5-M04-01 production wiring', () => {
+  const originalSecret = process.env['JWT_ACCESS_SECRET'];
+  beforeAll(() => { process.env['JWT_ACCESS_SECRET'] = 'm04-wiring-test-only-secret-at-least-32-bytes'; });
+  afterAll(() => {
+    if (originalSecret === undefined) delete process.env['JWT_ACCESS_SECRET'];
+    else process.env['JWT_ACCESS_SECRET'] = originalSecret;
+  });
   it('resolves M04 through AppModule with the real M02 and M03 adapters', async () => {
     const module = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
