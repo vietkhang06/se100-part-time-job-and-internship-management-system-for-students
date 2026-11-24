@@ -9,6 +9,9 @@ import {
 import { PrismaM04Repository } from './infrastructure/prisma-m04.repository';
 import { M04Controller } from './presentation/m04.controller';
 import { PrismaM04EventDispatcher } from './infrastructure/m04-event-dispatcher';
+import { ReviewsModule } from '../reviews/reviews.module';
+import { ApplicationReviewSourceAdapter } from './infrastructure/application-review-source.adapter';
+import { ReviewSourcesRegistry } from '../reviews/application/ports/review-sources.port';
 
 export { M04_CV_SOURCE, M04_JOB_SOURCE, M04_REPOSITORY } from './application/m04-ports';
 
@@ -18,13 +21,19 @@ export class M04Module {
   static register(cvSource: Provider, jobSource: Provider, repository?: Provider): DynamicModule {
     return {
       module: M04Module,
-      imports: [AuthModule, NotificationsModule],
+      imports: [AuthModule, NotificationsModule, ReviewsModule],
       controllers: [M04Controller],
       providers: [
         cvSource,
         jobSource,
         repository ?? { provide: M04_REPOSITORY, useClass: PrismaM04Repository },
         PrismaM04EventDispatcher,
+        {
+          provide: ApplicationReviewSourceAdapter,
+          useFactory: (store: M04Repository, registry: ReviewSourcesRegistry) =>
+            new ApplicationReviewSourceAdapter(store, registry),
+          inject: [M04_REPOSITORY, ReviewSourcesRegistry],
+        },
         {
           provide: M04Workflow,
           useFactory: (

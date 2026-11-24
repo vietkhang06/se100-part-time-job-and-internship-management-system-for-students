@@ -88,6 +88,7 @@ describe('S6-M04-01 production AppModule E2E', () => {
   });
 
   afterAll(async () => {
+    await prisma.review.deleteMany({ where: { studentId: { in: [ids.student, ids.otherStudent] } } });
     await prisma.m04EventOutbox.deleteMany({ where: { OR: [
       { actorId: { in: Object.values(ids) } }, { recipientId: { in: Object.values(ids) } },
     ] } });
@@ -98,6 +99,37 @@ describe('S6-M04-01 production AppModule E2E', () => {
     await prisma.user.deleteMany({ where: { id: { in: Object.values(ids) } } });
     await app.close();
   });
+
+  it.each(['SUBMITTED', 'REVIEWING', 'INTERVIEW_SCHEDULED', 'WITHDRAWN', 'ACCEPTED', 'REJECTED'] as const)(
+    'enforces review ownership, eligibility and uniqueness for %s through production AppModule', async status => {
+      const [token, stranger] = await Promise.all([
+        login(`${tag}-student-2@example.test`), login(`${tag}-student@example.test`),
+      ]);
+      const application = await prisma.application.create({ data: {
+        studentId: ids.otherStudent, jobId: primaryJobId, cvId: otherCvId, cvSnapshot: {}, status,
+      } });
+      const review = (actor: string, applicationId = application.id) => request(app.getHttpServer())
+        .post('/api/v1/reviews').set(auth(actor)).send({ applicationId, rating: 4 });
+      try {
+        await review(stranger).expect(404);
+        await review(token, randomUUID()).expect(404);
+        await request(app.getHttpServer()).post('/api/v1/reviews').set(auth(token)).send({ rating: 4 }).expect(400);
+        if (status === 'ACCEPTED' || status === 'REJECTED') {
+          const responses = await Promise.all([review(token), review(token)]);
+          expect(responses.map(r => r.status).sort()).toEqual([201, 409]);
+          expect(responses.find(r => r.status === 409)?.body.code).toBe('REVIEW_ALREADY_EXISTS');
+          expect(await prisma.review.count({ where: { applicationId: application.id } })).toBe(1);
+        } else {
+          const rejected = await review(token).expect(409);
+          expect(rejected.body.code).toBe('REVIEW_NOT_ELIGIBLE');
+          expect(await prisma.review.count({ where: { applicationId: application.id } })).toBe(0);
+        }
+      } finally {
+        await prisma.review.deleteMany({ where: { applicationId: application.id } });
+        await prisma.application.delete({ where: { id: application.id } });
+      }
+    },
+  );
 
   it('runs submit → review → interview → reschedule → result through real adapters and M05', async () => {
     const [studentToken, otherStudentToken, hrToken, otherHrToken] = await Promise.all([

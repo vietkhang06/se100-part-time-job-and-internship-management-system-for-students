@@ -5,19 +5,29 @@ import { CvSnapshotSourceAdapter } from '../students/infrastructure/adapters/cv-
 import { JobAccessSourceAdapter } from '../companies/infrastructure/adapters/job-access-source.adapter';
 import { M04Workflow } from './application/m04-workflow';
 import { M04_CV_SOURCE, M04_JOB_SOURCE } from './application/m04-ports';
+import { ReviewSourcesRegistry } from '../reviews/application/ports/review-sources.port';
 
 describe('S5-M04-01 production wiring', () => {
+  const originalSecret = process.env['JWT_ACCESS_SECRET'];
+  beforeAll(() => { process.env['JWT_ACCESS_SECRET'] = 'm04-wiring-test-only-secret-at-least-32-bytes'; });
+  afterAll(() => {
+    if (originalSecret === undefined) delete process.env['JWT_ACCESS_SECRET'];
+    else process.env['JWT_ACCESS_SECRET'] = originalSecret;
+  });
   it('resolves M04 through AppModule with the real M02 and M03 adapters', async () => {
     const module = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue({})
       .compile();
+    await module.init();
 
     expect(module.get(M04Workflow)).toBeInstanceOf(M04Workflow);
     expect(module.get(CvSnapshotSourceAdapter)).toBeInstanceOf(CvSnapshotSourceAdapter);
     expect(module.get(JobAccessSourceAdapter)).toBeInstanceOf(JobAccessSourceAdapter);
     expect(typeof module.get(M04_CV_SOURCE).getOwnedSnapshot).toBe('function');
     expect(typeof module.get(M04_JOB_SOURCE).getApplicationContext).toBe('function');
+    expect(module.get(ReviewSourcesRegistry).getApplicationSource()).toBeDefined();
+    expect(module.get(ReviewSourcesRegistry).getCompanyDirectory()).toBeDefined();
     await module.close();
   });
 });
