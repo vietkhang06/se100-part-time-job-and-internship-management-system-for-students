@@ -1,4 +1,5 @@
 import { CvSnapshotDto, NotificationEventType } from '@campusjob/contracts';
+import type { Prisma } from '@prisma/client';
 import { ApplicationStatus } from '../domain/application-state';
 import { M04Workflow } from './m04-workflow';
 import {
@@ -22,7 +23,8 @@ class MemoryRepository implements M04Repository {
 
   async createApplication(input: {
     studentId: string; jobId: string; cvId: string; cvSnapshot: CvSnapshotDto; coverLetter: string | null;
-  }, events: readonly M04EventDraft[] = []): Promise<ApplicationRecord> {
+  }, events: readonly M04EventDraft[] = [], assertAllowed?: (transaction: Prisma.TransactionClient) => Promise<void>): Promise<ApplicationRecord> {
+    await assertAllowed?.({} as Prisma.TransactionClient);
     if ([...this.applications.values()].some((a) => a.studentId === input.studentId && a.jobId === input.jobId)) {
       throw new M04WorkflowError('DUPLICATE_APPLICATION');
     }
@@ -184,7 +186,9 @@ describe('M04 workflow with contract fixtures', () => {
     current = new Date('2026-10-14T10:00:00.000Z');
     owner = 'employer-a';
     returnedSnapshot = snapshot;
-    workflow = new M04Workflow(repository, cvs, jobs, () => current);
+    workflow = new M04Workflow(repository, cvs, jobs, () => current, undefined, {
+      getApplicationLock: async () => ({ locked: false, until: null }),
+    });
   });
 
   it('submits a frozen CV snapshot once and hides another student’s application', async () => {
@@ -222,6 +226,61 @@ describe('M04 workflow with contract fixtures', () => {
     returnedSnapshot = { ...snapshot, studentId: 'student-b' };
     await expect(workflow.submit('student-a', 'job-a', 'cv-1')).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(repository.applications.size).toBe(0);
+  });
+
+  it('blocks submission while an application lock is active and exposes its expiry', async () => {
+    const until = new Date('2026-12-14T10:00:00.000Z');
+    workflow = new M04Workflow(repository, cvs, jobs, () => current, undefined, {
+      getApplicationLock: async () => ({ locked: true, until }),
+    });
+
+    await expect(workflow.submit('student-a', 'job-a', 'cv-1')).rejects.toMatchObject({
+      code: 'APPLICATION_LOCKED',
+      lockedUntil: until,
+    });
+    expect(repository.applications.size).toBe(0);
+    expect(repository.history).toHaveLength(0);
+    expect(repository.emitted).toHaveLength(0);
+  });
+
+  it('fails closed if the sanction dependency is missing or its query fails', async () => {
+    const missing = new M04Workflow(repository, cvs, jobs);
+    await expect(missing.submit('student-a', 'job-a', 'cv-1')).rejects.toThrow('Application lock service is unavailable');
+    const unavailable = new M04Workflow(repository, cvs, jobs, () => current, undefined, {
+      getApplicationLock: async () => { throw new Error('database unavailable'); },
+    });
+    await expect(unavailable.submit('student-a', 'job-a', 'cv-1')).rejects.toThrow('database unavailable');
+    expect(repository.applications.size).toBe(0);
+    expect(repository.history).toHaveLength(0);
+    expect(repository.emitted).toHaveLength(0);
+  });
+
+  it('allows submission after an application lock is lifted or expired', async () => {
+    workflow = new M04Workflow(repository, cvs, jobs, () => current, undefined, {
+      getApplicationLock: async () => ({ locked: false, until: null }),
+    });
+
+    await expect(workflow.submit('student-a', 'job-a', 'cv-1')).resolves.toMatchObject({
+      status: ApplicationStatus.SUBMITTED,
+    });
+  });
+
+  it('rechecks a lock activated after validation and forwards the persistence transaction', async () => {
+    const until = new Date('2035-01-01T00:00:00Z');
+    const transaction = {} as Prisma.TransactionClient;
+    const getApplicationLock = jest.fn()
+      .mockResolvedValueOnce({ locked: false, until: null })
+      .mockResolvedValueOnce({ locked: true, until });
+    jest.spyOn(repository, 'createApplication').mockImplementation(async (_input, _events, assertAllowed) => {
+      await assertAllowed!(transaction);
+      throw new Error('The late lock must prevent reaching the write');
+    });
+    workflow = new M04Workflow(repository, cvs, jobs, () => current, undefined, { getApplicationLock });
+    await expect(workflow.submit('student-a', 'job-a', 'cv-1')).rejects.toMatchObject({ code: 'APPLICATION_LOCKED' });
+    expect(getApplicationLock).toHaveBeenNthCalledWith(2, 'student-a', current, transaction);
+    expect(repository.applications.size).toBe(0);
+    expect(repository.history).toHaveLength(0);
+    expect(repository.emitted).toHaveLength(0);
   });
 
   it('allows only the managing employer to view and process a candidate', async () => {

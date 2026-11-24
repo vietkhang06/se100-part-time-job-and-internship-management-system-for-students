@@ -88,6 +88,7 @@ describe('S6-M04-01 production AppModule E2E', () => {
   });
 
   afterAll(async () => {
+    await prisma.sanction.deleteMany({ where: { targetId: { in: [ids.student, ids.otherStudent] } } });
     await prisma.m04EventOutbox.deleteMany({ where: { OR: [
       { actorId: { in: Object.values(ids) } }, { recipientId: { in: Object.values(ids) } },
     ] } });
@@ -97,6 +98,36 @@ describe('S6-M04-01 production AppModule E2E', () => {
     await prisma.company.deleteMany({ where: { taxId: { startsWith: tag } } });
     await prisma.user.deleteMany({ where: { id: { in: Object.values(ids) } } });
     await app.close();
+  });
+
+  it('blocks locked students through the real API and permits submission after lift and expiry', async () => {
+    const token = await login(`${tag}-student-2@example.test`);
+    const until = new Date(Date.now() + 30 * 86400000);
+    const sanction = await prisma.sanction.create({ data: {
+      reportId: randomUUID(), targetType: 'STUDENT', targetId: ids.otherStudent,
+      type: 'APPLICATION_LOCK', reason: 'Private reason', imposedBy: ids.hr,
+      startsAt: new Date(), endsAt: until,
+    } });
+    const apply = () => request(app.getHttpServer()).post(`/api/v1/jobs/${primaryJobId}/apply`)
+      .set(auth(token)).send({ cvId: otherCvId });
+    try {
+      const blocked = await apply().expect(403);
+      expect(blocked.body).toMatchObject({ code: 'APPLICATION_LOCKED', lockedUntil: until.toISOString() });
+      expect(JSON.stringify(blocked.body)).not.toContain('Private reason');
+      expect(await prisma.application.count({ where: { studentId: ids.otherStudent } })).toBe(0);
+      expect(await prisma.m04EventOutbox.count({ where: { actorId: ids.otherStudent } })).toBe(0);
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: ids.otherStudent } })).status).toBe('ACTIVE');
+      await request(app.getHttpServer()).get('/api/v1/applications/me').set(auth(token)).expect(200);
+      await prisma.sanction.update({ where: { id: sanction.id }, data: { status: 'LIFTED' } });
+      await apply().expect(201);
+      await prisma.application.deleteMany({ where: { studentId: ids.otherStudent, jobId: primaryJobId } });
+      await prisma.sanction.update({ where: { id: sanction.id }, data: { status: 'ACTIVE', endsAt: new Date(0) } });
+      await apply().expect(201);
+    } finally {
+      await prisma.application.deleteMany({ where: { studentId: ids.otherStudent, jobId: primaryJobId } });
+      await prisma.sanction.delete({ where: { id: sanction.id } });
+      await prisma.auditLog.deleteMany({ where: { entityId: sanction.id } });
+    }
   });
 
   it('runs submit → review → interview → reschedule → result through real adapters and M05', async () => {

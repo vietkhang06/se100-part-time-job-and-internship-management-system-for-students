@@ -1,4 +1,5 @@
 import { SanctionStatus, SanctionTargetType, SanctionType } from '@campusjob/contracts';
+import type { Prisma } from '@prisma/client';
 import { SanctionEntity, SanctionEventProps } from '../entities/sanction.entity';
 
 export const SANCTION_REPOSITORY_TOKEN = Symbol('SANCTION_REPOSITORY_TOKEN');
@@ -52,6 +53,7 @@ export interface ISanctionRepository {
     targetId: string,
     type: SanctionType,
     now: Date,
+    transaction?: Prisma.TransactionClient,
   ): Promise<SanctionEntity | null>;
   /** Chỉ gỡ được chế tài đang ACTIVE. Một transaction: cập nhật + sự kiện LIFTED + audit. null nếu không còn ACTIVE. */
   lift(id: string, actorId: string, reason: string, now: Date): Promise<SanctionEntity | null>;

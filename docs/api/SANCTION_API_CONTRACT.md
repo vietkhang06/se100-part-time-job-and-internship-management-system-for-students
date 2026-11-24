@@ -78,3 +78,12 @@ Mã lỗi chính: `SANCTION_REPORT_NOT_SUBSTANTIATED`, `SANCTION_REPORT_ALREADY_
 2. Một báo cáo chỉ một chế tài (hiện tại). Có cần vừa cảnh cáo vừa khóa không?
 3. UC57 "gỡ cờ cảnh báo" có nghĩa là gỡ chế tài (như đang làm) hay một khái niệm riêng cho doanh nghiệp?
 4. Có cho sinh viên khiếu nại chế tài không? (chưa có trong đặc tả nên chưa làm)
+
+## 8. M04 submission concurrency integration (2026-11-24)
+
+- `studentId` at this boundary is authenticated `User.id`, not `StudentProfile.id`.
+- M04 checks `getApplicationLock` before validation and again after acquiring `pg_advisory_xact_lock(hashtext(User.id))` in its application write transaction. M05 acquires the same key before persisting an `APPLICATION_LOCK` activation.
+- The port accepts optional `now` and `Prisma.TransactionClient` parameters. Existing one-argument calls remain valid. The guarded recheck uses the caller's connection; it must not allocate another pooled connection. Expiry auditing remains on the initial, non-transactional query.
+- M04 uses READ COMMITTED so a waiting submission sees a sanction committed before it acquired the lock. If submission acquired the lock first, it can commit before activation; activation then blocks subsequent submissions. This is serialized ordering, not retroactive deletion of an earlier valid application.
+- A lock returns HTTP 403, `code: APPLICATION_LOCKED`, and ISO UTC `lockedUntil` when present. Internal sanction reason and ID are not returned. Account status is unchanged. Missing sanction wiring or failed lock reads do not permit submission.
+- This protocol assumes all production activation writers use `PrismaSanctionRepository.create`; direct database writes bypass application-level locking. No new policy thresholds or duration formula are introduced.

@@ -9,6 +9,8 @@ import {
 import { PrismaM04Repository } from './infrastructure/prisma-m04.repository';
 import { M04Controller } from './presentation/m04.controller';
 import { PrismaM04EventDispatcher } from './infrastructure/m04-event-dispatcher';
+import { SanctionsModule } from '../sanctions/sanctions.module';
+import { ISanctionQuery, SANCTION_QUERY_TOKEN } from '../sanctions/application/ports/sanction-query.port';
 
 export { M04_CV_SOURCE, M04_JOB_SOURCE, M04_REPOSITORY } from './application/m04-ports';
 
@@ -18,7 +20,7 @@ export class M04Module {
   static register(cvSource: Provider, jobSource: Provider, repository?: Provider): DynamicModule {
     return {
       module: M04Module,
-      imports: [AuthModule, NotificationsModule],
+      imports: [AuthModule, NotificationsModule, SanctionsModule],
       controllers: [M04Controller],
       providers: [
         cvSource,
@@ -32,8 +34,9 @@ export class M04Module {
             cvs: CvSnapshotSource,
             jobs: JobAccessSource,
             events: PrismaM04EventDispatcher,
-          ) => new M04Workflow(store, cvs, jobs, () => new Date(), events),
-          inject: [M04_REPOSITORY, M04_CV_SOURCE, M04_JOB_SOURCE, PrismaM04EventDispatcher],
+            sanctions: ISanctionQuery,
+          ) => new M04Workflow(store, cvs, jobs, () => new Date(), events, sanctions),
+          inject: [M04_REPOSITORY, M04_CV_SOURCE, M04_JOB_SOURCE, PrismaM04EventDispatcher, SANCTION_QUERY_TOKEN],
         },
       ],
       exports: [M04Workflow],

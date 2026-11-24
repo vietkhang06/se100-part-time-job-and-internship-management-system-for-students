@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import supertest from 'supertest';
 import cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
+import { SanctionQueryService } from '../src/modules/sanctions/application/use-cases/sanction-query.service';
 import { PrismaService } from '../src/shared/database/prisma.service';
 import { PasswordHasher } from '../src/modules/auth/infrastructure/security/password-hasher';
 import {
@@ -239,7 +240,8 @@ describe('S2-M02-06: M02 Integration Tests (UC11–UC12, UC31–UC35, UC37–UC3
     // Khởi tạo M04Workflow với real CvSnapshotSource adapter từ M02
     const cvSnapshotSource = app.get<GetCvSnapshotUseCase>(CV_SNAPSHOT_SOURCE_TOKEN);
     const m04Repo = new PrismaM04Repository(prisma);
-    m04Workflow = new M04Workflow(m04Repo, cvSnapshotSource, stubJobAccessSource);
+    m04Workflow = new M04Workflow(m04Repo, cvSnapshotSource, stubJobAccessSource, undefined, undefined,
+      app.get(SanctionQueryService));
   }, 60000);
 
   afterAll(async () => {

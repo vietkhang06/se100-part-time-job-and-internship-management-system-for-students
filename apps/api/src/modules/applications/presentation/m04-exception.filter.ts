@@ -12,12 +12,21 @@ export class M04ExceptionFilter implements ExceptionFilter {
     const response = context.getResponse<Response>();
     const code = exception instanceof M04WorkflowError ? exception.code : 'INVALID_STATE';
     const status = code === 'NOT_FOUND' ? HttpStatus.NOT_FOUND
-      : code === 'FORBIDDEN' ? HttpStatus.FORBIDDEN
+      : code === 'FORBIDDEN' || code === 'APPLICATION_LOCKED' ? HttpStatus.FORBIDDEN
       : code === 'INVALID_INPUT' ? HttpStatus.BAD_REQUEST
       : HttpStatus.CONFLICT;
     response.status(status).json({
-      statusCode: status, message: exception.message, error: exception.name,
-      code, timestamp: new Date().toISOString(), path: request.url,
+      statusCode: status,
+      message: code === 'APPLICATION_LOCKED'
+        ? `Quyền ứng tuyển của bạn đang bị khóa${exception instanceof M04WorkflowError && exception.lockedUntil
+          ? ` đến ${exception.lockedUntil.toISOString()}` : ''}.`
+        : exception.message,
+      error: exception.name,
+      code,
+      ...(exception instanceof M04WorkflowError && exception.lockedUntil
+        ? { lockedUntil: exception.lockedUntil.toISOString() }
+        : {}),
+      timestamp: new Date().toISOString(), path: request.url,
       correlationId: request.headers['x-correlation-id'] || request.headers['x-request-id'] || request.id,
     });
   }
