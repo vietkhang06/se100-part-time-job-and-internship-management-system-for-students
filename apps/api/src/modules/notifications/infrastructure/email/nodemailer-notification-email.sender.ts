@@ -17,11 +17,16 @@ export class NodemailerNotificationEmailSender implements INotificationEmailSend
 
   constructor(configService: ConfigService) {
     this.from = configService.get<string>('SMTP_FROM', 'no-reply@campusjob.local');
+    const user = configService.get<string>('SMTP_USER');
+    const pass = configService.get<string>('SMTP_PASS');
+    const auth = user && pass ? { user, pass } : undefined;
+
     this.transporter = nodemailer.createTransport({
       host: configService.get<string>('SMTP_HOST', 'localhost'),
       port: Number(configService.get<number>('SMTP_PORT', 1026)),
-      secure: false,
-      ignoreTLS: true,
+      secure: configService.get<string>('SMTP_SECURE') === 'true',
+      ignoreTLS: configService.get<string>('SMTP_IGNORE_TLS') !== 'false',
+      auth,
     });
   }
 

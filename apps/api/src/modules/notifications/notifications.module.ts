@@ -26,6 +26,7 @@ import { UpdateNotificationEmailPreferenceUseCase } from './application/use-case
     PublishNotificationUseCase,
     DispatchNotificationEmailUseCase,
     RetryPendingNotificationEmailsUseCase,
+    EmailRetrySchedulerService,
     ListMyNotificationsUseCase,
     GetUnreadCountUseCase,
     MarkNotificationReadUseCase,

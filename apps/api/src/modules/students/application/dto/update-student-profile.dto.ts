@@ -1,4 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { STUDENT_PROFILE_SKILLS_LIMIT } from './student-profile-validation.constants';
 import {
   IsOptional,
   IsString,
@@ -78,7 +79,8 @@ export class UpdateStudentProfileDto implements UpdateStudentProfileRequestDto {
   })
   @IsOptional()
   @IsArray({ message: 'Kỹ năng phải là một danh sách mảng.' })
-  @ArrayMaxSize(20, { message: 'Danh sách kỹ năng tối đa 20 mục.' })
+  @ArrayMaxSize(STUDENT_PROFILE_SKILLS_LIMIT, {
+  message: `Danh sách kỹ năng tối đa ${STUDENT_PROFILE_SKILLS_LIMIT} mục.`,})
   @IsString({ each: true, message: 'Mỗi kỹ năng phải là một chuỗi ký tự.' })
   @MaxLength(50, { each: true, message: 'Mỗi kỹ năng không được vượt quá 50 ký tự.' })
   skills?: string[];

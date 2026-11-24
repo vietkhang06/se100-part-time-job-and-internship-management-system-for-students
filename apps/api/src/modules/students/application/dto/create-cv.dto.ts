@@ -72,7 +72,7 @@ export class CreateCvDto implements CreateCvRequestDto {
 
   @ApiPropertyOptional({
     example: ['TypeScript', 'NestJS', 'PostgreSQL', 'Docker'],
-    description: 'Danh sách kỹ năng (tối đa 30 kỹ năng)',
+    description: 'Các kỹ năng trình bày trong CV, tối đa 30 mục',
     type: [String],
   })
   @IsOptional()

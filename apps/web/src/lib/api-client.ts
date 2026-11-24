@@ -51,6 +51,10 @@ export async function apiClient<T>(
   endpoint: string,
   options: RequestInit = {},
 ): Promise<T> {
+  return request<T>(endpoint, options, false);
+}
+
+async function request<T>(endpoint: string, options: RequestInit, retried: boolean): Promise<T> {
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
   const headers: Record<string, string> = {
@@ -69,6 +73,18 @@ export async function apiClient<T>(
   });
 
   if (!response.ok) {
+    // A refreshed session may have outlived the in-memory access token after reload.
+    // Refresh once and retry protected requests; never retry the refresh/login call itself.
+    if (response.status === 401 && !retried && !endpoint.startsWith('/auth/')) {
+      let refreshed = false;
+      try {
+        await refreshSession();
+        refreshed = true;
+      } catch {
+        // Return the original unauthorized response below.
+      }
+      if (refreshed) return request<T>(endpoint, options, true);
+    }
     let errorData: ApiErrorResponse;
     try {
       errorData = await response.json();
