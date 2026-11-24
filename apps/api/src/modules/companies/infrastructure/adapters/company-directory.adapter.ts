@@ -67,12 +67,12 @@ export class CompanyDirectoryAdapter implements ICompanyDirectory {
 
   private async resolveOwnerUserId(companyId: string): Promise<string> {
     // Trả về userId của member OWNER nếu có, nếu không thì bất kỳ active member
-    const members = await this.memberRepo.findAllByUserId(companyId);
+    const members = await this.memberRepo.findActiveMembersByCompanyId(companyId);
     const owner = members.find(
-      (m) => m.companyId === companyId && m.role === CompanyMemberRole.OWNER && m.status === CompanyMemberStatus.ACTIVE,
+      ({ member }) => member.role === CompanyMemberRole.OWNER && member.status === CompanyMemberStatus.ACTIVE,
     );
-    if (owner) return owner.userId;
+    if (owner) return owner.member.userId;
 
-    return companyId; // fallback an toàn
+    return members[0]?.member.userId ?? companyId;
   }
 }

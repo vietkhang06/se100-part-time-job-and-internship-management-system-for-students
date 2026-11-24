@@ -81,6 +81,7 @@ model User {
   fileAssets                   FileAsset[]
   companyMemberships           CompanyMember[]
   reviewedCompanyVerifications CompanyVerification[]     @relation("ReviewedCompanyVerifications")
+  notificationEmailPreferences NotificationEmailPreference[]
 
   @@index([email])
   @@index([role])
@@ -190,6 +191,23 @@ model Notification {
 
   @@index([recipientId, readAt, createdAt])
   @@index([emailStatus, emailNextRetryAt])
+}
+
+// ============================================================================
+// M05 · Notification Email Preference (C-20 / S6-M05-03)
+// Lưu tùy chọn bật/tắt email theo loại thông báo cho từng người dùng.
+// ============================================================================
+model NotificationEmailPreference {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventType    String
+  emailEnabled Boolean
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, eventType])
+  @@index([userId])
 }
 
 // ============================================================================

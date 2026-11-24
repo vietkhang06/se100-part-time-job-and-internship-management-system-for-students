@@ -4,7 +4,11 @@
  * Inputs below exercise the persistence boundary, not CV/job eligibility.
  */
 import { randomUUID } from 'crypto';
-import { CvSnapshotDto, NotificationEventType } from '@campusjob/contracts';
+import { CvSnapshotDto, NotificationEventType, SanctionTargetType, SanctionType } from '@campusjob/contracts';
+import type { Prisma } from '@prisma/client';
+import { SanctionQueryService } from '../src/modules/sanctions/application/use-cases/sanction-query.service';
+import { PrismaSanctionRepository } from '../src/modules/sanctions/infrastructure/persistence/prisma-sanction.repository';
+import { M04WorkflowError } from '../src/modules/applications/application/m04-ports';
 import { PrismaService } from '../src/shared/database/prisma.service';
 import { PrismaM04Repository } from '../src/modules/applications/infrastructure/prisma-m04.repository';
 import { ApplicationStatus as S } from '../src/modules/applications/domain/application-state';
@@ -14,7 +18,7 @@ describe('S3-M04-01 PostgreSQL persistence regression (not full integration)', (
   let repository: PrismaM04Repository;
   let studentId: string;
   let jobId: string;
-  const actorId = 'm04-regression-employer';
+  const actorId = randomUUID();
   const now = new Date('2035-01-01T00:00:00.000Z');
   const scheduledAt = new Date('2035-01-02T00:00:00.000Z');
   const later = new Date('2035-01-03T00:00:00.000Z');
@@ -25,6 +29,8 @@ describe('S3-M04-01 PostgreSQL persistence regression (not full integration)', (
     await prisma.$connect();
     const [target] = await prisma.$queryRaw<Array<{ name: string }>>`SELECT current_database() AS name`;
     if (target.name !== 'campusjob_m04_test') throw new Error('Unexpected M04 test database');
+    await prisma.user.create({ data: { id: actorId, email: `${actorId}@example.test`, fullName: 'M04 regression admin',
+      passwordHash: 'unused-test-fixture', role: 'ADMIN' } });
     repository = new PrismaM04Repository(prisma);
   });
   beforeEach(() => {
@@ -39,8 +45,18 @@ describe('S3-M04-01 PostgreSQL persistence regression (not full integration)', (
       });
     }
     if (prisma && studentId) await prisma.application.deleteMany({ where: { studentId } });
+    if (prisma && studentId) {
+      const sanctions = await prisma.sanction.findMany({ where: { targetId: studentId }, select: { id: true } });
+      await prisma.auditLog.deleteMany({ where: { entityId: { in: sanctions.map(s => s.id) } } });
+      await prisma.sanction.deleteMany({ where: { targetId: studentId } });
+    }
   });
-  afterAll(async () => { if (prisma) await prisma.$disconnect(); });
+  afterAll(async () => {
+    if (prisma) {
+      await prisma.user.deleteMany({ where: { id: actorId } });
+      await prisma.$disconnect();
+    }
+  });
 
   function create() {
     const cvId = randomUUID();
@@ -71,6 +87,87 @@ describe('S3-M04-01 PostgreSQL persistence regression (not full integration)', (
     expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
     expect(results.filter(r => r.status === 'rejected')).toHaveLength(1);
   }
+
+  function sanctionData() {
+    return { id: randomUUID(), reportId: randomUUID(), targetId: studentId,
+      targetType: SanctionTargetType.STUDENT, type: SanctionType.APPLICATION_LOCK,
+      reason: 'Concurrency regression', startsAt: new Date(), endsAt: later, imposedBy: actorId };
+  }
+
+  async function assertUnlocked(transaction: Prisma.TransactionClient) {
+    const state = await new SanctionQueryService(new PrismaSanctionRepository(prisma))
+      .getApplicationLock(studentId, new Date(), transaction);
+    if (state.locked) throw new M04WorkflowError('APPLICATION_LOCKED', state.until ?? undefined);
+  }
+
+  async function waitForAdvisoryWaiter() {
+    const deadline = Date.now() + 3000;
+    while (Date.now() < deadline) {
+      const rows = await prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted
+          AND objid = (hashtext(${studentId})::bigint & 4294967295)::oid`;
+      if (Number(rows[0].count) > 0) return;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    throw new Error('Expected a database advisory lock waiter');
+  }
+
+  it('blocks an application waiting behind an uncommitted sanction, without history or outbox', async () => {
+    let release!: () => void;
+    let acquired!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const ready = new Promise<void>(resolve => { acquired = resolve; });
+    const activation = prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${studentId}))`;
+      await tx.sanction.create({ data: sanctionData() });
+      acquired();
+      await gate;
+    });
+    await ready;
+    const submission = repository.createApplication(create().input, [], assertUnlocked);
+    const rejected = expect(submission).rejects.toMatchObject({ code: 'APPLICATION_LOCKED' });
+    try { await waitForAdvisoryWaiter(); } finally { release(); }
+    await activation;
+    await rejected;
+    expect(await prisma.application.count({ where: { studentId } })).toBe(0);
+    expect(await prisma.applicationStatusHistory.count({ where: { actorId: studentId } })).toBe(0);
+    expect(await prisma.m04EventOutbox.count({ where: { actorId: studentId } })).toBe(0);
+  });
+
+  it('serializes the real sanction writer behind an application that already owns the lock', async () => {
+    let release!: () => void;
+    let acquired!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const ready = new Promise<void>(resolve => { acquired = resolve; });
+    const submission = repository.createApplication(create().input, [], async tx => {
+      await assertUnlocked(tx);
+      acquired();
+      await gate;
+    });
+    await ready;
+    const activation = new PrismaSanctionRepository(prisma).create(sanctionData());
+    try { await waitForAdvisoryWaiter(); } finally { release(); }
+    await submission;
+    await activation;
+    jobId = randomUUID();
+    await expect(repository.createApplication(create().input, [], assertUnlocked))
+      .rejects.toMatchObject({ code: 'APPLICATION_LOCKED' });
+    expect(await prisma.application.count({ where: { studentId } })).toBe(1);
+  });
+
+  it('rechecks sanctions using a one-connection pool without nested connection acquisition', async () => {
+    const url = new URL(process.env['DATABASE_URL']!);
+    url.searchParams.set('connection_limit', '1');
+    url.searchParams.set('pool_timeout', '5');
+    const single = new PrismaService({ datasources: { db: { url: url.toString() } } });
+    try {
+      await single.$connect();
+      const query = new SanctionQueryService(new PrismaSanctionRepository(single));
+      await new PrismaM04Repository(single).createApplication(create().input, [], async tx => {
+        expect(await query.getApplicationLock(studentId, new Date(), tx)).toEqual({ locked: false, until: null });
+      });
+    } finally { await single.$disconnect(); }
+  });
 
   it('DB01 stores the submitted snapshot and initial history atomically', async () => {
     const { input } = create();

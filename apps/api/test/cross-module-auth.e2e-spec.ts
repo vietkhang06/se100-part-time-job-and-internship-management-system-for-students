@@ -4,6 +4,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import supertest from 'supertest';
 import cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module';
+import { SanctionQueryService } from '../src/modules/sanctions/application/use-cases/sanction-query.service';
 import { DatabaseModule } from '../src/shared/database/database.module';
 import { AuthModule } from '../src/modules/auth/auth.module';
 import { PrismaService } from '../src/shared/database/prisma.service';
@@ -318,7 +319,8 @@ describe('S2-M01-05: Cross-Module Authorization (E2E & Contract Tests)', () => {
 
     // 2. Setup M04 Contract Testing Architecture (using real PrismaM04Repository)
     const m04Repo = new PrismaM04Repository(prisma);
-    const m04Workflow = new M04Workflow(m04Repo, testCvSnapshotSource, testJobAccessSource);
+    const m04Workflow = new M04Workflow(m04Repo, testCvSnapshotSource, testJobAccessSource, undefined, undefined,
+      app.get(SanctionQueryService));
 
     const m04ModuleRef: TestingModule = await Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true }), DatabaseModule, AuthModule],

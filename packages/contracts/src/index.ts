@@ -289,6 +289,16 @@ export interface MarkAllReadResponseDto {
   updatedCount: number;
 }
 
+export interface NotificationEmailPreferenceDto {
+  eventType: NotificationEventType;
+  emailEnabled: boolean;
+}
+
+export interface UpdateNotificationEmailPreferenceDto {
+  eventType: NotificationEventType;
+  emailEnabled: boolean;
+}
+
 // ==========================================
 // M02: STUDENT PROFILE & CV CONTRACTS
 // ==========================================

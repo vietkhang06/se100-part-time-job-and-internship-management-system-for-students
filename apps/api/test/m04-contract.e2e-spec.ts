@@ -102,5 +102,16 @@ describe('M04 API contract with fixture adapters', () => {
       .expect(409);
     expect(res.body.code).toBe('QUOTA_EXCEEDED');
   });
+
+  it('returns the application lock expiry without internal sanction information', async () => {
+    const until = new Date('2035-01-01T00:00:00.000Z');
+    workflow.submit.mockRejectedValue(new M04WorkflowError('APPLICATION_LOCKED', until));
+    const response = await request(app.getHttpServer()).post('/api/v1/jobs/job-a/apply')
+      .set('x-test-user', 'student-a').set('x-test-role', 'STUDENT')
+      .send({ cvId: 'cv-1' }).expect(403);
+    expect(response.body).toMatchObject({ code: 'APPLICATION_LOCKED', lockedUntil: until.toISOString() });
+    expect(response.body).not.toHaveProperty('sanctionId');
+    expect(response.body).not.toHaveProperty('reason');
+  });
 });
 

@@ -1,4 +1,5 @@
-import { Logger } from '@nestjs/common';
+import { Logger, ServiceUnavailableException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { NotificationEventType, UserRole } from '@campusjob/contracts';
 import {
   CvSnapshotSource, JobAccessSource, M04EventDispatcher, M04EventDraft, M04Repository,
@@ -8,6 +9,7 @@ import { ApplicationStatus, nextApplicationStatus } from '../domain/application-
 import { ApplicationSubmissionPolicyError, assertCanSubmitApplication } from '../domain/application-submission-policy';
 import { InterviewMode, assertCanDecideReschedule, assertCanRecordInterviewResult, assertCanRequestReschedule, assertValidInterviewSchedule } from '../../interviews/domain/interview-rules';
 import { assessMatchingScore } from '../domain/matching-score';
+import { ISanctionQuery } from '../../sanctions/application/ports/sanction-query.port';
 
 /** M04 workflow. CV and Job decisions stay with the owning modules via ports. */
 export class M04Workflow {
@@ -19,9 +21,11 @@ export class M04Workflow {
     private readonly jobs: JobAccessSource,
     private readonly now: () => Date = () => new Date(),
     private readonly events: M04EventDispatcher = { dispatchPending: async () => undefined },
+    private readonly sanctions?: ISanctionQuery,
   ) {}
 
   async submit(studentId: string, jobId: string, cvId: string, coverLetter?: string): Promise<ApplicationRecord> {
+    await this.assertApplicationUnlocked(studentId);
     await this.jobs.assertAcceptingApplications(jobId);
     const job = await this.jobs.getApplicationContext(jobId);
     const cvSnapshot = await this.cvs.getOwnedSnapshot(studentId, cvId);
@@ -50,9 +54,15 @@ export class M04Workflow {
     }, job.managerUserIds.map((recipientId) => this.event(
       NotificationEventType.APPLICATION_SUBMITTED, 'APPLICATION', studentId, recipientId,
       { jobId, jobTitle: job.title, companyId: job.companyId, companyName: job.companyName, studentName: cvSnapshot.fullName },
-    )));
+    )), (transaction) => this.assertApplicationUnlocked(studentId, transaction));
     await this.dispatchEvents();
     return application;
+  }
+
+  private async assertApplicationUnlocked(studentId: string, transaction?: Prisma.TransactionClient): Promise<void> {
+    if (!this.sanctions) throw new ServiceUnavailableException('Application lock service is unavailable.');
+    const lock = await this.sanctions.getApplicationLock(studentId, this.now(), transaction);
+    if (lock.locked) throw new M04WorkflowError('APPLICATION_LOCKED', lock.until ?? undefined);
   }
 
   listMine(studentId: string): Promise<ApplicationRecord[]> {

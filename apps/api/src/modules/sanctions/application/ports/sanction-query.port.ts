@@ -1,3 +1,5 @@
+import type { Prisma } from '@prisma/client';
+
 export const SANCTION_QUERY_TOKEN = Symbol('SANCTION_QUERY_TOKEN');
 
 export interface ApplicationLockState {
@@ -11,5 +13,6 @@ export interface ApplicationLockState {
  * khóa quyền ứng tuyển không. M05 KHÔNG tự sửa luồng nộp hồ sơ của M04; Gia Khang gọi cổng này.
  */
 export interface ISanctionQuery {
-  getApplicationLock(studentId: string): Promise<ApplicationLockState>;
+  /** A caller holding the student advisory lock must pass its transaction connection. */
+  getApplicationLock(studentId: string, now?: Date, transaction?: Prisma.TransactionClient): Promise<ApplicationLockState>;
 }

@@ -76,8 +76,8 @@ import { M04_JOB_SOURCE } from '../applications/m04.module';
 @Module({
   imports: [DatabaseModule, StorageModule, ModerationModule, MailModule, ReviewsModule],
   controllers: [
-    CompaniesController,
     CompanyBranchesController,
+    CompaniesController,
     JobsController,
     PublicJobsController,
     PublicCompaniesController,

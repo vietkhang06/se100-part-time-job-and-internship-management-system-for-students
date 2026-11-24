@@ -21,7 +21,7 @@ describe('SanctionQueryService', () => {
     const state = await new SanctionQueryService(repo).getApplicationLock('stu1');
     expect(state).toEqual({ locked: true, until });
     expect(repo.findActiveByTarget).toHaveBeenCalledWith(
-      SanctionTargetType.STUDENT, 'stu1', SanctionType.APPLICATION_LOCK, expect.any(Date),
+      SanctionTargetType.STUDENT, 'stu1', SanctionType.APPLICATION_LOCK, expect.any(Date), undefined,
     );
   });
 

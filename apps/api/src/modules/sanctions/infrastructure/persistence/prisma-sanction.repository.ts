@@ -39,6 +39,10 @@ export class PrismaSanctionRepository implements ISanctionRepository {
   async create(data: CreateSanctionData): Promise<{ sanction: SanctionEntity | null; duplicate: boolean }> {
     try {
       const raw = await this.prisma.$transaction(async (tx) => {
+        if (data.type === SanctionType.APPLICATION_LOCK && data.targetType === SanctionTargetType.STUDENT) {
+          // Serialize activation with M04's guarded submit transaction, keyed by User.id.
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${data.targetId}))`;
+        }
         const sanction = await tx.sanction.create({
           data: {
             id: data.id,
@@ -203,8 +207,9 @@ export class PrismaSanctionRepository implements ISanctionRepository {
     targetId: string,
     type: SanctionType,
     now: Date,
+    transaction?: Prisma.TransactionClient,
   ): Promise<SanctionEntity | null> {
-    const raw = await this.prisma.sanction.findFirst({
+    const raw = await (transaction ?? this.prisma).sanction.findFirst({
       where: {
         targetType,
         targetId,

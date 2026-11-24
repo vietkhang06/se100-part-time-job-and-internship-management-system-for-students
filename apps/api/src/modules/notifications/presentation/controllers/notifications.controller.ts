@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   HttpCode,
@@ -13,16 +14,20 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import {
   MarkAllReadResponseDto,
   NotificationDto,
+  NotificationEmailPreferenceDto,
   PaginatedResponse,
   UnreadCountResponseDto,
 } from '@campusjob/contracts';
 import { JwtAuthGuard } from '../../../../shared/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
 import { ListNotificationsQueryDto } from '../../application/dto/list-notifications-query.dto';
+import { UpdateNotificationEmailPreferenceDto } from '../../application/dto/update-notification-email-preference.dto';
 import { ListMyNotificationsUseCase } from '../../application/use-cases/list-my-notifications.use-case';
 import { GetUnreadCountUseCase } from '../../application/use-cases/get-unread-count.use-case';
 import { MarkNotificationReadUseCase } from '../../application/use-cases/mark-notification-read.use-case';
 import { MarkAllNotificationsReadUseCase } from '../../application/use-cases/mark-all-notifications-read.use-case';
+import { GetNotificationEmailPreferencesUseCase } from '../../application/use-cases/get-notification-email-preferences.use-case';
+import { UpdateNotificationEmailPreferenceUseCase } from '../../application/use-cases/update-notification-email-preference.use-case';
 
 @ApiTags('Notifications')
 @ApiBearerAuth()
@@ -34,6 +39,8 @@ export class NotificationsController {
     private readonly getUnreadCount: GetUnreadCountUseCase,
     private readonly markNotificationRead: MarkNotificationReadUseCase,
     private readonly markAllNotificationsRead: MarkAllNotificationsReadUseCase,
+    private readonly getPreferencesUseCase: GetNotificationEmailPreferencesUseCase,
+    private readonly updatePreferenceUseCase: UpdateNotificationEmailPreferenceUseCase,
   ) {}
 
   @Get()
@@ -50,6 +57,27 @@ export class NotificationsController {
   @ApiOperation({ summary: 'Số thông báo chưa đọc (badge)' })
   async unreadCount(@CurrentUser('id') userId: string): Promise<UnreadCountResponseDto> {
     return this.getUnreadCount.execute(userId);
+  }
+
+  @Get('preferences')
+  @ApiOperation({ summary: 'S6-M05-03 — Xem tùy chọn nhận email thông báo của tôi' })
+  @ApiResponse({ status: 200, description: 'Danh sách tùy chọn email theo loại thông báo' })
+  async getPreferences(
+    @CurrentUser('id') userId: string,
+  ): Promise<NotificationEmailPreferenceDto[]> {
+    return this.getPreferencesUseCase.execute(userId);
+  }
+
+  @Patch('preferences')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'S6-M05-03 — Cập nhật tùy chọn nhận email cho một loại thông báo' })
+  @ApiResponse({ status: 200, description: 'Tùy chọn email đã được cập nhật' })
+  @ApiResponse({ status: 400, description: 'Loại sự kiện không hợp lệ hoặc không hỗ trợ gửi email' })
+  async updatePreference(
+    @CurrentUser('id') userId: string,
+    @Body() dto: UpdateNotificationEmailPreferenceDto,
+  ): Promise<NotificationEmailPreferenceDto> {
+    return this.updatePreferenceUseCase.execute(userId, dto);
   }
 
   @Patch('read-all')

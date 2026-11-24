@@ -5,6 +5,10 @@ import {
   NOTIFICATION_REPOSITORY_TOKEN,
 } from '../../domain/repositories/notification.repository.interface';
 import {
+  INotificationPreferenceRepository,
+  NOTIFICATION_PREFERENCE_REPOSITORY_TOKEN,
+} from '../../domain/repositories/notification-preference.repository.interface';
+import {
   IUserRepository,
   USER_REPOSITORY_TOKEN,
 } from '../../../users/domain/repositories/user.repository.interface';
@@ -27,6 +31,8 @@ export class PublishNotificationUseCase implements INotificationPublisher {
     private readonly notificationRepository: INotificationRepository,
     @Inject(USER_REPOSITORY_TOKEN)
     private readonly userRepository: IUserRepository,
+    @Inject(NOTIFICATION_PREFERENCE_REPOSITORY_TOKEN)
+    private readonly preferenceRepository: INotificationPreferenceRepository,
     private readonly dispatchEmail: DispatchNotificationEmailUseCase,
   ) {}
 
@@ -47,7 +53,19 @@ export class PublishNotificationUseCase implements INotificationPublisher {
     const payload = input.payload ?? {};
     const content = buildNotificationContent(input.eventType, payload);
 
-    // 1) Lưu sự kiện trước: email lỗi không bao giờ làm mất thông báo.
+    // Kiểm tra tùy chọn email của người nhận: nếu sự kiện gửi email nhưng người nhận tắt, hủy gửi email
+    let shouldSendEmail = content.sendEmail;
+    if (shouldSendEmail) {
+      const emailEnabled = await this.preferenceRepository.isEmailEnabled(
+        input.recipientId,
+        input.eventType,
+      );
+      if (!emailEnabled) {
+        shouldSendEmail = false;
+      }
+    }
+
+    // 1) Lưu sự kiện trước: email lỗi hoặc email tắt không bao giờ làm mất thông báo in-app.
     const { notification, created } = await this.notificationRepository.create({
       recipientId: input.recipientId,
       eventType: input.eventType,
@@ -55,7 +73,7 @@ export class PublishNotificationUseCase implements INotificationPublisher {
       body: content.body,
       payload: input.payload ?? null,
       dedupeKey: input.dedupeKey ?? null,
-      emailStatus: content.sendEmail
+      emailStatus: shouldSendEmail
         ? NotificationEmailStatus.PENDING
         : NotificationEmailStatus.NOT_REQUIRED,
     });
@@ -64,8 +82,8 @@ export class PublishNotificationUseCase implements INotificationPublisher {
       return { outcome: 'DUPLICATE', notificationId: notification.id };
     }
 
-    // 2) Gửi email theo kiểu best-effort; kết quả được ghi vào emailStatus.
-    if (content.sendEmail) {
+    // 2) Gửi email theo kiểu best-effort nếu tùy chọn bật; kết quả được ghi vào emailStatus.
+    if (shouldSendEmail) {
       try {
         await this.dispatchEmail.execute(notification.id);
       } catch (err: unknown) {

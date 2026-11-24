@@ -15,8 +15,7 @@ export interface RetryEmailsSummary {
 
 /**
  * Xử lý hàng đợi email còn PENDING/FAILED và đã tới hạn.
- * Chưa gắn scheduler: chờ Lead chốt ai sở hữu UC61/UC68 (bảo trì định kỳ).
- * Khi có quyết định, chỉ cần gọi execute() từ job/maintenance endpoint.
+ * Được gắn tự động qua EmailRetrySchedulerService (R-M05-03), hoặc có thể gọi trực tiếp từ maintenance job/endpoint.
  */
 @Injectable()
 export class RetryPendingNotificationEmailsUseCase {
