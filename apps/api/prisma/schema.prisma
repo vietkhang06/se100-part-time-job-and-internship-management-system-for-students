@@ -97,14 +97,35 @@ model StudentProfile {
   graduationYear   Int?
   jobSeekingStatus JobSeekingStatus @default(ACTIVELY_LOOKING)
   bio              String?
+  isCampusVerified Boolean          @default(false)
+  campusEmail      String?          @unique
+  campusVerifiedAt DateTime?
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 
-  studentSkills    StudentSkill[]
-  cvs              Cv[]
+  studentSkills            StudentSkill[]
+  cvs                      Cv[]
+  campusVerificationTokens CampusEmailVerificationToken[]
 
   @@index([userId])
   @@index([jobSeekingStatus])
+}
+
+model CampusEmailVerificationToken {
+  id               String         @id @default(uuid())
+  studentProfileId String
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  campusEmail      String
+  otpHash          String
+  attempts         Int            @default(0)
+  maxAttempts      Int            @default(5)
+  expiresAt        DateTime
+  usedAt           DateTime?
+  createdAt        DateTime       @default(now())
+
+  @@index([studentProfileId, createdAt])
+  @@index([studentProfileId, campusEmail, usedAt])
+  @@index([expiresAt])
 }
 
 model AuthSession {

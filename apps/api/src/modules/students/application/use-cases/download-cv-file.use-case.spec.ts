@@ -82,7 +82,11 @@ describe('DownloadCvFileUseCase (S3-M02-02 & S4-M02-02 CV/FileAsset Lifecycle & 
       findLatestByStudentProfileId: jest.fn(), isCvInUse: jest.fn(),
     };
     mockProfileRepo = {
-      findById: jest.fn(), findByUserId: jest.fn(), createOrFind: jest.fn(), updateByUserId: jest.fn(),
+      findById: jest.fn(),
+      findByUserId: jest.fn(),
+      findByVerifiedCampusEmail: jest.fn(),
+      createOrFind: jest.fn(),
+      updateByUserId: jest.fn(),
     };
     mockPrisma = new PrismaService();
     findApplication = jest.spyOn(mockPrisma.application, 'findFirst');

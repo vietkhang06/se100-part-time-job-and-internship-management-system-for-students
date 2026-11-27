@@ -1,8 +1,10 @@
-import { CvErrorCode, JobSeekingStatus } from '@campusjob/contracts';
+import { CvErrorCode, JobSeekingStatus, StudentProfileErrorCode } from '@campusjob/contracts';
 import { ApiClientError } from './api-client';
 import {
   formatM02ErrorMessage,
   normalizeSkillList,
+  validateCampusEmail,
+  validateCampusOtp,
   validateCvForm,
   validateCvUploadFile,
   validateSkillAddition,
@@ -206,6 +208,32 @@ describe('M02 Validation & Error Formatting (S7-M02-01)', () => {
           'Fallback',
         ),
       ).toContain('Tiêu đề CV phải từ 2 đến 100 ký tự.');
+      expect(
+        formatM02ErrorMessage(
+          makeError(429, 'Vui lòng đợi 45 giây.', StudentProfileErrorCode.CAMPUS_OTP_RATE_LIMITED),
+          'Fallback',
+        ),
+      ).toContain('45 giây');
+      expect(
+        formatM02ErrorMessage(
+          makeError(409, 'Email trường này đã được liên kết.', StudentProfileErrorCode.CAMPUS_EMAIL_ALREADY_IN_USE),
+          'Fallback',
+        ),
+      ).toContain('đã được liên kết');
+    });
+  });
+
+  describe('validateCampusEmail & validateCampusOtp (COND-M02-01)', () => {
+    it('accepts valid .edu.vn emails and 6-digit numeric OTPs', () => {
+      expect(validateCampusEmail('21520001@gm.uit.edu.vn')).toBeUndefined();
+      expect(validateCampusOtp('123456')).toBeUndefined();
+    });
+
+    it('rejects non-edu.vn domains, domain spoofing, and invalid OTP formats', () => {
+      expect(validateCampusEmail('student@gmail.com')).toContain('.edu.vn');
+      expect(validateCampusEmail('student@uit.edu.vn.fake.com')).toContain('.edu.vn');
+      expect(validateCampusOtp('12345')).toContain('6 chữ số');
+      expect(validateCampusOtp('12ab56')).toContain('6 chữ số');
     });
   });
 });

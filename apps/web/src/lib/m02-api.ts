@@ -1,11 +1,15 @@
 import type {
   ApiErrorResponse,
+  ConfirmCampusVerificationRequestDto,
+  ConfirmCampusVerificationResponseDto,
   CreateCvRequestDto,
   CvDetailResponseDto,
   CvListResponseDto,
   CvResponseDto,
   DeleteCvResponseDto,
   FileAssetDto,
+  RequestCampusVerificationRequestDto,
+  RequestCampusVerificationResponseDto,
   SetDefaultCvResponseDto,
   StudentProfileResponseDto,
   UpdateCvRequestDto,
@@ -62,6 +66,26 @@ export const m02Api = {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
+
+  /** COND-M02-01 / FR-06: Gửi hoặc gửi lại mã OTP xác thực email trường */
+  requestCampusVerification: (payload: RequestCampusVerificationRequestDto) =>
+    request<RequestCampusVerificationResponseDto>(
+      '/students/campus-verification/request',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+    ),
+
+  /** COND-M02-01 / FR-06: Xác nhận mã OTP email trường */
+  confirmCampusVerification: (payload: ConfirmCampusVerificationRequestDto) =>
+    request<ConfirmCampusVerificationResponseDto>(
+      '/students/campus-verification/confirm',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+    ),
 
   /** UC31: Xem danh sách CV của sinh viên đang đăng nhập */
   listCvs: () => request<CvListResponseDto>('/students/cvs'),

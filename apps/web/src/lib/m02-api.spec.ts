@@ -122,5 +122,54 @@ describe('m02Api Client & 401 Refresh Resilience (S7-M02-01)', () => {
 
     await expect(m02Api.uploadCvFile(fakeFile)).rejects.toThrow(ApiClientError);
   });
+
+  it('calls campus verification request and confirm endpoints correctly', async () => {
+    const mockFetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          message: 'Đã gửi mã OTP',
+          campusEmail: '21520001@gm.uit.edu.vn',
+          expiresAt: new Date().toISOString(),
+          resendCooldownSeconds: 60,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          message: 'Xác thực thành công',
+          campusVerifiedAt: new Date().toISOString(),
+          profile: {
+            id: 'profile-1',
+            userId: 'student-1',
+            fullName: 'Nguyễn Văn A',
+            email: 'student@example.com',
+            jobSeekingStatus: JobSeekingStatus.ACTIVELY_LOOKING,
+            skills: [],
+            isCampusVerified: true,
+            campusEmail: '21520001@gm.uit.edu.vn',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        }),
+      });
+
+    global.fetch = mockFetch as unknown as typeof fetch;
+
+    const reqRes = await m02Api.requestCampusVerification({
+      campusEmail: '21520001@gm.uit.edu.vn',
+    });
+    expect(reqRes.resendCooldownSeconds).toBe(60);
+
+    const confirmRes = await m02Api.confirmCampusVerification({
+      campusEmail: '21520001@gm.uit.edu.vn',
+      otp: '123456',
+    });
+    expect(confirmRes.profile.isCampusVerified).toBe(true);
+    expect(confirmRes.profile.campusEmail).toBe('21520001@gm.uit.edu.vn');
+  });
 });
 

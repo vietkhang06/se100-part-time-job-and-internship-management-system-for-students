@@ -105,6 +105,7 @@ describe('GetCvSnapshotUseCase – Contract C-03 & C-05 (S4-M02-03 / UC37–UC38
     mockProfileRepo = {
       findById: jest.fn(),
       findByUserId: jest.fn(),
+      findByVerifiedCampusEmail: jest.fn(),
       createOrFind: jest.fn(),
       updateByUserId: jest.fn(),
     };

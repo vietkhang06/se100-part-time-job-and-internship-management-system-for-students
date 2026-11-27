@@ -41,7 +41,7 @@ Theo tài liệu kiến trúc `docs/ROLES_AND_STATES.md` và mã nguồn enum `U
 | Phân hệ / FR | Tuyến đường (Endpoint) | Yêu cầu xác thực | Vai trò cho phép (`Allowed Roles`) | Ghi chú chính sách |
 |---|---|---|---|---|
 | **FR-05: Hồ sơ cá nhân** | `GET /api/v1/users/me`<br>`PATCH /api/v1/users/me` | Authenticated | `STUDENT`, `EMPLOYER`, `MODERATOR`, `ADMIN` | Người dùng quản lý thông tin chính mình (Resource ownership). |
-| **FR-06: Xác thực trường** | `POST /api/v1/students/verify-campus-email` | Authenticated | `STUDENT` | Chỉ sinh viên mới có nhu cầu xác minh email trường đại học. |
+| **FR-06: Xác thực trường** | `POST /api/v1/students/campus-verification/request`<br>`POST /api/v1/students/campus-verification/confirm` | Authenticated | `STUDENT` | Chỉ sinh viên mới có nhu cầu gửi OTP và xác nhận email trường đại học (COND-M02-01 / ADR-016). |
 | **FR-07: Công ty & Chi nhánh** | `POST /api/v1/companies`<br>`POST /api/v1/companies/branches` | Authenticated | `EMPLOYER` | Chỉ nhà tuyển dụng tạo lập và quản lý doanh nghiệp. |
 | **FR-08: Quản lý CV** | `GET /api/v1/resumes`<br>`POST /api/v1/resumes` | Authenticated | `STUDENT` | Chỉ sinh viên upload và quản lý hồ sơ ứng tuyển cá nhân. |
 | **FR-09: Tin tuyển dụng** | `POST /api/v1/jobs`<br>`PATCH /api/v1/jobs/:id` | Authenticated | `EMPLOYER` | Doanh nghiệp tạo và chỉnh sửa tin tuyển dụng của công ty mình. |

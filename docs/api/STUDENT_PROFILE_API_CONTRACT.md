@@ -139,3 +139,77 @@ Content-Type: application/json
   }
 }
 ```
+
+---
+
+## 4. Hợp đồng Xác thực Email Trường bằng OTP (COND-M02-01 / FR-06 / ADR-016)
+
+Quy trình xác thực email trường cho sinh viên tách biệt hoàn toàn với xác minh tài khoản đăng nhập (`C-01`) và tuân thủ các ràng buộc bảo mật sau:
+
+1. **Chống tự xác nhận:** `PATCH /api/v1/students/profile` tuyệt đối **không** nhận `campusEmail` hay `isCampusVerified`. Trạng thái `isCampusVerified` chỉ chuyển sang `true` khi sinh viên xác nhận đúng mã OTP gửi về hộp thư trường trong `POST /api/v1/students/campus-verification/confirm`.
+2. **Domain được phép:** Chỉ chấp nhận địa chỉ email thuộc hậu tố `.edu.vn` (mặc định; cấu hình mở rộng qua `CAMPUS_EMAIL_ALLOWED_SUFFIXES` / `CAMPUS_EMAIL_ALLOWED_DOMAINS`).
+3. **Tính duy nhất:** Mỗi `campusEmail` đã xác minh chỉ gắn với duy nhất một `StudentProfile` (`409 Conflict` nếu tài khoản sinh viên khác đã xác minh email này).
+4. **Cơ chế OTP một lần & bảo vệ brute-force:**
+   - Mã OTP gồm 6 chữ số ngẫu nhiên (`crypto.randomInt`), chỉ lưu bản băm SHA-256 gắn với `(studentProfileId, campusEmail, otp)` trong bảng `CampusEmailVerificationToken`.
+   - Thời hạn hiệu lực: **10 phút** (`expiresAt`).
+   - Tối đa **5 lần nhập sai** trên một mã OTP; quá số lần sẽ khóa mã hiện tại (`429 CAMPUS_OTP_MAX_ATTEMPTS`), sinh viên phải yêu cầu gửi mã mới.
+   - Khi tạo mã mới hoặc xác nhận thành công, toàn bộ mã chờ xử lý trước đó bị vô hiệu hóa (`usedAt != null`); sử dụng giao dịch nguyên tử (`$transaction`) để chống dùng lại (replay / race condition).
+   - Rate limit gửi OTP: **cooldown 60 giây** giữa 2 lần gửi liên tiếp và tối đa **5 yêu cầu / giờ** trên mỗi sinh viên (`429 CAMPUS_OTP_RATE_LIMITED`).
+5. **Tác động tới C-03:** Giữ nguyên cấu trúc 16 trường của `CvSnapshotDto` (`C-03`). Trạng thái xác thực email trường hiển thị trên `StudentProfileDto` (`GET /api/v1/students/profile` và `/candidate/profile`).
+
+### 4.1 Yêu cầu gửi / gửi lại mã OTP xác thực email trường
+
+- **Endpoint:** `POST /api/v1/students/campus-verification/request`
+- **Yêu cầu xác thực:** Bearer Token (`JwtAuthGuard`, `RolesGuard(UserRole.STUDENT)`)
+
+#### Request Body (`RequestCampusVerificationRequestDto`)
+| Trường | Kiểu dữ liệu | Bắt buộc | Ràng buộc kiểm thực | Ý nghĩa |
+|---|---|---|---|---|
+| `campusEmail` | `string` | Có | Email hợp lệ, tự động `trim().toLowerCase()`, thuộc domain `.edu.vn` | Email trường sinh viên muốn xác thực |
+
+#### Phản hồi thành công (`200 OK` — `RequestCampusVerificationResponseDto`)
+```json
+{
+  "message": "Mã OTP xác thực email trường đã được gửi. Vui lòng kiểm tra hộp thư của bạn.",
+  "campusEmail": "21520001@gm.uit.edu.vn",
+  "expiresAt": "2026-11-25T16:10:00.000Z",
+  "resendCooldownSeconds": 60
+}
+```
+
+### 4.2 Xác nhận mã OTP xác thực email trường
+
+- **Endpoint:** `POST /api/v1/students/campus-verification/confirm`
+- **Yêu cầu xác thực:** Bearer Token (`JwtAuthGuard`, `RolesGuard(UserRole.STUDENT)`)
+
+#### Request Body (`ConfirmCampusVerificationRequestDto`)
+| Trường | Kiểu dữ liệu | Bắt buộc | Ràng buộc kiểm thực | Ý nghĩa |
+|---|---|---|---|---|
+| `campusEmail` | `string` | Có | Email hợp lệ, thuộc domain `.edu.vn` | Email trường đã yêu cầu gửi OTP |
+| `otp` | `string` | Có | Chuỗi đúng 6 chữ số (`/^\d{6}$/`) | Mã OTP dùng một lần nhận từ email |
+
+#### Phản hồi thành công (`200 OK` — `ConfirmCampusVerificationResponseDto`)
+```json
+{
+  "message": "Xác thực email trường thành công.",
+  "campusVerifiedAt": "2026-11-25T16:02:00.000Z",
+  "profile": {
+    "id": "e4a2c2b3-5c74-4b53-8d65-1d22dfb43a91",
+    "userId": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
+    "fullName": "Nguyễn Văn A",
+    "email": "student@example.com",
+    "phone": "0901234567",
+    "avatarUrl": null,
+    "university": "Đại học Công nghệ Thông tin - ĐHQG TP.HCM",
+    "major": "Kỹ thuật Phần mềm",
+    "graduationYear": 2025,
+    "jobSeekingStatus": "ACTIVELY_LOOKING",
+    "bio": "Sinh viên năm cuối mong muốn tìm vị trí thực tập backend developer.",
+    "skills": ["TypeScript", "NestJS", "PostgreSQL", "Docker"],
+    "isCampusVerified": true,
+    "campusEmail": "21520001@gm.uit.edu.vn",
+    "createdAt": "2026-10-12T00:00:00.000Z",
+    "updatedAt": "2026-11-25T16:02:00.000Z"
+  }
+}
+```

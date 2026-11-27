@@ -13,6 +13,14 @@ Tài liệu này xác định ma trận ánh xạ chính thức giữa tình hu�
 | **Dữ liệu vi phạm ràng buộc validation** | `400 Bad Request` | `VALIDATION_ERROR` | Bất kỳ trường nào vi phạm độ dài, kiểu dữ liệu hoặc số lượng phần tử mảng | Mảng chi tiết các lỗi từ `class-validator` |
 | **Trạng thái tìm việc sai danh mục** | `400 Bad Request` | `INVALID_JOB_SEEKING_STATUS` | Giá trị `jobSeekingStatus` gửi lên không nằm trong enum (`ACTIVELY_LOOKING`, `OPEN_FOR_OPPORTUNITIES`, `NOT_LOOKING`) | `"Trạng thái tìm việc không hợp lệ. Chỉ chấp nhận: ACTIVELY_LOOKING, OPEN_FOR_OPPORTUNITIES, NOT_LOOKING."` |
 | **Không tìm thấy hồ sơ sinh viên** | `404 Not Found` | `STUDENT_PROFILE_NOT_FOUND` | Người dùng sinh viên hợp lệ nhưng bản ghi hồ sơ chưa tồn tại trong hệ thống | `"Không tìm thấy hồ sơ sinh viên tương ứng."` |
+| **Domain email trường không được phép** | `400 Bad Request` | `CAMPUS_EMAIL_DOMAIN_NOT_ALLOWED` | Email gửi lên không thuộc hậu tố `.edu.vn` hoặc danh sách domain trường được phép | `"Chỉ chấp nhận email sinh viên thuộc tên miền trường đại học hợp lệ (.edu.vn)."` |
+| **Email trường đã được xác thực trước đó** | `400 Bad Request` | `CAMPUS_EMAIL_ALREADY_VERIFIED` | Sinh viên yêu cầu gửi OTP cho chính `campusEmail` đang ở trạng thái đã xác thực | `"Email trường này đã được xác thực cho hồ sơ của bạn."` |
+| **Email trường đã thuộc tài khoản khác** | `409 Conflict` | `CAMPUS_EMAIL_ALREADY_IN_USE` | `campusEmail` đã được một tài khoản sinh viên khác xác thực thành công | `"Email trường này đã được liên kết với một tài khoản sinh viên khác."` |
+| **Mã OTP không hợp lệ hoặc đã dùng** | `400 Bad Request` | `CAMPUS_OTP_INVALID` | Không có OTP chờ xử lý khớp `(studentProfileId, campusEmail)`, OTP sai hoặc đã được sử dụng | `"Mã OTP không chính xác hoặc đã được sử dụng."` |
+| **Mã OTP đã hết hạn** | `400 Bad Request` | `CAMPUS_OTP_EXPIRED` | Thời điểm xác nhận vượt quá `expiresAt` (10 phút) | `"Mã OTP đã hết hạn. Vui lòng yêu cầu gửi mã mới."` |
+| **Nhập sai OTP quá số lần cho phép** | `429 Too Many Requests` | `CAMPUS_OTP_MAX_ATTEMPTS` | Nhập sai OTP >= 5 lần trên mã hiện tại | `"Bạn đã nhập sai mã OTP quá số lần quy định. Vui lòng yêu cầu gửi mã mới."` |
+| **Gửi yêu cầu OTP quá nhanh / quá giới hạn** | `429 Too Many Requests` | `CAMPUS_OTP_RATE_LIMITED` | Chưa hết cooldown 60 giây giữa 2 lần gửi hoặc vượt quá 5 yêu cầu trong 1 giờ | `"Vui lòng đợi trước khi yêu cầu gửi lại mã OTP."` |
+| **Không thể gửi email OTP** | `503 Service Unavailable` | `CAMPUS_EMAIL_DELIVERY_FAILED` | Lỗi kết nối SMTP/Mailpit khi gửi email chứa mã OTP | `"Không thể gửi email xác thực lúc này. Vui lòng thử lại sau."` |
 
 ---
 

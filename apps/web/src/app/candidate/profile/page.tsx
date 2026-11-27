@@ -25,9 +25,12 @@ import { SkillEditor } from '@/components/students/skill-editor';
 import { useAuth } from '@/lib/auth-context';
 import { m02Api } from '@/lib/m02-api';
 import {
+  CAMPUS_VERIFICATION_LIMITS,
   formatM02ErrorMessage,
   PROFILE_LIMITS,
   StudentProfileFormValues,
+  validateCampusEmail,
+  validateCampusOtp,
   validateStudentProfileForm,
 } from '@/lib/m02-validation';
 import {
@@ -52,6 +55,17 @@ export default function CandidateProfilePage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [profile, setProfile] = useState<StudentProfileDto | null>(null);
 
+  const [campusEmailInput, setCampusEmailInput] = useState('');
+  const [campusOtpInput, setCampusOtpInput] = useState('');
+  const [campusPendingEmail, setCampusPendingEmail] = useState<string | null>(null);
+  const [campusExpiresAt, setCampusExpiresAt] = useState<string | null>(null);
+  const [campusCooldown, setCampusCooldown] = useState(0);
+  const [campusRequesting, setCampusRequesting] = useState(false);
+  const [campusConfirming, setCampusConfirming] = useState(false);
+  const [campusError, setCampusError] = useState<string | null>(null);
+  const [campusSuccess, setCampusSuccess] = useState<string | null>(null);
+  const [showChangeCampusEmail, setShowChangeCampusEmail] = useState(false);
+
   const [form, setForm] = useState<StudentProfileFormValues>({
     university: '',
     major: '',
@@ -71,7 +85,18 @@ export default function CandidateProfilePage() {
       bio: data.bio ?? '',
       skills: Array.isArray(data.skills) ? [...data.skills] : [],
     });
+    if (data.campusEmail) {
+      setCampusEmailInput((prev) => prev || data.campusEmail || '');
+    }
   }, []);
+
+  useEffect(() => {
+    if (campusCooldown <= 0) return;
+    const timer = window.setInterval(() => {
+      setCampusCooldown((prev) => (prev > 1 ? prev - 1 : 0));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [campusCooldown]);
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
@@ -164,6 +189,85 @@ export default function CandidateProfilePage() {
     }
   }
 
+  async function handleRequestCampusOtp(targetEmailRaw?: string) {
+    const emailToVerify = (targetEmailRaw ?? campusEmailInput).trim().toLowerCase();
+    setCampusError(null);
+    setCampusSuccess(null);
+
+    const validationErr = validateCampusEmail(emailToVerify);
+    if (validationErr) {
+      setCampusError(validationErr);
+      return;
+    }
+
+    setCampusRequesting(true);
+    try {
+      const res = await m02Api.requestCampusVerification({
+        campusEmail: emailToVerify,
+      });
+      setCampusEmailInput(res.campusEmail);
+      setCampusPendingEmail(res.campusEmail);
+      setCampusExpiresAt(res.expiresAt);
+      setCampusOtpInput('');
+      setCampusCooldown(
+        res.resendCooldownSeconds || CAMPUS_VERIFICATION_LIMITS.COOLDOWN_SECONDS,
+      );
+      setCampusSuccess(res.message);
+    } catch (err) {
+      setCampusError(
+        formatM02ErrorMessage(
+          err,
+          'Không thể gửi mã OTP xác thực email trường. Vui lòng thử lại.',
+        ),
+      );
+    } finally {
+      setCampusRequesting(false);
+    }
+  }
+
+  async function handleConfirmCampusOtp(e: React.FormEvent) {
+    e.preventDefault();
+    const targetEmail = (campusPendingEmail || campusEmailInput).trim().toLowerCase();
+    setCampusError(null);
+    setCampusSuccess(null);
+
+    const emailErr = validateCampusEmail(targetEmail);
+    if (emailErr) {
+      setCampusError(emailErr);
+      return;
+    }
+
+    const otpErr = validateCampusOtp(campusOtpInput);
+    if (otpErr) {
+      setCampusError(otpErr);
+      return;
+    }
+
+    setCampusConfirming(true);
+    try {
+      const res = await m02Api.confirmCampusVerification({
+        campusEmail: targetEmail,
+        otp: campusOtpInput.trim(),
+      });
+      applyProfileToForm(res.profile);
+      setCampusPendingEmail(null);
+      setCampusExpiresAt(null);
+      setCampusOtpInput('');
+      setCampusCooldown(0);
+      setShowChangeCampusEmail(false);
+      setCampusSuccess(res.message);
+    } catch (err) {
+      setCampusError(
+        formatM02ErrorMessage(
+          err,
+          'Xác thực OTP thất bại. Vui lòng kiểm tra lại mã OTP.',
+        ),
+      );
+    } finally {
+      setCampusConfirming(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -219,7 +323,9 @@ export default function CandidateProfilePage() {
                       {profile?.email || user?.email}
                     </CardDescription>
                   </div>
-                  <Badge variant="secondary">Tài khoản Sinh viên</Badge>
+                  <Badge variant="secondary" className="shrink-0 whitespace-nowrap">
+                    Tài khoản Sinh viên
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
@@ -239,6 +345,22 @@ export default function CandidateProfilePage() {
                     }
                   </span>
                 </div>
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-1 border-t border-border pt-3">
+                  <span className="text-muted-foreground">Email trường:</span>
+                  <div className="flex flex-col sm:items-end gap-1">
+                    <Badge
+                      variant={profile?.isCampusVerified ? 'success' : 'warning'}
+                      className="shrink-0 whitespace-nowrap"
+                    >
+                      {profile?.isCampusVerified ? 'Đã xác thực trường' : 'Chưa xác thực'}
+                    </Badge>
+                    {profile?.isCampusVerified && profile.campusEmail && (
+                      <span className="text-xs font-medium text-foreground break-all">
+                        {profile.campusEmail}
+                      </span>
+                    )}
+                  </div>
+                </div>
                 {profile?.updatedAt && (
                   <div className="flex flex-col sm:flex-row sm:justify-between gap-1 border-t border-border pt-3 text-xs text-muted-foreground">
                     <span>Cập nhật lần cuối:</span>
@@ -250,10 +372,168 @@ export default function CandidateProfilePage() {
               </CardContent>
             </Card>
 
-            <Alert variant="info" title="Đồng bộ với CV Snapshot (Contract C-03)">
-              Họ tên, email, số điện thoại và danh sách kỹ năng chuẩn hóa trên hồ sơ giúp nhà tuyển
-              dụng đánh giá chính xác năng lực của bạn khi nộp hồ sơ ứng tuyển.
+            <Alert variant="info" title="Thông tin dùng chung cho hồ sơ ứng tuyển">
+              Họ tên, email, số điện thoại và danh sách kỹ năng trên hồ sơ sẽ giúp nhà tuyển dụng
+              đánh giá chính xác năng lực của bạn khi nộp hồ sơ ứng tuyển.
             </Alert>
+
+            {/* KHỐI XÁC THỰC EMAIL TRƯỜNG / OTP (COND-M02-01) */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base">Xác thực email trường (.edu.vn)</CardTitle>
+                    <CardDescription className="mt-1">
+                      Nhận mã OTP dùng một lần qua hộp thư sinh viên để xác nhận định danh trường.
+                    </CardDescription>
+                  </div>
+                  <Badge
+                    variant={profile?.isCampusVerified ? 'success' : 'outline'}
+                    className="shrink-0 whitespace-nowrap"
+                  >
+                    {profile?.isCampusVerified ? 'Đã xác thực' : 'Tùy chọn'}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {campusError && (
+                  <Alert variant="destructive" title="Xác thực chưa thành công">
+                    {campusError}
+                  </Alert>
+                )}
+
+                {campusSuccess && (
+                  <Alert variant="success" title="Thông báo xác thực">
+                    {campusSuccess}
+                  </Alert>
+                )}
+
+                {profile?.isCampusVerified && !showChangeCampusEmail ? (
+                  <div className="space-y-3 text-sm">
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                      <p className="text-xs font-medium text-emerald-800">
+                        Email trường đã xác thực:
+                      </p>
+                      <p className="font-semibold text-emerald-950 break-all mt-0.5">
+                        {profile.campusEmail}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setShowChangeCampusEmail(true);
+                        setCampusError(null);
+                        setCampusSuccess(null);
+                        setCampusEmailInput('');
+                      }}
+                    >
+                      Đổi email trường khác
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Input
+                        label="Địa chỉ email trường (.edu.vn)"
+                        name="campusEmail"
+                        type="email"
+                        placeholder="VD: 21520001@gm.uit.edu.vn"
+                        maxLength={CAMPUS_VERIFICATION_LIMITS.EMAIL_MAX}
+                        value={campusEmailInput}
+                        disabled={campusRequesting || campusConfirming}
+                        onChange={(e) => {
+                          setCampusEmailInput(e.target.value);
+                          if (campusError) setCampusError(null);
+                        }}
+                      />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          isLoading={campusRequesting}
+                          disabled={campusConfirming || campusCooldown > 0}
+                          onClick={() => void handleRequestCampusOtp()}
+                        >
+                          {campusCooldown > 0
+                            ? `Gửi lại OTP sau (${campusCooldown}s)`
+                            : campusPendingEmail
+                              ? 'Gửi lại mã OTP'
+                              : 'Gửi mã OTP'}
+                        </Button>
+                        {showChangeCampusEmail && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={campusRequesting || campusConfirming}
+                            onClick={() => {
+                              setShowChangeCampusEmail(false);
+                              setCampusPendingEmail(null);
+                              setCampusOtpInput('');
+                              setCampusError(null);
+                            }}
+                          >
+                            Hủy
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {campusPendingEmail && (
+                      <form
+                        onSubmit={handleConfirmCampusOtp}
+                        className="space-y-3 border-t border-border pt-3"
+                        noValidate
+                      >
+                        <p className="text-xs text-muted-foreground">
+                          Nhập mã OTP 6 chữ số đã gửi tới{' '}
+                          <span className="font-semibold text-foreground">
+                            {campusPendingEmail}
+                          </span>
+                          {campusExpiresAt
+                            ? ` (hết hạn lúc ${new Date(campusExpiresAt).toLocaleTimeString('vi-VN')})`
+                            : ''}
+                          .
+                        </p>
+                        <Input
+                          label="Mã OTP (6 chữ số)"
+                          name="campusOtp"
+                          inputMode="numeric"
+                          placeholder="123456"
+                          maxLength={CAMPUS_VERIFICATION_LIMITS.OTP_LENGTH}
+                          value={campusOtpInput}
+                          disabled={campusConfirming || campusRequesting}
+                          onChange={(e) => {
+                            const digitsOnly = e.target.value.replace(/\D/g, '').slice(0, 6);
+                            setCampusOtpInput(digitsOnly);
+                            if (campusError) setCampusError(null);
+                          }}
+                        />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            type="submit"
+                            variant="primary"
+                            size="sm"
+                            isLoading={campusConfirming}
+                            disabled={campusRequesting}
+                          >
+                            Xác nhận OTP
+                          </Button>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          {process.env.NODE_ENV !== 'production'
+                            ? 'Môi trường dev: kiểm tra hộp thư OTP tại Mailpit (cổng 8026).'
+                            : 'Kiểm tra hộp thư đến hoặc thư mục Spam của email trường để lấy mã OTP.'}
+                        </p>
+                      </form>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
           {/* CỘT PHẢI: FORM CẬP NHẬT HỒ SƠ & SKILL EDITOR (UC12) */}
@@ -261,7 +541,7 @@ export default function CandidateProfilePage() {
             <CardHeader>
               <CardTitle>Thông tin học vấn, kỹ năng & tìm việc</CardTitle>
               <CardDescription>
-                Dữ liệu được kiểm thực đồng nhất giữa trình duyệt và máy chủ theo hợp đồng M02.
+                Cập nhật thông tin học vấn, kỹ năng chuyên môn và trạng thái tìm việc của bạn.
               </CardDescription>
             </CardHeader>
             <CardContent>

@@ -93,6 +93,7 @@ describe('CV Management Use Cases (S2-M02-04 Vertical Slice)', () => {
     mockProfileRepo = {
       findById: jest.fn(),
       findByUserId: jest.fn(),
+      findByVerifiedCampusEmail: jest.fn(),
       createOrFind: jest.fn(),
       updateByUserId: jest.fn(),
     };
