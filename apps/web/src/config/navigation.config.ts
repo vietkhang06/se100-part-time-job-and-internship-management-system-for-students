@@ -13,6 +13,7 @@ export const CANDIDATE_NAV_ITEMS: NavItem[] = [
   { title: 'Gửi báo cáo vi phạm', href: '/candidate/reports' },
   { title: 'Chế tài tài khoản', href: '/candidate/sanctions' },
   { title: 'Đánh giá của tôi', href: '/candidate/reviews' },
+  { title: 'Cài đặt thông báo', href: '/candidate/settings' },
 ];
 
 export const EMPLOYER_NAV_ITEMS: NavItem[] = [

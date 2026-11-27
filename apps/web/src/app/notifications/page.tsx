@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import type { NotificationDto, PaginatedResponse } from '@campusjob/contracts';
 import { RoleGate } from '@/components/m05/role-gate';
 import { PageContainer } from '@/components/layout/page-container';
@@ -16,7 +17,7 @@ function Inbox() {
     try {await apiClient('/notifications/'+path,{method:'PATCH'}); setMessage(''); reload();}
     catch(err) {setMessage(err instanceof Error ? err.message : 'Không thể cập nhật.');}
   }
-  return <><PageHeader title="Thông báo" action={<Button variant="outline" onClick={()=>mark('read-all')}>Đánh dấu tất cả đã đọc</Button>}/>
+  return <><PageHeader title="Thông báo" action={<div className="flex items-center gap-2"><Link href="/candidate/settings"><Button variant="outline">Cài đặt thông báo</Button></Link><Button variant="outline" onClick={()=>mark('read-all')}>Đánh dấu tất cả đã đọc</Button></div>}/>
     <p role="status">{error || message || (!data?'Đang tải…':data.data.length===0?'Bạn chưa có thông báo.':'')}</p>
     {data?.data.map(n=><article key={n.id} className="mb-3 space-y-2 rounded-xl border bg-card p-5"><h2 className="font-semibold">{n.title}</h2><p>{n.body}</p><p className="text-sm text-muted-foreground">{new Date(n.createdAt).toLocaleString('vi-VN')}</p>
     {!n.isRead && <Button variant="outline" onClick={()=>mark(n.id+'/read')}>Đánh dấu đã đọc</Button>}</article>)}
