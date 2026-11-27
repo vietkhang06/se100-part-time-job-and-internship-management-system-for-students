@@ -31,9 +31,9 @@ export function closeReportWithoutSanction(reportId: string, reason: string) {
   });
 }
 
-export function listSanctions(params: { status?: string; type?: string; page: number; limit?: number }) {
+export function listSanctions(params: { status?: string; type?: string; targetId?: string; page: number; limit?: number }) {
   return request<PaginatedResponse<SanctionDto>>(
-    `/sanctions${buildQuery({ status: params.status, type: params.type, page: params.page, limit: params.limit ?? 10 })}`,
+    `/sanctions${buildQuery({ status: params.status, type: params.type, targetId: params.targetId, page: params.page, limit: params.limit ?? 10 })}`,
   );
 }
 

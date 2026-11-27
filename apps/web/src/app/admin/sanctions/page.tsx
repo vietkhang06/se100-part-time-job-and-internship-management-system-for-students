@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/ui/error-state';
+import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Pager } from '@/components/m05/pager';
@@ -134,11 +135,18 @@ const TYPE_FILTER = [
 function HistoryTab() {
   const [status, setStatus] = React.useState('');
   const [type, setType] = React.useState('');
+  const [targetId, setTargetId] = React.useState('');
   const [page, setPage] = React.useState(1);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const load = React.useCallback(
-    () => listSanctions({ status: status || undefined, type: type || undefined, page }),
-    [status, type, page],
+    () =>
+      listSanctions({
+        status: status || undefined,
+        type: type || undefined,
+        targetId: targetId.trim() || undefined,
+        page,
+      }),
+    [status, type, targetId, page],
   );
   const { data, isLoading, error, reload } = useAsyncResource(load, true, 'Không thể tải lịch sử chế tài.');
   const sanctions = data?.data ?? [];
@@ -146,7 +154,7 @@ function HistoryTab() {
   return (
     <div className="space-y-4">
       <Card className="p-4">
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-3">
           <Select
             label="Trạng thái"
             value={status}
@@ -157,13 +165,22 @@ function HistoryTab() {
             options={STATUS_FILTER}
           />
           <Select
-            label="Hình thức"
+            label="Hình thức chế tài"
             value={type}
             onChange={(e) => {
               setType(e.target.value);
               setPage(1);
             }}
             options={TYPE_FILTER}
+          />
+          <Input
+            label="Mã đối tượng (UUID)"
+            placeholder="Lọc theo ID..."
+            value={targetId}
+            onChange={(e) => {
+              setTargetId(e.target.value);
+              setPage(1);
+            }}
           />
         </div>
       </Card>
