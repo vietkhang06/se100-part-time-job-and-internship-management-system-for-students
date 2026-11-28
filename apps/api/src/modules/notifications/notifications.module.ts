@@ -18,6 +18,7 @@ import { MarkNotificationReadUseCase } from './application/use-cases/mark-notifi
 import { MarkAllNotificationsReadUseCase } from './application/use-cases/mark-all-notifications-read.use-case';
 import { GetNotificationEmailPreferencesUseCase } from './application/use-cases/get-notification-email-preferences.use-case';
 import { UpdateNotificationEmailPreferenceUseCase } from './application/use-cases/update-notification-email-preference.use-case';
+import { EmailRetrySchedulerService } from './application/services/email-retry-scheduler.service';
 
 @Module({
   imports: [DatabaseModule, UsersModule],

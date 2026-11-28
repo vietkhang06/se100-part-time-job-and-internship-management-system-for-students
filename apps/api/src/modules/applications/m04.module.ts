@@ -12,6 +12,8 @@ import { PrismaM04EventDispatcher } from './infrastructure/m04-event-dispatcher'
 import { ReviewsModule } from '../reviews/reviews.module';
 import { ApplicationReviewSourceAdapter } from './infrastructure/application-review-source.adapter';
 import { ReviewSourcesRegistry } from '../reviews/application/ports/review-sources.port';
+import { SanctionsModule } from '../sanctions/sanctions.module';
+import { ISanctionQuery, SANCTION_QUERY_TOKEN } from '../sanctions/application/ports/sanction-query.port';
 
 export { M04_CV_SOURCE, M04_JOB_SOURCE, M04_REPOSITORY } from './application/m04-ports';
 
@@ -21,7 +23,7 @@ export class M04Module {
   static register(cvSource: Provider, jobSource: Provider, repository?: Provider): DynamicModule {
     return {
       module: M04Module,
-      imports: [AuthModule, NotificationsModule, ReviewsModule],
+      imports: [AuthModule, NotificationsModule, ReviewsModule, SanctionsModule],
       controllers: [M04Controller],
       providers: [
         cvSource,
