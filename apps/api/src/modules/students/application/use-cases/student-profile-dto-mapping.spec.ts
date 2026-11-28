@@ -36,6 +36,7 @@ describe('S4-M02-01: StudentProfile DTO Mapping & Field Synchronization (Unit)',
     mockRepository = {
       findById: jest.fn(),
       findByUserId: jest.fn(),
+      findByVerifiedCampusEmail: jest.fn(),
       createOrFind: jest.fn(),
       updateByUserId: jest.fn(),
     };

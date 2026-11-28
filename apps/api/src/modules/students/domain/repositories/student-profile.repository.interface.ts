@@ -17,6 +17,7 @@ export interface UpdateStudentProfileData {
 export interface IStudentProfileRepository {
   findById(id: string): Promise<StudentProfileEntity | null>;
   findByUserId(userId: string): Promise<StudentProfileEntity | null>;
+  findByVerifiedCampusEmail(campusEmail: string): Promise<StudentProfileEntity | null>;
   createOrFind(userId: string): Promise<StudentProfileEntity>;
   updateByUserId(
     userId: string,

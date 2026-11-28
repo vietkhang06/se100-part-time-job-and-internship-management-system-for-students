@@ -33,6 +33,52 @@ export const CV_LIMITS = {
   ALLOWED_EXTENSIONS: ['.pdf', '.doc', '.docx'] as const,
 } as const;
 
+export const CAMPUS_VERIFICATION_LIMITS = {
+  OTP_LENGTH: 6,
+  COOLDOWN_SECONDS: 60,
+  EMAIL_MAX: 254,
+} as const;
+
+const CAMPUS_EMAIL_FORMAT_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CAMPUS_DOMAIN_LABEL_REGEX = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+
+export function validateCampusEmail(rawEmail: string): string | undefined {
+  const email = rawEmail.trim().toLowerCase();
+  if (!email) {
+    return 'Vui lòng nhập địa chỉ email trường đại học.';
+  }
+  if (email.length > CAMPUS_VERIFICATION_LIMITS.EMAIL_MAX || !CAMPUS_EMAIL_FORMAT_REGEX.test(email)) {
+    return 'Địa chỉ email trường không đúng định dạng.';
+  }
+  const parts = email.split('@');
+  if (parts.length !== 2) {
+    return 'Địa chỉ email trường không đúng định dạng.';
+  }
+  const [localPart, domain] = parts;
+  if (!localPart || localPart.length > 64) {
+    return 'Địa chỉ email trường không đúng định dạng.';
+  }
+  const labels = domain.split('.');
+  if (labels.length < 2 || !labels.every((label) => CAMPUS_DOMAIN_LABEL_REGEX.test(label))) {
+    return 'Tên miền email trường không hợp lệ.';
+  }
+  if (!domain.endsWith('.edu.vn') || domain.length <= '.edu.vn'.length) {
+    return 'Chỉ chấp nhận email sinh viên thuộc tên miền trường đại học (.edu.vn).';
+  }
+  return undefined;
+}
+
+export function validateCampusOtp(rawOtp: string): string | undefined {
+  const otp = rawOtp.trim();
+  if (!otp) {
+    return 'Vui lòng nhập mã OTP gồm 6 chữ số.';
+  }
+  if (!/^\d{6}$/.test(otp)) {
+    return 'Mã OTP phải gồm đúng 6 chữ số.';
+  }
+  return undefined;
+}
+
 export const YEAR_MONTH_REGEX = /^\d{4}-\d{2}$/;
 
 export function isValidHttpUrl(value: string): boolean {
@@ -394,6 +440,18 @@ export function formatM02ErrorMessage(error: unknown, fallback: string): string 
       /file too large|exceeds|vượt quá.*10\s*mb/i.test(rawMsg)
     ) {
       return 'Kích thước tệp vượt quá giới hạn 10MB cho phép (413). Vui lòng chọn tệp nhỏ hơn 10MB.';
+    }
+
+    if (error.status === 429 || code === StudentProfileErrorCode.CAMPUS_OTP_RATE_LIMITED || code === StudentProfileErrorCode.CAMPUS_OTP_MAX_ATTEMPTS) {
+      return rawMsg || 'Bạn thao tác quá nhanh hoặc vượt quá số lần thử cho phép (429). Vui lòng đợi trước khi thử lại.';
+    }
+
+    if (error.status === 503 || code === StudentProfileErrorCode.CAMPUS_EMAIL_DELIVERY_FAILED) {
+      return rawMsg || 'Không thể gửi email xác thực lúc này (503). Vui lòng thử lại sau.';
+    }
+
+    if (code === StudentProfileErrorCode.CAMPUS_EMAIL_ALREADY_IN_USE) {
+      return rawMsg || 'Email trường này đã được liên kết với một tài khoản sinh viên khác (409).';
     }
 
     if (

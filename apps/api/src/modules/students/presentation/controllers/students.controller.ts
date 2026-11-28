@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Patch,
   Body,
   Param,
@@ -17,6 +18,8 @@ import {
 } from '@nestjs/swagger';
 import {
   StudentProfileResponseDto,
+  RequestCampusVerificationResponseDto,
+  ConfirmCampusVerificationResponseDto,
   UserRole,
   CvSnapshotDto,
 } from '@campusjob/contracts';
@@ -25,14 +28,19 @@ import { RolesGuard } from '../../../../shared/guards/roles.guard';
 import { Roles } from '../../../../shared/decorators/roles.decorator';
 import { CurrentUser } from '../../../../shared/decorators/current-user.decorator';
 import { UpdateStudentProfileDto } from '../../application/dto/update-student-profile.dto';
+import { RequestCampusVerificationDto } from '../../application/dto/request-campus-verification.dto';
+import { ConfirmCampusVerificationDto } from '../../application/dto/confirm-campus-verification.dto';
 import { GetStudentProfileUseCase } from '../../application/use-cases/get-student-profile.use-case';
 import { UpdateStudentProfileUseCase } from '../../application/use-cases/update-student-profile.use-case';
 import { GetCvSnapshotUseCase } from '../../application/use-cases/get-cv-snapshot.use-case';
+import { RequestCampusVerificationUseCase } from '../../application/use-cases/request-campus-verification.use-case';
+import { ConfirmCampusVerificationUseCase } from '../../application/use-cases/confirm-campus-verification.use-case';
 
 /**
  * StudentsController
  *
- * Quản lý hồ sơ sinh viên (UC11–UC12) và trích xuất Snapshot CV cho hồ sơ ứng tuyển (Contract C-03 / UC37–UC38).
+ * Quản lý hồ sơ sinh viên (UC11–UC12), xác thực email trường (COND-M02-01 / FR-06)
+ * và trích xuất Snapshot CV cho hồ sơ ứng tuyển (Contract C-03 / UC37–UC38).
  */
 @ApiTags('Students')
 @ApiBearerAuth()
@@ -44,6 +52,8 @@ export class StudentsController {
     private readonly getProfileUseCase: GetStudentProfileUseCase,
     private readonly updateProfileUseCase: UpdateStudentProfileUseCase,
     private readonly getCvSnapshotUseCase: GetCvSnapshotUseCase,
+    private readonly requestCampusVerificationUseCase: RequestCampusVerificationUseCase,
+    private readonly confirmCampusVerificationUseCase: ConfirmCampusVerificationUseCase,
   ) {}
 
   /**
@@ -78,6 +88,68 @@ export class StudentsController {
     @Body() dto: UpdateStudentProfileDto,
   ): Promise<StudentProfileResponseDto> {
     return this.updateProfileUseCase.execute(userId, dto);
+  }
+
+  /**
+   * COND-M02-01 / FR-06 – Gửi hoặc gửi lại mã OTP xác thực email trường
+   * POST /api/v1/students/campus-verification/request
+   */
+  @Post('campus-verification/request')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'COND-M02-01 – Gửi mã OTP xác thực email trường đại học',
+  })
+  @ApiResponse({ status: 200, description: 'Mã OTP đã được gửi qua email' })
+  @ApiResponse({
+    status: 400,
+    description: 'Domain email trường không hợp lệ hoặc đã được xác thực',
+  })
+  @ApiResponse({ status: 401, description: 'Chưa đăng nhập' })
+  @ApiResponse({ status: 403, description: 'Không phải vai trò STUDENT' })
+  @ApiResponse({
+    status: 409,
+    description: 'Email trường đã được liên kết với tài khoản sinh viên khác',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Yêu cầu gửi OTP quá nhanh hoặc vượt quá giới hạn trong giờ',
+  })
+  async requestCampusVerification(
+    @CurrentUser('id') userId: string,
+    @Body() dto: RequestCampusVerificationDto,
+  ): Promise<RequestCampusVerificationResponseDto> {
+    return this.requestCampusVerificationUseCase.execute(userId, dto);
+  }
+
+  /**
+   * COND-M02-01 / FR-06 – Xác nhận mã OTP xác thực email trường
+   * POST /api/v1/students/campus-verification/confirm
+   */
+  @Post('campus-verification/confirm')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'COND-M02-01 – Xác nhận mã OTP để kích hoạt trạng thái xác thực trường',
+  })
+  @ApiResponse({ status: 200, description: 'Xác thực email trường thành công' })
+  @ApiResponse({
+    status: 400,
+    description: 'Mã OTP không đúng, đã hết hạn hoặc đã được sử dụng',
+  })
+  @ApiResponse({ status: 401, description: 'Chưa đăng nhập' })
+  @ApiResponse({ status: 403, description: 'Không phải vai trò STUDENT' })
+  @ApiResponse({
+    status: 409,
+    description: 'Email trường đã được liên kết với tài khoản sinh viên khác',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Nhập sai mã OTP vượt quá số lần cho phép',
+  })
+  async confirmCampusVerification(
+    @CurrentUser('id') userId: string,
+    @Body() dto: ConfirmCampusVerificationDto,
+  ): Promise<ConfirmCampusVerificationResponseDto> {
+    return this.confirmCampusVerificationUseCase.execute(userId, dto);
   }
 
   /**

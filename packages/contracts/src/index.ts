@@ -34,6 +34,14 @@ export enum StudentProfileErrorCode {
   VALIDATION_ERROR = 'VALIDATION_ERROR',
   INVALID_JOB_SEEKING_STATUS = 'INVALID_JOB_SEEKING_STATUS',
   STUDENT_PROFILE_NOT_FOUND = 'STUDENT_PROFILE_NOT_FOUND',
+  CAMPUS_EMAIL_DOMAIN_NOT_ALLOWED = 'CAMPUS_EMAIL_DOMAIN_NOT_ALLOWED',
+  CAMPUS_EMAIL_ALREADY_VERIFIED = 'CAMPUS_EMAIL_ALREADY_VERIFIED',
+  CAMPUS_EMAIL_ALREADY_IN_USE = 'CAMPUS_EMAIL_ALREADY_IN_USE',
+  CAMPUS_OTP_INVALID = 'CAMPUS_OTP_INVALID',
+  CAMPUS_OTP_EXPIRED = 'CAMPUS_OTP_EXPIRED',
+  CAMPUS_OTP_MAX_ATTEMPTS = 'CAMPUS_OTP_MAX_ATTEMPTS',
+  CAMPUS_OTP_RATE_LIMITED = 'CAMPUS_OTP_RATE_LIMITED',
+  CAMPUS_EMAIL_DELIVERY_FAILED = 'CAMPUS_EMAIL_DELIVERY_FAILED',
   UNAUTHORIZED = 'UNAUTHORIZED',
   FORBIDDEN = 'FORBIDDEN',
 }
@@ -339,6 +347,28 @@ export interface UpdateStudentProfileRequestDto {
 
 export interface StudentProfileResponseDto {
   message?: string;
+  profile: StudentProfileDto;
+}
+
+export interface RequestCampusVerificationRequestDto {
+  campusEmail: string;
+}
+
+export interface RequestCampusVerificationResponseDto {
+  message: string;
+  campusEmail: string;
+  expiresAt: string;
+  resendCooldownSeconds: number;
+}
+
+export interface ConfirmCampusVerificationRequestDto {
+  campusEmail: string;
+  otp: string;
+}
+
+export interface ConfirmCampusVerificationResponseDto {
+  message: string;
+  campusVerifiedAt: string;
   profile: StudentProfileDto;
 }
 

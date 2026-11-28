@@ -39,8 +39,8 @@ export class PrismaStudentProfileRepository
         JobSeekingStatus.ACTIVELY_LOOKING,
       raw.bio ?? null,
       skills,
-      false, // isCampusVerified
-      null, // campusEmail
+      Boolean(raw.isCampusVerified),
+      raw.campusEmail ?? null,
       raw.createdAt,
       raw.updatedAt,
     );
@@ -60,6 +60,22 @@ export class PrismaStudentProfileRepository
   async findByUserId(userId: string): Promise<StudentProfileEntity | null> {
     const raw = await this.prisma.studentProfile.findUnique({
       where: { userId },
+      include: {
+        user: true,
+        studentSkills: { include: { skill: true } },
+      },
+    });
+    return raw ? this.toDomain(raw) : null;
+  }
+
+  async findByVerifiedCampusEmail(
+    campusEmail: string,
+  ): Promise<StudentProfileEntity | null> {
+    const raw = await this.prisma.studentProfile.findFirst({
+      where: {
+        campusEmail: campusEmail.trim().toLowerCase(),
+        isCampusVerified: true,
+      },
       include: {
         user: true,
         studentSkills: { include: { skill: true } },
