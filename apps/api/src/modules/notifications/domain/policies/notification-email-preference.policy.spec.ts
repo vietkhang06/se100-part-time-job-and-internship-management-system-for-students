@@ -2,33 +2,46 @@ import { NotificationEventType } from '@campusjob/contracts';
 import { NotificationEmailPreferencePolicy } from './notification-email-preference.policy';
 
 describe('NotificationEmailPreferencePolicy', () => {
-  it('identifies email-capable event types correctly', () => {
-    expect(
-      NotificationEmailPreferencePolicy.isEmailCapable(NotificationEventType.JOB_APPROVED),
-    ).toBe(true);
-    expect(
-      NotificationEmailPreferencePolicy.isEmailCapable(NotificationEventType.APPLICATION_STATUS_CHANGED),
-    ).toBe(true);
-    expect(
-      NotificationEmailPreferencePolicy.isEmailCapable(NotificationEventType.SANCTION_APPLIED),
-    ).toBe(true);
-    expect(
-      NotificationEmailPreferencePolicy.isEmailCapable(NotificationEventType.REPORT_RESOLVED),
-    ).toBe(true);
+  it('covers all 15 NotificationEventType enum members in email-capability classification', () => {
+    const all15Events = Object.values(NotificationEventType);
+    expect(all15Events.length).toBe(15);
 
-    // Non-email event types
-    expect(
-      NotificationEmailPreferencePolicy.isEmailCapable(NotificationEventType.JOB_SUBMITTED_FOR_REVIEW),
-    ).toBe(false);
-    expect(
-      NotificationEmailPreferencePolicy.isEmailCapable(NotificationEventType.APPLICATION_SUBMITTED),
-    ).toBe(false);
-    expect(
-      NotificationEmailPreferencePolicy.isEmailCapable(NotificationEventType.INTERVIEW_CONFIRMED),
-    ).toBe(false);
-    expect(
-      NotificationEmailPreferencePolicy.isEmailCapable(NotificationEventType.REPORT_RECEIVED),
-    ).toBe(false);
+    const emailCapableEvents = all15Events.filter((e) =>
+      NotificationEmailPreferencePolicy.isEmailCapable(e),
+    );
+    const inAppOnlyEvents = all15Events.filter(
+      (e) => !NotificationEmailPreferencePolicy.isEmailCapable(e),
+    );
+
+    expect(emailCapableEvents.length).toBe(11);
+    expect(inAppOnlyEvents.length).toBe(4);
+
+    // Exact 11 email-capable events
+    expect(emailCapableEvents.sort()).toEqual(
+      [
+        NotificationEventType.JOB_APPROVED,
+        NotificationEventType.JOB_REJECTED,
+        NotificationEventType.JOB_HIDDEN,
+        NotificationEventType.COMPANY_VERIFICATION_RESULT,
+        NotificationEventType.APPLICATION_STATUS_CHANGED,
+        NotificationEventType.INTERVIEW_INVITED,
+        NotificationEventType.INTERVIEW_RESCHEDULE_REQUESTED,
+        NotificationEventType.INTERVIEW_RESCHEDULE_RESOLVED,
+        NotificationEventType.INTERVIEW_RESULT_RECORDED,
+        NotificationEventType.REPORT_RESOLVED,
+        NotificationEventType.SANCTION_APPLIED,
+      ].sort(),
+    );
+
+    // Exact 4 in-app only events
+    expect(inAppOnlyEvents.sort()).toEqual(
+      [
+        NotificationEventType.JOB_SUBMITTED_FOR_REVIEW,
+        NotificationEventType.APPLICATION_SUBMITTED,
+        NotificationEventType.INTERVIEW_CONFIRMED,
+        NotificationEventType.REPORT_RECEIVED,
+      ].sort(),
+    );
   });
 
   it('allows disabling email for all email-capable types', () => {
