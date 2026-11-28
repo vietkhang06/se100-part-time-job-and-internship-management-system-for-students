@@ -13,7 +13,7 @@ import { JOB_EXPIRY_NOTIFIER_TOKEN } from './domain/ports/job-expiry-notifier.po
 import { PrismaSavedJobRepository } from './infrastructure/persistence/prisma-saved-job.repository';
 import { PrismaJobExpiryReminderLogRepository } from './infrastructure/persistence/prisma-job-expiry-reminder-log.repository';
 import { JobExpiryEmailNotifierAdapter } from './infrastructure/adapters/job-expiry-email-notifier.adapter';
-import { Module, OnModuleInit, Optional } from '@nestjs/common';
+import { Module, OnModuleInit, Optional, forwardRef, Inject } from '@nestjs/common';
 import { ModerationTargetType } from '@campusjob/contracts';
 import { DatabaseModule } from '../../shared/database/database.module';
 import { StorageModule } from '../../shared/storage/storage.module';
@@ -21,6 +21,9 @@ import { ModerationModule } from '../moderation/moderation.module';
 import { ModerationTargetHandlerRegistry } from '../moderation/application/ports/moderation-target-handler.port';
 import { ReviewSourcesRegistry } from '../reviews/application/ports/review-sources.port';
 import { ReviewsModule } from '../reviews/reviews.module';
+import { SanctionsModule } from '../sanctions/sanctions.module';
+import { CompanySanctionHandlerRegistry } from '../sanctions/application/ports/company-sanction-handler.port';
+import { CompanySanctionAdapter } from './infrastructure/adapters/company-sanction.adapter';
 
 import { CompaniesController } from './presentation/controllers/companies.controller';
 import { CompanyBranchesController } from './presentation/controllers/company-branches.controller';
@@ -74,7 +77,14 @@ import { CompanyDirectoryAdapter } from './infrastructure/adapters/company-direc
 import { M04_JOB_SOURCE } from '../applications/m04.module';
 
 @Module({
-  imports: [DatabaseModule, StorageModule, ModerationModule, MailModule, ReviewsModule],
+  imports: [
+    DatabaseModule,
+    StorageModule,
+    ModerationModule,
+    MailModule,
+    ReviewsModule,
+    forwardRef(() => SanctionsModule),
+  ],
   controllers: [
     CompanyBranchesController,
     CompaniesController,
@@ -111,6 +121,7 @@ import { M04_JOB_SOURCE } from '../applications/m04.module';
     GetPublicJobDetailUseCase,
     JobAccessSourceAdapter,
     CompanyDirectoryAdapter,
+    CompanySanctionAdapter,
     SaveJobUseCase,
     UnsaveJobUseCase,
     ListSavedJobsUseCase,
@@ -189,6 +200,7 @@ import { M04_JOB_SOURCE } from '../applications/m04.module';
     GetPublicJobDetailUseCase,
     JobAccessSourceAdapter,
     CompanyDirectoryAdapter,
+    CompanySanctionAdapter,
     M04_JOB_SOURCE,
     COMPANY_REPOSITORY_TOKEN,
     COMPANY_MEMBER_REPOSITORY_TOKEN,
@@ -218,6 +230,11 @@ export class CompaniesModule implements OnModuleInit {
     private readonly reviewSourcesRegistry?: ReviewSourcesRegistry,
     @Optional()
     private readonly companyDirectoryAdapter?: CompanyDirectoryAdapter,
+    @Optional()
+    @Inject(forwardRef(() => CompanySanctionHandlerRegistry))
+    private readonly companySanctionRegistry?: CompanySanctionHandlerRegistry,
+    @Optional()
+    private readonly companySanctionAdapter?: CompanySanctionAdapter,
   ) {}
 
   onModuleInit() {
@@ -228,6 +245,9 @@ export class CompaniesModule implements OnModuleInit {
       this.reviewSourcesRegistry.registerCompanyDirectory(
         this.companyDirectoryAdapter,
       );
+    }
+    if (this.companySanctionRegistry && this.companySanctionAdapter) {
+      this.companySanctionRegistry.register(this.companySanctionAdapter);
     }
   }
 }
